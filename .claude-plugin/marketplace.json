@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "mismagent-method",
+  "description": "mismAgent's local marketplace — agentic flow in three movements (explore -> model -> build), portable (generic core + per-project profile). The weight scales with the case: the core is enough for single-side; modules are enabled by necessity.",
+  "owner": {
+    "name": "Luca Parsani"
+  },
+  "plugins": [
+    {
+      "name": "mismagent",
+      "description": "The mismAgent KERNEL: dialogic explore (challenger/analyst), tactical model -> building-block manifest (types pinned at the boundaries), skill-matrix workers (realize-* + seam-in-process), Composer (merge=composition, D2 on the boundary). Enough on its own for single-side projects.",
+      "source": "./plugins/mismagent",
+      "category": "development"
+    },
+    {
+      "name": "mismagent-cross-deploy",
+      "description": "Module BY NECESSITY: cross-deploy boundaries (consumer and supplier on different sides). The port is projected into OpenAPI + generated types + CDC: skills seam-cross-deploy and mism-create-contract. Enable it ONLY if the profile declares multiple sides with boundaries between them.",
+      "source": "./plugins/mismagent-cross-deploy",
+      "category": "development"
+    }
+  ]
+}

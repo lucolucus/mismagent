@@ -1,0 +1,8 @@
+{
+  "name": "mismagent-cross-deploy",
+  "description": "Cross-deploy module of mismAgent (requires the core `mismagent` plugin). When a Bounded Context boundary crosses a deploy boundary (side(consumer) != side(supplier)), the Port is projected into OpenAPI + per-side generated types + CDC publish/verify. Skills: seam-cross-deploy (loaded by the worker when boundary.projection = cross-deploy) and mism-create-contract (reconciles the OpenAPI from the blocks, names from the ubiquitous language). Enable it on demand: a single-side project does not need it.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Luca Parsani"
+  }
+}

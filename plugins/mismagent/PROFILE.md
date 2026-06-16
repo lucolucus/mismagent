@@ -36,6 +36,10 @@ sides:
     dev_architecture: <skill>   # the repo's "architecture memory" skill (or: none)
     gate: "<commands>"          # build + test that must turn green
                                 # bootstrap: "manual — TBD after the stack ADR" (the architect finalizes it)
+    ui_render_check: "<mechanism>"  # ONLY for sides that render UI: how a `ui` block proves it
+                                # RENDERS (not just that the presenter is green). Either an automated
+                                # UI smoke/screenshot test folded INTO the gate, or "manual run-the-app
+                                # (recorded)". Read by realize-ui. Sides with no UI: none
     contract: "<mechanism>"     # ONLY for sides with cross-deploy boundaries: how it verifies the
                                 # contract / generates the types. Single-side: none
 ```
@@ -45,7 +49,7 @@ The natural contexts of the domain (they seed the boundaries and the canonical n
 - `<Context1>`, `<Context2>`, …
 
 ## Boundaries & projection
-The rule that decides the shape of every inter-context boundary (`mism-build-manifest` applies it):
+The rule that decides the shape of every inter-context boundary (`build-manifest` applies it):
 - `side(consumer) == side(supplier)` → **`in-process`**: port = code interface +
   in-process consumer-driven contract test. No YAML.
 - different sides → **`cross-deploy`**: the port is projected into **OpenAPI** + generated types

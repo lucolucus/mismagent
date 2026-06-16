@@ -17,7 +17,7 @@ Aggregate. Rationale: `redesign/composer-spec.md` §4·§9·§14.
 - Knows **only the public API** of the supplier (the signature), never its source nor its internal
   state.
 - Makes the port's **consumer-driven contract test pass** (the one written by `realize-port`) — first
-  on the fake, then real-on-real when the Composer re-runs it in **D2**.
+  on the fake, then real-on-real when the worker-composer re-runs it in **D2**.
 
 ### PERSISTENCE Adapter (repository)
 - Keeps the Aggregate **agnostic of the technology**: the domain is pure, persistence lives here
@@ -33,7 +33,7 @@ The persistence adapter is the **only one** authorized to write the Aggregate's 
 - you respect the `enforced_by` constraints declared in the block-spec's ADRs (soft-delete,
   write-once, …).
 
-## The projection (the Composer chooses it, §13.B)
+## The projection (the worker-composer chooses it, §13.B)
 `seam-in-process` = adapter as a code object + in-process test. `seam-cross-deploy` = generated HTTP
 client + CDC verify on the producer side. You realize the impl.; skill B fixes the medium.
 

@@ -1,5 +1,5 @@
 ---
-name: mism-code-review
+name: code-review
 description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE task. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the task REALLY satisfied?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by /dev-orchestrator-v2 after the verifier. Read-only: finds and triages, does not fix.'
 ---
 
@@ -10,7 +10,7 @@ missed edge cases, ACs satisfied only "on paper". Orientation: `methodology/mism
 You run in **fresh context** in a subagent: you did not see the development, so you don't trust — you hunt.
 
 ## Complementary to the verifier (you do not duplicate it)
-`mism-verifier` is **structural and deterministic** (build/test/contract green, AC has *a* test,
+`mismagent-verifier` is **structural and deterministic** (build/test/contract green, AC has *a* test,
 no shadow-types, ADR `enforced_by`). You are **semantic**: the test passes, but is the code *right*?
 Is the AC satisfied in *spirit*? The verifier says "there is a test"; you say "the test proves the
 right thing and none is missing".
@@ -38,7 +38,7 @@ dev (Patch) or becomes a new task (Defer). Your output is a verdict + findings, 
 - **Severity:** `HIGH` (blocks the merge: correctness/security/AC-not-satisfied) · `MED`
   (to be fixed) · `LOW` (could be improved).
 - **Disposition:** `Patch` (the dev fixes it now) · `Defer` (future work → new task via
-  `mism-write-task`, with the `depends_on` edge added by the orchestrator) · `Decision` (a
+  `write-task`, with the `depends_on` edge added by the orchestrator) · `Decision` (a
   human/product choice is needed: do not invent it).
 
 ## Outcome — strict handoff

@@ -22,7 +22,7 @@ owns no rules. Rationale: `redesign/composer-spec.md` §1·§4.3.
 
 ## The check (you carry it with you)
 - **AC-test with a fake port:** you verify the use-case's behavior using a **fake** of the port (green
-  on its own, without the real other side). The real-on-real welding is done by the Composer in D2.
+  on its own, without the real other side). The real-on-real welding is done by the worker-composer in D2.
 - **Translate the user's `tests_nl`** (§16) into the use-case's AC-tests.
 - **Green on its own includes the Aggregate's invariant-tests:** if your use-case breaks a root
   invariant, you are not green. The invariant tests of the owner block remain your safety net.

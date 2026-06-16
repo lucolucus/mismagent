@@ -7,7 +7,7 @@ a single, installable folder. It is not a methodology to read: it is a flow to i
 single-side project. The weight scales with the case — modules are enabled only when the project
 requires them:
 - **`mismagent-cross-deploy`** (same marketplace) — when a boundary crosses a deploy boundary:
-  `seam-cross-deploy` + `mism-create-contract` (the port → OpenAPI + generated types + CDC).
+  `seam-cross-deploy` + `create-contract` (the port → OpenAPI + generated types + CDC).
 - The superseded pieces of the file-driven flow live in **`attic/`** at the repo root, outside the
   registry (see `attic/README.md`): no agent can invoke them by mistake.
 
@@ -21,29 +21,29 @@ skills, boundary rules, boundary projections and the commit format.
 - `methodology/mismagent.md` — the map of the flow (what to invoke, in what order).
   `redesign/composer-spec.md` — rationale of the architecture-driven build.
 - `skills/`:
-  - `mism-explore` (explore) — orchestrates the dialogue; profile bootstrap; challenger + analyst.
-  - `mism-build-manifest` (model) — from the tactical model → **building-block manifest**
+  - `explore` (explore) — orchestrates the dialogue; profile bootstrap; challenger + analyst.
+  - `build-manifest` (model) — from the tactical model → **building-block manifest**
     (types pinned at the boundaries, projection, `tests_nl`).
-  - `mism-readiness-gate` (model→build) — survival test on the manifest.
+  - `readiness-gate` (model→build) — survival test on the manifest.
   - `realize-{aggregate,application-service,port,adapter,read-model}` + `seam-in-process`
     (build) — the worker's skills: block-type × boundary projection.
-  - `mism-ux-designer` (model) — imagines the UI → views (if the feature has a UI).
-  - `mism-code-review` (build) — adversarial semantic review with fresh context.
-  - writers: `mism-write-context-map`, `mism-write-infra-notes`, `mism-write-adr`, `mism-write-task`.
+  - `ux-designer` (model) — imagines the UI → views (if the feature has a UI).
+  - `code-review` (build) — adversarial semantic review with fresh context.
+  - writers: `write-context-map`, `write-infra-notes`, `write-adr`, `write-task`.
 - `agents/`:
-  - explore — `mism-challenger` (fresh-context adversary), `mism-researcher`, `mism-analyst`.
-  - model — `mism-tactical-modeler` (DDD tactical), `mism-architect` (architecture + ADRs,
+  - explore — `mismagent-challenger` (fresh-context adversary), `mismagent-researcher`, `mismagent-analyst`.
+  - model — `mismagent-tactical-modeler` (DDD tactical), `mismagent-architect` (architecture + ADRs,
     guarantor of the boundaries; stack decisions are deliberated with the user).
-  - build — `mism-worker` (realizes ONE building block), `mism-verifier` (read-only, fresh context).
-- `commands/` — **`composer`** (architecture-driven build: sole git-writer, merge =
+  - build — `mismagent-worker` (realizes ONE building block), `mismagent-verifier` (read-only, fresh context).
+- `commands/` — **`worker-composer`** (architecture-driven build: sole git-writer, merge =
   composition, D2 on the boundary).
 
 ## The flow
-**explore** (`/mismagent:mism-explore` → `mism-challenger` → `mism-analyst`) →
-**model** (`mism-tactical-modeler` → `mism-ux-designer` → `mism-architect` → `mism-build-manifest`
-→ if a boundary is cross-deploy: `mism-create-contract`, from the module) →
-**build** (`/mismagent:composer` → `mism-worker` ×N with block-type × projection skills →
-`mism-verifier` + `mism-code-review` → confirmation → feature-flag).
+**explore** (`/mismagent:explore` → `mismagent-challenger` → `mismagent-analyst`) →
+**model** (`mismagent-tactical-modeler` → `ux-designer` → `mismagent-architect` → `build-manifest`
+→ if a boundary is cross-deploy: `create-contract`, from the module) →
+**build** (`/mismagent:worker-composer` → `mismagent-worker` ×N with block-type × projection skills →
+`mismagent-verifier` + `code-review` → confirmation → feature-flag).
 
 ## Installation (local marketplace)
 The **marketplace is the root of this repo** (it contains `.claude-plugin/marketplace.json`,
@@ -66,10 +66,10 @@ must be registered with the **ABSOLUTE path** (a relative path is interpreted as
 then `/reload-plugins`.
 
 After installation **skills and commands are namespaced with the plugin name**: invoke them as
-`/mismagent:mism-explore`, `/mismagent:composer`, … (and from the module:
-`/mismagent-cross-deploy:mism-create-contract`). **Agents**, on the other hand, show up in
+`/mismagent:explore`, `/mismagent:worker-composer`, … (and from the module:
+`/mismagent-cross-deploy:create-contract`). **Agents**, on the other hand, show up in
 `/agents` under their bare `mism-*` name and are dispatched by the assistant (they are not
-slash-commands). Verify: `/mismagent:mism-explore` must appear among the available skills.
+slash-commands). Verify: `/mismagent:explore` must appear among the available skills.
 
 ## Note
 The flow hard-codes no project specifics: the side repos' paths, the build/test commands (gate),

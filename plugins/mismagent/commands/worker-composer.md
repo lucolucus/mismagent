@@ -1,11 +1,11 @@
 ---
-description: mismAgent's Composer (build movement — REPLACES dev-orchestrator-v2). Reads the building-block manifest, builds the pieces in WAVES (boundary owners first, consumers in parallel) by dispatching specialized mism-worker workers via skills, keeps every piece green (D1) and every SEAM green (D2 = contract test on the merge). The ONLY one that merges and moves state; writes no code. Thin coordinator. Full spec: redesign/composer-spec.md.
+description: mismAgent's worker-composer (build movement — REPLACES dev-orchestrator-v2). Reads the building-block manifest, builds the pieces in WAVES (boundary owners first, consumers in parallel) by dispatching specialized mismagent-worker workers via skills, keeps every piece green (D1) and every SEAM green (D2 = contract test on the merge). The ONLY one that merges and moves state; writes no code. Thin coordinator. Full spec: redesign/composer-spec.md.
 argument-hint: "[feature | <output_dir>/<feature>/]"
 ---
 
-# Composer — executor of mismAgent's *architecture-driven* build
+# Worker-Composer — executor of mismAgent's *architecture-driven* build
 
-You are a **THIN coordinator**. You **write NO code and NO tests** (`mism-worker` does that). You
+You are a **THIN coordinator**. You **write NO code and NO tests** (`mismagent-worker` does that). You
 are the **only one that merges and moves state**. The build does not *orchestrate*, it **composes**:
 it realizes the architecture's building blocks and welds them at the **boundaries** the model has
 already drawn — *every piece green on its own* + *every seam keeps the green*. Full rationale:
@@ -29,7 +29,7 @@ boundary). *(This is where a Wave-1-style type bug stops, before wasting the wor
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
-- dispatch **`mism-worker`** (Agent tool) with: the **block-spec** from the manifest (incl.
+- dispatch **`mismagent-worker`** (Agent tool) with: the **block-spec** from the manifest (incl.
   `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
   projection)` + the side's `dev-architecture` (profile) + the model `tier`, and the **interfaces
   of the boundaries** the block touches (never the other side's source — only its public API /
@@ -37,8 +37,8 @@ parallel** (cap N; **one worktree per block**, off the base branch). For each re
 - worker → `READY-FOR-REVIEW` → §3 · `BOUNCED` (ambiguous AC) → `doing→backlog` + note · `BLOCKED` → stays.
 
 ## 3 · D1 — GREEN ON ITS OWN
-For each `READY-FOR-REVIEW`, **with fresh context**: `mism-verifier` (the profile's build + tests +
-`enforced_by` §14 + every AC covered) + `mism-code-review`. `PASS` and no HIGH finding → eligible
+For each `READY-FOR-REVIEW`, **with fresh context**: `mismagent-verifier` (the profile's build + tests +
+`enforced_by` §14 + every AC covered) + `code-review`. `PASS` and no HIGH finding → eligible
 for merge.
 
 ## 4 · COMPOSE (merge = composition)

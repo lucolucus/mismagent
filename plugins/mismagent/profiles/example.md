@@ -25,7 +25,8 @@ sides:
   fe:
     repo: machinecare-fe                    # e.g. Next.js + TypeScript
     dev_architecture: fe-dev-architecture   # golden files in machinecare-fe/docs/dev-architecture/
-    gate: "npm run lint && npm run build && npm run test && npm run test:contract"
+    gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
+    ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"
     contract: "openapi-typescript → src/types/api.generated.ts + contract.test.ts per operationId"
   infra:
     repo: machinecare-infra

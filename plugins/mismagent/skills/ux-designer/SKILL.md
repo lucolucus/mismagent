@@ -1,6 +1,6 @@
 ---
-name: mism-ux-designer
-description: 'mismAgent UX/UI design skill (explore/model). Does NOT write code: helps IMAGINE and PROPOSE the UI before the worker builds it. Reads descriptions + screens (UI/, sample/) and produces concepts/layouts/component breakdown + the data views that are needed. Output consumed by the manifest''s ui blocks (mism-build-manifest) and by the read-models'' view_shape (consumer-driven). Use when a feature has UI to design.'
+name: ux-designer
+description: 'mismAgent UX/UI design skill (explore/model). Does NOT write code: helps IMAGINE and PROPOSE the UI before the worker builds it. Reads descriptions + screens (UI/, sample/) and produces concepts/layouts/component breakdown + the data views that are needed. Output consumed by the manifest''s ui blocks (build-manifest) and by the read-models'' view_shape (consumer-driven). Use when a feature has UI to design.'
 ---
 
 # MismAgent — UX Designer (skill, explore/model)
@@ -21,7 +21,7 @@ several alternatives are needed in parallel, you may **spawn a subagent** for di
   loading states, not just the happy path.
 
 ## Anti-zombie principle
-Your output must **seed real work**: the manifest's **`ui` blocks** (`mism-build-manifest`:
+Your output must **seed real work**: the manifest's **`ui` blocks** (`build-manifest`:
 screens, `consumes_rm`, `tests_nl`) and the **read-models' `view_shape`** (the views the UI
 consumes, consumer-driven). If an idea becomes neither a component to build nor a view,
 it is noise: do not write it.
@@ -37,10 +37,10 @@ it is noise: do not write it.
 4. **Write** `<output_dir>/<feature>/UI/ux-proposal.md`: screens, components, **states**
    (empty / error / loading), and for each screen the **data views** it needs
    (→ they will seed the **read-models' `view_shape`**, consumer-driven).
-5. **Unknowns → spikes** (materialized by `mism-write-task`).
+5. **Unknowns → spikes** (materialized by `write-task`).
 
 ## Output (with its consumer)
-- `<output_dir>/<feature>/UI/ux-proposal.md` → consumed by `mism-build-manifest`
+- `<output_dir>/<feature>/UI/ux-proposal.md` → consumed by `build-manifest`
   (`ui` blocks + read-models' `view_shape` = the consumer-driven views).
 
 ## Boundaries

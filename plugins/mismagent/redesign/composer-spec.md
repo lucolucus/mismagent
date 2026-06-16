@@ -16,7 +16,7 @@ The build does not **orchestrate**, it **composes**: it realizes the architectur
 blocks* and fits them together along the **boundaries** that `model` has already drawn, keeping
 green both the blocks (on their own) and their **contract tests** (at the boundaries). The old
 orchestrator was a *conductor* (sequencing, epics, producer-before-consumer, monopolist
-git-writer); the new one is a *composer*.
+git-writer); the new one is a *worker-composer*.
 
 ---
 
@@ -121,7 +121,7 @@ producer-before-consumer as dogma, no hand-written file DAG. **It reads the arch
 5. DONE when: all blocks realized ∧ each one green on its own ∧ every boundary green (composed).
 ```
 **State = the folder** (Agentheim inheritance), but the folders organize **building blocks**, not
-file-tasks: the composer is the only one who moves them (plumbing, see Open #5).
+file-tasks: the worker-composer is the only one who moves them (plumbing, see Open #5).
 
 ---
 
@@ -152,27 +152,27 @@ What that derivation established, and what the rest of this spec encodes:
 1. **RESOLVED → §9.** The Aggregate root is a **building block of its own, built first**; the order
    is not invented, it is *read from the architecture* (the architecture-discovery step / IDEA-2).
    Persistence = **a driven adapter of its own** (domain agnostic of technology).
-2. **RESOLVED → §8.** How does the composer read the architecture, mechanically? A **building-block
+2. **RESOLVED → §8.** How does the worker-composer read the architecture, mechanically? A **building-block
    manifest** *generated* from the tactical model (not hand-written), which replaces the `dag.yaml`.
 3. **RESOLVED → §9.** The Contract Test lives **with the boundary owner**: invariant tests
    in the **Aggregate** (intra); **consumer-driven** contract test **in the Port** (inter,
-   consumer-owned), which the Adapter makes pass and the composer re-runs real-on-real in D2.
+   consumer-owned), which the Adapter makes pass and the worker-composer re-runs real-on-real in D2.
 4. **RESOLVED → §8.** Boundary projection: `in-process` vs `cross-deploy`, chosen by
    `side(consumer) == side(supplier)`. Cross-deploy ⇒ the Port projects into OpenAPI + HTTP CDC.
    This is what makes it **truly generalize** (the old OpenAPI is just the cross-deploy projection).
 5. **RESOLVED → §10.** git is plumbing, not identity: worktree = isolation (D1); **`git merge` = the
-   composition**, and the Contract Test runs *on the merge* (D2); the composer owns the merges ⇒
+   composition**, and the Contract Test runs *on the merge* (D2); the worker-composer owns the merges ⇒
    owns the state. Epics, universal producer-before-consumer, and `dag.yaml` all fall away.
-6. **DECIDED (2026-06-09): `Composer`.** It names the intent (it composes the building blocks at the
+6. **DECIDED (2026-06-09): `worker-composer`.** It names the intent (it composes the building blocks at the
    boundaries) and the philosophical contrast *composition vs orchestration*; the `-v2` disappears.
    (The worker remains to be renamed for consistency — minor.)
 7. **Multi-model worker (IDEA-1).** The building-block spec could declare an `llm_tier`, and the
-   composer could pick the worker's model per block (delicate Aggregate = powerful; trivial Adapter
+   worker-composer could pick the worker's model per block (delicate Aggregate = powerful; trivial Adapter
    = cheap). Orthogonal: after the core is solid.
 8. **OPEN (emerged from the comparison with Agentheim, §11): memory/prior-art for the worker.** The
    spec doesn't say **how the worker receives the "how"** (code conventions, prior-art of blocks
    already done, golden doc). Agentheim injects pre-loaded ADRs + prior-art + INDEX/knowledge;
-   mismAgent the profile's `dev-architecture` skill. For the Composer the natural source is the
+   mismAgent the profile's `dev-architecture` skill. For the worker-composer the natural source is the
    **golden doc from IDEA-2** (injected memory) + the outcomes of blocks already `done` — to be made
    explicit.
 
@@ -193,8 +193,8 @@ mismAgent principle: *"the contract is a consequence, not a source"*. Same for t
 | ADR `enforced_by` | mechanical constraint of the block |
 
 So **`mism-build-dag` (or its successor) emits the manifest** in place of the file-task `dag.yaml`.
-The manifest **is** the bridge: the only artifact the composer reads. No zombies — every row has
-a downstream consumer (the composer itself).
+The manifest **is** the bridge: the only artifact the worker-composer reads. No zombies — every row has
+a downstream consumer (the worker-composer itself).
 
 > The manifest is the **product of the architecture-discovery step** (IDEA-2, see §9), not a
 > separate artifact: that's where Aggregates/Ports/boundaries get chosen deliberately, and from
@@ -246,7 +246,7 @@ boundary.projection = side(consumer) == side(supplier)  ?  in-process  :  cross-
    flow had nailed down *only* that one; now it is **one of two** → the redesign **generalizes**
    instead of working around (it resolves the #4/#11/#12/#13/#15 cluster at the root).
 2. **BE‖FE is not a dogma, it's an effect.** In the `cross-deploy` case the blocks carry different
-   `side`s and the composer dispatches workers per side ⇒ the BE‖FE parallelism **re-emerges as a
+   `side`s and the worker-composer dispatches workers per side ⇒ the BE‖FE parallelism **re-emerges as a
    consequence** of the projection, not as a hard-coded assumption. On single-side it doesn't show
    up (one side only). → resolves **#13** *conceptually*. ⚠️ But **operationally**, in the
    cross-deploy case it is identical to mismAgent (you still dispatch BE‖FE in parallel against the
@@ -267,7 +267,7 @@ and the boundary blocks come first.*
 - **intra** boundary → owner = the **Aggregate root**: **a block of its own, built first** (#1);
   its contract test is the **invariant tests**, in there.
 - **inter** boundary → owner = the **Port** (consumer-owned): **consumer-driven** contract test,
-  lives **with the Port**; the Adapter makes it pass, the composer re-runs it real-on-real in D2 (#3).
+  lives **with the Port**; the Adapter makes it pass, the worker-composer re-runs it real-on-real in D2 (#3).
 
 **#1 — why root-first.** Parallelizing the consumers forces the boundary owner to exist first
 (otherwise two Application Services would race to create the same root). But the order is not an
@@ -283,13 +283,13 @@ the guard its own separate "green on its own" (the persistence-adapter as a bloc
 
 **Elevation of IDEA-2 — architecture discovery is the front of the pipeline.** The manifest
 (§8) is the **product** of the architecture-discovery step (IDEA-2, today embryonic in
-`mism-architect`): that's where Aggregates/Ports/boundaries get chosen deliberately (pros/cons,
+`mismagent-architect`): that's where Aggregates/Ports/boundaries get chosen deliberately (pros/cons,
 golden doc), and from those choices fall out blocks, boundaries, projections and the root-first
 order. IDEA-2 stops being "an idea for review": it is the **first movement of the build**.
 ```
 architecture discovery (IDEA-2: choices + golden doc)
    → building-block manifest (§8)
-   → composer (§5): boundary owners first · consumers in parallel · contract tests at the boundaries
+   → worker-composer (§5): boundary owners first · consumers in parallel · contract tests at the boundaries
 ```
 
 > ⚠️ **Caveat (§12, attack 3):** "invariants on the root, written once" is today a **principle**,
@@ -310,11 +310,11 @@ identity. In the new one, git is a **tool of the two duties**, re-derived:
   parallelism safe (consumers writing at the same time don't step on each other). It survives, from
   *identity* to *tool*.
 - **`git merge` = the composition itself.** A block that is green on its own gets **merged** into
-  the integration line; as soon as a boundary has **both sides** in, the composer runs the
+  the integration line; as soon as a boundary has **both sides** in, the worker-composer runs the
   **boundary's contract test on the merge result** = **D2**. Green → boundary welded, the merge
   stays. Red → composition failed → merge **rejected/`BOUNCED`**. *Composition isn't orchestrated,
   it's welded: it IS a merge gated by the contract test.*
-- **The composer owns the merges ⇒ owns the state** (`git mv` between the block folders). It is not
+- **The worker-composer owns the merges ⇒ owns the state** (`git mv` between the block folders). It is not
   the "only git-writer" dogma: it is a **consequence** of being the integrator. The worker commits
   only code in its worktree — never merges, never state. (The old invariant, made precise: not "the
   only one writing git", but "**the only one doing merges and moving state**".)
@@ -326,19 +326,19 @@ request (flow invariant #7).
 
 ---
 
-## 11. Comparison with the ancestors (validation): Agentheim → mismAgent → Composer
+## 11. Comparison with the ancestors (validation): Agentheim → mismAgent → worker-composer
 
 > Sources: Agentheim = repo `github.com/heimeshoff/Agentheim` (skill `work` + agents, fetched
 > 2026-06-09); mismAgent = `dev-orchestrator-v2.md` + `mism-developer-lean.md` of this repo.
 
-| Dimension | **Agentheim** | **mismAgent** (`dev-orch-v2`+`dev-lean`) | **Composer** |
+| Dimension | **Agentheim** | **mismAgent** (`dev-orch-v2`+`dev-lean`) | **worker-composer** |
 |---|---|---|---|
 | Unit | task (file level) | lean task (files + `contract_ref`) | **Application Service on an Aggregate** |
 | **Integration** | dependency-DAG + **per-file isolation** + per-task verifier — **no boundary** | same + **ONE** cross-side OpenAPI contract | **boundaries first-class** (Aggregate intra + Port inter), contract test per boundary, in-/cross-deploy projection |
 | "Works by files" | **yes** (origin of the defect) | yes (inherited) | **no** (building block + boundary) |
 | Invariants | no home (ACs per task) | ACs per task | **on the Aggregate root**, once |
 | Who commits | the orchestrator | the worker (story branch) | the worker (worktree) |
-| Who moves the state | **the worker** | the orchestrator (`git mv`) | the Composer |
+| Who moves the state | **the worker** | the orchestrator (`git mv`) | the worker-composer |
 | Who writes the ADRs | **the worker** | upstream (model) | upstream (IDEA-2) |
 | Merging | commit/task after the verifier | merge to master, produces-before-consumes | **`git merge` = composition**, contract test on the merge |
 | Parallelism | DAG + file-isolation | **hard-coded BE‖FE** + DAG | **effect** of the cross-deploy projection |
@@ -347,23 +347,23 @@ request (flow invariant #7).
 **Four outcomes (they validate the spec):**
 1. **The "works by files" is ANCESTRAL.** Agentheim integrates only at the file level (BCs
    "separated only by README + index"). mismAgent inherited it and bolted on *one* cross-side
-   contract. The Composer is the **first** to replace per-file isolation with architectural
+   contract. The worker-composer is the **first** to replace per-file isolation with architectural
    boundaries. *The leap is in the integration, not in the worker — but it is **evolution**, not
    revolution (§12), and the per-file isolation being abandoned was also a robustness (§12,
    attack 2).*
 2. **The worker is nearly unchanged along the lineage** (and mismAgent had already slimmed it down
-   from Agentheim: removed ADRs/state/README, added the commit). The Composer keeps the worker lean
+   from Agentheim: removed ADRs/state/README, added the commit). The worker-composer keeps the worker lean
    and changes only *what it produces* (a building block) and *how it integrates*. → the worker
    resembles Agentheim's because **it descends from it**; but the integration model is another.
 3. **mismAgent already had ~80% of the cross-deploy:** `dev-orch-v2` already has "additive vs
    breaking → producer-before-consumer *only at merge* (the FE has the generated types)". The
-   Composer doesn't invent it: it **generalizes** it (one projection among several) and pairs it
+   worker-composer doesn't invent it: it **generalizes** it (one projection among several) and pairs it
    with the intra-Aggregate boundary. → coherent evolution, not a break.
 4. **Gap surfaced → Open #8:** the **memory/prior-art for the worker** (Agentheim injects it
-   heavily; the Composer spec doesn't). Natural source: the IDEA-2 golden doc + the outcomes of
+   heavily; the worker-composer spec doesn't). Natural source: the IDEA-2 golden doc + the outcomes of
    `done` blocks.
 
-**What of the old `dev-orchestrator-v2` SURVIVES in the Composer:** state = the folder, sole
+**What of the old `dev-orchestrator-v2` SURVIVES in the worker-composer:** state = the folder, sole
 merger/state-mover, fresh-context verifier + code-review, worktrees for isolation,
 no-merge-onto-base-without-OK. **What FALLS:** the file-task `dag.yaml` (→ manifest), BE‖FE as a
 hard-coded axis (→ effect of the projection), universal producer-before-consumer (→ only the
@@ -383,7 +383,7 @@ cross-deploy CDC), epics/`project-orchestrator`.
 2. **Per-file isolation is also robustness** (zero conflicts guaranteed, no dependency on a perfect
    upstream architecture). The boundary model is **fragile** if IDEA-2 gets a boundary wrong/misses
    one — more likely on **greenfield** (`dev_architecture: none`), i.e. exactly where mismAgent
-   already struggles. The Composer is riskier *precisely there*.
+   already struggles. The worker-composer is riskier *precisely there*.
 3. **"Invariants on the root" is a principle, not a gate.** The spec doesn't prevent an Application
    Service from re-implementing an invariant: without a mechanical check, it's "write good code",
    same as before.
@@ -395,13 +395,13 @@ cross-deploy CDC), epics/`project-orchestrator`.
    and validated-against the same case**. It only proves a human can write good DDD for one
    vertical.
 
-**The underlying attack:** the Composer is newest/most valuable in the **multi-team cross-deploy**
+**The underlying attack:** the worker-composer is newest/most valuable in the **multi-team cross-deploy**
 case (where mismAgent already worked) and more **ceremonious/risky in the single-side greenfield**
 — which is the very *trigger* of the redesign ("too heavy for single-side"). It risks **solving the
 wrong problem**: the benefit lands where the pain wasn't, the ceremony where it was.
 
 > **Reply (the user) — DOWNGRADES this attack.** Category error: the boundary work
-> (port + contract test) is **the worker's work**, not Composer ceremony (the Composer stays thin,
+> (port + contract test) is **the worker's work**, not worker-composer ceremony (the worker-composer stays thin,
 > 2 duties). The worker is **specializable via skills** (precedent: the per-side
 > `dev-architecture`). The **projection (#4) selects the worker's skill**: single-side → a light
 > "in-process boundary" skill (interface + in-process test = what you'd write anyway); cross-deploy
@@ -422,7 +422,7 @@ wrong problem**: the benefit lands where the pain wasn't, the ceremony where it 
 **RESHAPE → PROCEED conditions (before the core):**
 - **(a) ~~existential~~ → DOWNGRADED to a design task (reply above):** the single-side weight is
   the **skill-specialized worker's** work (projection → skill: light in-process / heavy
-  cross-deploy), not Composer ceremony. What remains is to **design the worker's skill matrix**
+  cross-deploy), not worker-composer ceremony. What remains is to **design the worker's skill matrix**
   (block-type × projection), which absorbs #8 + IDEA-1 + #4.
 - **(b) RESOLVED (design) → §14:** the mechanical gate = **confining invariant-bearing state inside
   the Aggregate** (3 greps generated from the manifest: no persistence/state writes from outside, no
@@ -440,7 +440,7 @@ wrong problem**: the benefit lands where the pain wasn't, the ceremony where it 
 **Principle:** **one single worker**, which *loads the right skills for each block* (just as today
 it loads the per-side `dev-architecture`). Each invocation composes:
 **(1 block-type) + (1 projection, if it touches a boundary) + (per-side memory) + (model tier)**.
-All the specialization lives **in the skills**; the Composer stays thin.
+All the specialization lives **in the skills**; the worker-composer stays thin.
 
 ### A — skills per BLOCK-TYPE (core, portable)
 | skill | realizes | carries with it |
@@ -460,6 +460,10 @@ All the specialization lives **in the skills**; the Composer stays thin.
 ### C — cross-cutting (core)
 - `tdd` (red-green-refactor) — **already exists in Agentheim**; the A skills lean on it.
 - *(self-review/fix-loop until the gate is green = the worker's **process**, not a skill.)*
+- *(**frugality ladder** — before writing code the worker climbs YAGNI → domain-reuse → native/
+  persistence-native → installed-dep → one-liner → minimum, stopping at the first rung that works,
+  but **never** relaxing the boundary/invariants/tests; ponytail-inspired, = the worker's **process**,
+  not a skill. See `agents/mismagent-worker.md`.)*
 
 ### D — PER-SIDE / PER-STACK memory (provided by the project = #8, produced by IDEA-2) — NOT core
 - `<side>-dev-architecture` — golden doc: conventions, layering, naming, test framework. *(Origin-project precedents: `be-dev-architecture`, `fe-dev-architecture`)*
@@ -505,6 +509,13 @@ captive of the root.
 `invariant_fields` + `tables`, and the gate **generates** the three `enforced_by` greps. The
 verifier runs them. → closes the loop with #2.
 
+**The generated greps are code-scoped (friction-log #11/#12):** they anchor to **imports / field
+accesses in code**, never bare tokens in prose — a doc-comment naming the forbidden tech must not
+trip the gate (rule 3 greps `\.Active` *excluding comment lines*, not the raw substring) — and they
+target the Aggregate's **package/dir or symbols**, never a guessed filename (the worker chooses the
+layout). A grep whose target path does not exist matches nothing and **looks green** → the verifier
+treats a missing target as **FAIL**, not pass (§ verifier step 6).
+
 **Real ADRs are already instances of this** (the pilot project has them): an ADR "no `DELETE` on
 the aggregate's table" = rule 1; an ADR "no `UPDATE` on a write-once field" = rule 1 (write-once);
 an invariant-bearing field confined to its aggregate = rule 3. (b) **generalizes** them to every
@@ -517,10 +528,10 @@ semantic one remains with the review.
 
 ---
 
-## 15. The Composer's execution flow (ties §5 · §8 · §10 · §13 · §14 together)
+## 15. The worker-composer's execution flow (ties §5 · §8 · §10 · §13 · §14 together)
 
 Designed with the user on 2026-06-09. A **deterministic** flow (loop + parallel + barrier) → it is
-the shape the core's `Composer` command would encode.
+the shape the core's `worker-composer` command would encode.
 
 ```
 INPUT: building-block manifest (from IDEA-2) + profile (sides, gate, branching)
@@ -544,7 +555,7 @@ Phase 2 · WAVE LOOP (until all done)
      fresh-context verifier: build + tests + enforced_by(§14) + ACs covered → PASS = eligible for merge
 
   Phase 4 · COMPOSE
-     the Composer does `git merge` of the block into the integration line        (merge = composition, §10)
+     the worker-composer does `git merge` of the block into the integration line        (merge = composition, §10)
 
   Phase 5 · D2 — WELD THE BOUNDARY (for each boundary with BOTH sides now merged — BARRIER)
      run the boundary's contract_test, real-on-real
@@ -564,7 +575,7 @@ Phase 7 · REPORT
 - worker `BOUNCED` (ambiguous AC) → to the manifest/spec; · D1 FAIL / D2 RED → to the worker
   (rework, max K cycles).
 
-**Who touches what:** only the Composer merges and moves the folders; the workers write code in the
+**Who touches what:** only the worker-composer merges and moves the folders; the workers write code in the
 worktrees, never state, never merges (§10).
 
 *(A worked run of this flow on a real feature — the actual waves, merges and D2 — lives with the

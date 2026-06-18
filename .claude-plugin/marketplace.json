@@ -8,13 +8,13 @@
   "plugins": [
     {
       "name": "mismagent",
-      "description": "The mismAgent KERNEL: dialogic explore (challenger/analyst), tactical model -> building-block manifest (types pinned at the boundaries), skill-matrix workers (realize-* + seam-in-process), Composer (merge=composition, D2 on the boundary). Enough on its own for single-side projects.",
+      "description": "The mismAgent KERNEL: dialogic explore (challenger/analyst), tactical model -> building-block manifest (types pinned at the boundaries), skill-matrix workers (realize-* + seam-in-process), worker-composer (merge=composition, D2 on the boundary). Enough on its own for single-side projects.",
       "source": "./plugins/mismagent",
       "category": "development"
     },
     {
       "name": "mismagent-cross-deploy",
-      "description": "Module BY NECESSITY: cross-deploy boundaries (consumer and supplier on different sides). The port is projected into OpenAPI + generated types + CDC: skills seam-cross-deploy and mism-create-contract. Enable it ONLY if the profile declares multiple sides with boundaries between them.",
+      "description": "Module BY NECESSITY: cross-deploy boundaries (consumer and supplier on different sides). The port is projected into OpenAPI + generated types + CDC: skills seam-cross-deploy and create-contract. Enable it ONLY if the profile declares multiple sides with boundaries between them.",
       "source": "./plugins/mismagent-cross-deploy",
       "category": "development"
     }

@@ -16,13 +16,13 @@ as a GitHub repo):
 (direct equivalent: `extraKnownMarketplaces` with `source: directory` + `enabledPlugins` in
 `~/.claude/settings.json`, then `/reload-plugins` — see README §Installation).
 
-Verify: the skill **`/mismagent:mism-explore`** (namespace included!) must appear among the
-available ones. **Agents** (`mism-challenger`, `mism-analyst`, …) are not slash-commands: they
+Verify: the skill **`/mismagent:explore`** (namespace included!) must appear among the
+available ones. **Agents** (`mismagent-challenger`, `mismagent-analyst`, …) are not slash-commands: they
 show up in `/agents` and the assistant dispatches them. *(After installing/changing, a
 `/reload-plugins` may be needed for the new ones to enter the registry.)*
 
 ## 2. Profile: the BOOTSTRAP is enough to start
-You don't need the full profile before explore — you need the **bootstrap** (`mism-explore`
+You don't need the full profile before explore — you need the **bootstrap** (`explore`
 also creates it at step 0 if it's missing): in `.mismagent/profile.md` put
 - **output_dir** (recommended default: `.mismagent`),
 - **ubiquitous_language.lang** (the language the domain speaks),
@@ -33,12 +33,12 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 `gate: "manual — TBD after the stack ADR"`. Template: `PROFILE.md`; filled-in example: `profiles/example.md`.
 
 ## 3. Launch the flow
-`/mismagent:mism-explore` on the idea → `mism-challenger` (demolishes) → `mism-researcher`/
-`mism-analyst` (model) → **model** (ask to dispatch `mism-tactical-modeler`, then
-`mism-architect`; skill `/mismagent:mism-ux-designer` if there is UI, `/mismagent:mism-build-manifest`
-for the manifest; `/mismagent-cross-deploy:mism-create-contract` — from the module — only if a
+`/mismagent:explore` on the idea → `mismagent-challenger` (demolishes) → `mismagent-researcher`/
+`mismagent-analyst` (model) → **model** (ask to dispatch `mismagent-tactical-modeler`, then
+`mismagent-architect`; skill `/mismagent:ux-designer` if there is UI, `/mismagent:build-manifest`
+for the manifest; `/mismagent-cross-deploy:create-contract` — from the module — only if a
 boundary is cross-deploy) →
-**build** (`/mismagent:composer <feature>` → `mism-worker` ×N → verifier + code-review →
+**build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier + code-review →
 you confirm → flag).
 
 ---
@@ -51,7 +51,7 @@ you confirm → flag).
 - **The stack is decided in model, WITH you.** Don't fill in `gate`/stack in the profile by
   guessing: the architect presents the alternatives, you choose, the stack ADR gets written
   afterwards — and the architect finalizes the `gate` in the profile.
-- **Boundaries pinned before the workers.** The Composer's readiness blocks a manifest with
+- **Boundaries pinned before the workers.** The worker-composer's readiness blocks a manifest with
   unpinned boundary types (Published Language): it is the most expensive lesson of the first run —
   two workers blind on an under-specified boundary produce pieces that do NOT compose.
 - **Single-side is not a degraded case.** A single side ⇒ all boundaries `in-process`

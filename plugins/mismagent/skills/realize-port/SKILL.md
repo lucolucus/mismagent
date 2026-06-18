@@ -27,7 +27,7 @@ Rationale: `redesign/composer-spec.md` §2·§3·§9.
 - **Translate the user's `tests_nl`** (§16) on the boundary into contract test cases (e.g. *"if I
   change the price, old sales keep the old price"* → a case that goes through the port).
 
-## The projection (the Composer chooses it, §13.B)
+## The projection (the worker-composer chooses it, §13.B)
 - `seam-in-process` (single-side) → the port stays a code interface + in-process contract test.
 - `seam-cross-deploy` (multi-side) → the port is projected into OpenAPI + per-side types + CDC (Pact).
 You **do not distinguish**: you realize the interface + the contract test; skill B does the

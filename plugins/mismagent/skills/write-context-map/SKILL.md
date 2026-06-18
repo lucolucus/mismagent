@@ -1,25 +1,25 @@
 ---
-name: mism-write-context-map
-description: 'mismAgent''s specialized context-map writer (explore movement). Produces <output_dir>/<feature>/context-map.md: bounded contexts (DDD strategic) + relationships + ubiquitous language per context + TACTICAL MODEL per context (aggregates/invariants/domain events/commands, each with its downstream consumer) + list of open spikes. Inspired by Agentheim''s Model/context-map, but with the tactical persisted per-feature. Invoked by mism-analyst (inside explore). Every element has a downstream consumer (survival test), so it is not a zombie.'
+name: write-context-map
+description: 'mismAgent''s specialized context-map writer (explore movement). Produces <output_dir>/<feature>/context-map.md: bounded contexts (DDD strategic) + relationships + ubiquitous language per context + TACTICAL MODEL per context (aggregates/invariants/domain events/commands, each with its downstream consumer) + list of open spikes. Inspired by Agentheim''s Model/context-map, but with the tactical persisted per-feature. Invoked by mismagent-analyst (inside explore). Every element has a downstream consumer (survival test), so it is not a zombie.'
 ---
 
 # MismAgent — Write Context Map (writer, explore)
 
-Write/update `<output_dir>/<feature>/context-map.md`. Invoked by `mism-analyst`. Orientation: `methodology/mismagent.md`.
+Write/update `<output_dir>/<feature>/context-map.md`. Invoked by `mismagent-analyst`. Orientation: `methodology/mismagent.md`.
 
 ## Why it exists (downstream consumers = survival test)
-- **Bounded contexts** → seed the **boundaries** (manifest boundaries, `mism-build-manifest`).
+- **Bounded contexts** → seed the **boundaries** (manifest boundaries, `build-manifest`).
 - **Ubiquitous language** → seeds the **canonical names** of blocks and types (and, if a boundary
-  projects cross-deploy, of the OpenAPI `components/schemas`); the `mism-verifier` greps those
+  projects cross-deploy, of the OpenAPI `components/schemas`); the `mismagent-verifier` greps those
   terms on the diff → drift = FAIL.
 - **Aggregates / entities + invariants** → seed the manifest's **`aggregate` blocks** (with
-  `invariants`/`invariant_fields`) and the **invariant ACs**; the `mism-verifier` demands
+  `invariants`/`invariant_fields`) and the **invariant ACs**; the `mismagent-verifier` demands
   a test for every invariant. Capturing them HERE prevents `model` from reinventing them (drift).
 - **Domain events** → seed the **`read-model` blocks** (queries/views; the boundary projection
   decides whether they become GET endpoints) and the side-effects/guards of the writes.
 - **Commands (+ actor)** → seed the **`application-service` blocks** (the projection decides
   whether they project into write endpoints with an `operationId`).
-- **Open spikes** → become **`type: spike` nodes** (via `mism-write-task`).
+- **Open spikes** → become **`type: spike` nodes** (via `write-task`).
 
 If an element has no consumer, **do not write it** — this holds row by row of the tactical model.
 
@@ -35,7 +35,7 @@ If an element has no consumer, **do not write it** — this holds row by row of 
 - **Aggregates / entities:** <Aggregate (root)> guards <entities / value objects>
    → manifest `aggregate` block + architectural decision (architect)
 - **Invariants:** [INV-1] <cross-field rule, e.g. extraordinary maintenance ⇒ requires an attachment>
-   → Gherkin AC + invariant-test on the aggregate block (verified by mism-verifier)
+   → Gherkin AC + invariant-test on the aggregate block (verified by mismagent-verifier)
 - **Domain events:** <PastTenseEvent, e.g. MaintenanceRecorded>
    → `read-model` block (query/view) / side-effect / guard of the write
 - **Commands (+ actor):** <Command, e.g. RecordMaintenance> (actor: <who expects it>)
@@ -47,7 +47,7 @@ If an element has no consumer, **do not write it** — this holds row by row of 
 
 ## Seeds for the tactical (to be consumed — the analyst writes, the tactical-modeler absorbs)
 <!-- Aggregates/invariants GLIMPSED during the strategic. EPHEMERAL but PERSISTED section:
-     it is the explore→model handoff (ex SEEDS_FOR_TACTICAL). mism-tactical-modeler reads it from
+     it is the explore→model handoff (ex SEEDS_FOR_TACTICAL). mismagent-tactical-modeler reads it from
      HERE (not from a message), absorbs it into the "Tactical model" and then empties it. -->
 - <glimpsed aggregate/invariant, 1 line each>
 
@@ -71,4 +71,4 @@ If an element has no consumer, **do not write it** — this holds row by row of 
 ## Outcome
 Path of the file, bounded contexts written, key ubiquitous-language terms, invariants
 captured (→ ACs / invariant-tests), Seeds for the tactical persisted, open spikes (materializable
-as `type: spike` nodes via `mism-write-task`).
+as `type: spike` nodes via `write-task`).

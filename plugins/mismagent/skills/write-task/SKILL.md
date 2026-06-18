@@ -1,6 +1,6 @@
 ---
-name: mism-write-task
-description: 'mismAgent''s specialized writer of the lean task-file (model movement + Defer in build + spikes from explore). Produces tasks/<side>/<state>/<id>.md: boundary + Gherkin ACs + depends_on + contract_ref (by operationId) + references (anchors), MUTE on the how, state = the folder. Also handles type: spike (research/unknown node) and the spike closure protocol. Invoked by mism-build-manifest, by the Composer (Defer) and to materialize the context-map''s spikes.'
+name: write-task
+description: 'mismAgent''s specialized writer of the lean task-file (model movement + Defer in build + spikes from explore). Produces tasks/<side>/<state>/<id>.md: boundary + Gherkin ACs + depends_on + contract_ref (by operationId) + references (anchors), MUTE on the how, state = the folder. Also handles type: spike (research/unknown node) and the spike closure protocol. Invoked by build-manifest, by the worker-composer (Defer) and to materialize the context-map''s spikes.'
 ---
 
 # MismAgent — Write Task (writer, model / Defer / spike)
@@ -9,7 +9,7 @@ Write a **lean** task-file in `<output_dir>/<feature>/tasks/<side>/<state>/<id>.
 starting state is almost always `backlog/`). Orientation:
 `methodology/mismagent.md`. Target **80-120 lines**.
 
-## Invariants (also enforced by the `mism-readiness-gate` and the CI guards)
+## Invariants (also enforced by the `readiness-gate` and the CI guards)
 - **No state in the file:** `status:` in the frontmatter and the sections `## Status`,
   `## File List`, `## Change Log`, `## Dev Agent Record`, `## Dev Notes`, `## Implementation Plan`
   are forbidden. State **IS the folder**.
@@ -78,7 +78,7 @@ An open spike **blocks** its consumers; it is closed like this, never by "deleti
 2. **The spike node goes to `done/`** (not deleted) with a `resolution:` field in the frontmatter
    pointing to the consumer of the decision (`resolution: ADR-NNNN` or
    `resolution: AC of <task/block-id>`) — non-zombie trace.
-3. **Who closes it:** in `build` the orchestrator/Composer moves it (the only git-writer of
+3. **Who closes it:** in `build` the orchestrator/worker-composer moves it (the only git-writer of
    state); in `model`/`explore` — where no orchestrator exists — it is closed by **whoever leads the
    movement in session**, noting it in the outcome. This is not a violation of "state = the folder":
    the monopolist rule holds inside build.
@@ -103,16 +103,16 @@ ready_when: "no-consumer-uses:<deprecated-operationId>"
 No consumer references `<deprecated-operationId>` anymore — verifiable: grep the FE/sync repos
 for the old `operationId` (zero matches) and/or a contract test asserting "no calls to v1".
 As long as the condition is false, the task stays in `backlog/` as an **explicit pending** (the
-`mism-readiness-gate` reports it, it does not leave it mute), NEVER as a deadlock.
+`readiness-gate` reports it, it does not leave it mute), NEVER as a deadlock.
 ```
 
 ## Leanness rule & dependencies
 - If > ~5 `references` are needed or the file exceeds 120 lines → the **slice is too big**:
-  do not write a giant task, signal `mism-build-manifest` to split.
+  do not write a giant task, signal `build-manifest` to split.
 - Cross-slice `depends_on` is allowed. For an **additive** contract change on a read, the
   `consumes` task (consumer side) does **not** depend-for-development on the producer task (it has
   the types generated from the contract): the order matters only at **deploy** time (it is the
-  Composer's CDC publish/verify, cross-deploy boundary). So do NOT add a producer→consumer
+  worker-composer's CDC publish/verify, cross-deploy boundary). So do NOT add a producer→consumer
   `depends_on` for additive fields alone.
 
 ## Outcome

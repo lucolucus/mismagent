@@ -21,8 +21,8 @@ flowchart TD
     subgraph EX["explore — you in dialogue"]
         direction TB
         dlg["in-session dialogue with the user<br/>(+ profile bootstrap if missing)"]
-        chal["mism-challenger — fresh context<br/>KILL · RESHAPE · PROCEED"]
-        ana["mism-analyst<br/>strategic model + ubiquitous language"]
+        chal["mismagent-challenger — fresh context<br/>KILL · RESHAPE · PROCEED"]
+        ana["mismagent-analyst<br/>strategic model + ubiquitous language"]
         cmap[("context-map.md")]
         dlg --> chal --> ana --> cmap
     end
@@ -31,9 +31,9 @@ flowchart TD
 
     subgraph MO["model — you confirm the boundaries"]
         direction TB
-        tact["mism-tactical-modeler<br/>aggregates/invariants/events/commands"]
-        arch["mism-architect<br/>architecture + ADRs · stack deliberated with you"]
-        bman["mism-build-manifest<br/>types PINNED at the boundaries"]
+        tact["mismagent-tactical-modeler<br/>aggregates/invariants/events/commands"]
+        arch["mismagent-architect<br/>architecture + ADRs · stack deliberated with you"]
+        bman["build-manifest<br/>types PINNED at the boundaries"]
         manifest[("building-blocks.yaml")]
         tact --> arch --> bman --> manifest
     end
@@ -42,7 +42,7 @@ flowchart TD
 
     subgraph BU["build — you delegate; confirm at the end"]
         direction TB
-        comp["/mismagent:composer<br/>owner-first waves · merge = composition · contract test on the boundary"]
+        comp["/mismagent:worker-composer<br/>owner-first waves · merge = composition · contract test on the boundary"]
         comp
     end
 
@@ -55,7 +55,7 @@ flowchart TD
 - **model** — *you confirm the boundaries.* The tactical model (aggregates, invariants, events,
   commands) becomes a **building-block manifest** with the boundary **types pinned**. Foundational
   decisions (stack, language) are **deliberated with you**, never emitted in a silent ADR.
-- **build** — *you delegate, confirm only at the end.* The **Composer** reads the manifest and
+- **build** — *you delegate, confirm only at the end.* The **worker-composer** reads the manifest and
   *composes*: it builds the boundary owners first, the consumers in parallel, keeps every block green
   on its own, and welds each boundary with a contract test at merge time.
 
@@ -67,7 +67,7 @@ design rationale of the architecture-driven build.
 ## The ideas that hold it together
 
 - **State = the folder.** A task/block's status *is* its directory (`todo/ doing/ done/`); only the
-  Composer moves it. No status fields to drift.
+  worker-composer moves it. No status fields to drift.
 - **The boundary is executable.** Every boundary carries pinned types (Published Language) + a
   contract test — invariant tests on an aggregate, consumer-driven tests on a port. The "contract"
   is the contract test on a Bounded-Context boundary; OpenAPI is just its *cross-deploy projection*,
@@ -90,12 +90,12 @@ fictional instance).
 
 ## Kernel + modules by necessity
 
-- **`plugins/mismagent`** — the **kernel**: explore, model, the Composer, and the worker's
+- **`plugins/mismagent`** — the **kernel**: explore, model, the worker-composer, and the worker's
   skill-matrix (`realize-*` block types × `seam-in-process`). Enough on its own for a single-side
   project.
 - **`plugins/mismagent-cross-deploy`** — a module enabled **only when** a boundary crosses a deploy
   unit: the port projects into OpenAPI + generated types + CDC (`seam-cross-deploy`,
-  `mism-create-contract`).
+  `create-contract`).
 - **`attic/`** — the superseded file-driven flow, kept out of the plugin registry on purpose (a
   loaded superseded piece is a zombie in waiting). The history is in `git log`.
 
@@ -111,7 +111,7 @@ GitHub repo):
 /reload-plugins
 ```
 
-Skills and commands are namespaced: `/mismagent:mism-explore`, `/mismagent:composer`, … Agents
+Skills and commands are namespaced: `/mismagent:explore`, `/mismagent:worker-composer`, … Agents
 (`mism-*`) are dispatched by the assistant, not invoked as slash-commands. Start a feature with
-`/mismagent:mism-explore <your idea>`.
+`/mismagent:explore <your idea>`.
 

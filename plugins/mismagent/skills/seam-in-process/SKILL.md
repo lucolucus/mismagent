@@ -17,7 +17,7 @@ would write anyway.
   is instantiated twice —
   1. on a **fake** of the port → the consumer is green on its own (D1, without the real supplier);
   2. on the **real Adapter** on top of the real supplier → the welding of the boundary (D2), which the
-     Composer re-runs on merge.
+     worker-composer re-runs on merge.
 - **No generated types, no CDC publish/verify:** the boundary is code + test, all in the same process.
 
 ## The type at the boundary

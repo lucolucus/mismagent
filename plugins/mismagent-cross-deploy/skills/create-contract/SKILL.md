@@ -1,6 +1,6 @@
 ---
-name: mism-create-contract
-description: 'Model movement of mismAgent — ONLY for boundaries with CROSS-DEPLOY projection (the OpenAPI is the cross-deploy projection of a Bounded Context boundary; in-process/single-side the port stays a code interface and this skill is NOT used). RECONCILES the API CONTRACT (executable OpenAPI YAML, single source) as a CONSEQUENCE of the blocks/tasks: they declare the operationIds, here the shapes are filled in and the names are fixed from the ubiquitous language of explore. Stable operationIds, components/schemas with the canonical domain name, + the ADRs. Consumer-driven authorship on reads, producer-driven on writes; the architect arbitrates feasibility. Use after mism-build-manifest when at least one boundary is cross-deploy.'
+name: create-contract
+description: 'Model movement of mismAgent — ONLY for boundaries with CROSS-DEPLOY projection (the OpenAPI is the cross-deploy projection of a Bounded Context boundary; in-process/single-side the port stays a code interface and this skill is NOT used). RECONCILES the API CONTRACT (executable OpenAPI YAML, single source) as a CONSEQUENCE of the blocks/tasks: they declare the operationIds, here the shapes are filled in and the names are fixed from the ubiquitous language of explore. Stable operationIds, components/schemas with the canonical domain name, + the ADRs. Consumer-driven authorship on reads, producer-driven on writes; the architect arbitrates feasibility. Use after build-manifest when at least one boundary is cross-deploy.'
 ---
 
 # MismAgent — Create Contract (model movement, cross-deploy projection only)
@@ -56,16 +56,16 @@ A write has **two** pieces of contract beyond the success response:
   `ValidationError` schema), not only the 200/201s.
 - **Domain invariants** (cross-field rules, e.g. "subtype X valid only for category Y"):
   **take them from the "Tactical model" section of the `context-map.md`** (captured by
-  `mism-analyst`), **do not reinvent them**. They are NOT expressible in OpenAPI (the shape does
+  `mismagent-analyst`), **do not reinvent them**. They are NOT expressible in OpenAPI (the shape does
   not capture them) → they remain in the **producer side's domain**. To make them executable truth,
   the producer task must have an **AC on the invariant** (a test that verifies the 422 when the
-  invariant is violated). The `mism-verifier` checks that this AC has a test. The consumer side
+  invariant is violated). The `mismagent-verifier` checks that this AC has a test. The consumer side
   discovers them via 422 (which is why the 422 is contract, not extra).
 
-## ADR — delegate to `mism-write-adr`
-Non-obvious decisions become ADRs: **invoke `mism-write-adr`** (it owns format,
+## ADR — delegate to `write-adr`
+Non-obvious decisions become ADRs: **invoke `write-adr`** (it owns format,
 numbering, `supersedes`, `enforced_by` rule). Reminder: `enforced_by` (executable grep/lint,
-checked by the `mism-verifier`) **only** for mechanical constraints; discursive ADRs are
+checked by the `mismagent-verifier`) **only** for mechanical constraints; discursive ADRs are
 verified by the code-review. Typical here: additive-vs-breaking choice, canonical naming
 of a schema, access constraint (e.g. Managed Identity).
 
@@ -89,7 +89,7 @@ Modifying an existing operation is normal; **always classify** the change (used 
    from the domain (invariants, validation — producer-driven), including the errors (see below).
 4. **Names from the ubiquitous language:** every schema carries the canonical name from the
    `context-map` (one concept = one name). No synonyms.
-5. For every feasibility/cost conflict: decide, write an ADR (via `mism-write-adr`),
+5. For every feasibility/cost conflict: decide, write an ADR (via `write-adr`),
    possibly with a counter-proposal.
 6. **Close the loop:** every `operationId` declared by the tasks exists in the YAML and vice versa
    (no orphan endpoint, no task pointing to a non-existent `operationId`).

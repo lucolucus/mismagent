@@ -450,6 +450,7 @@ All the specialization lives **in the skills**; the worker-composer stays thin.
 | `realize-port` | consumer-owned read-only interface (declaration of the boundary) | the spec of the consumer-driven contract test |
 | `realize-adapter` | impl. of a port — variants: *read* (toward another context) and *persistence* (repository) | round-trip tests; honors `enforced_by` |
 | `realize-read-model` | query/projection (CQRS) | the view's test |
+| `realize-scaffold` | **greenfield only**: the minimal buildable skeleton (wrapper/modules/plugins) — wave-0 owner | acceptance = the side's gate green on the empty tree (no domain, no ACs) |
 
 ### B — skills per boundary PROJECTION (core) — selected by #4
 | skill | boundary | weight |
@@ -542,9 +543,12 @@ Phase 0 · INGEST
 
 Phase 1 · READINESS (model→build gate, evolved)
   ∀ block: complete spec · ∀ boundary: PINNED TYPES + contract_test defined + projection chosen · executable gate
+  git present? (worktrees+merges) → else git init WITH user confirmation     (greenfield bootstrap, #7)
+  greenfield with no wave-0 scaffold block + non-runnable gate → BOUNCE       (missing scaffold owner, #6)
   ✗ → BOUNCE to IDEA-2 (incomplete manifest), don't start          ← Wave-1 lesson (see §16-proto)
 
 Phase 2 · WAVE LOOP (until all done)
+  wave 0 (greenfield): build the `scaffold` block ALONE → gate green on the empty skeleton, then go on
   ready = blocks whose consumed boundaries' OWNERS are in done      (owners first, §5)
   parallel (cap N, worktree per block):
      skills = select(block.type × projection) + dev-architecture(side) + tier   (§13)

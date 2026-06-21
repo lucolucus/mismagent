@@ -16,6 +16,20 @@ wrong**. This gate makes that test explicit *before* the worker wastes work.
 Verify **only** the tasks candidate for promotion in this batch + their direct
 dependencies — **not** the entire backlog every time (so it scales beyond 35+ tasks).
 
+## Two modes — read this first (the #8 dual-paradigm trap)
+mismAgent has **two** state models; do not mix them:
+- **Architecture-driven (current/default):** state = `building-blocks.yaml` + the worker-composer's
+  `blocks/<context>/{todo,doing,done}/`; the **discrete task view the human reads** is the *derived*
+  `tasks/T01..TNN.md` (emitted by `build-manifest`, **no status**). Here apply items **#1–#5** below;
+  items **#6–#9 (tasks/ + dag.yaml) DO NOT apply** — there is no `dag.yaml` and `tasks/` is a derived,
+  status-less view, so the "no status in tasks" grep should pass trivially.
+- **File-driven (legacy, `attic/`, not invocable):** state = `tasks/<side>/{backlog,todo,doing,done}/`
+  + `dag.yaml`. Only here do items **#6–#9** apply.
+
+**Git presence (BLOCKS, both modes):** the side's repo must be **under git** (the worker-composer
+lives on worktrees + merges). If `git -C <repo> rev-parse` fails → the worker-composer's Phase 1
+`git init`s it **with the user's confirmation**; this gate just flags it as the prerequisite.
+
 ## Checklist (every item BLOCKS if it fails)
 Items **#1/#2 depend on the boundary projection** (from the profile) — do not demand an
 OpenAPI where there is no cross-deploy boundary:

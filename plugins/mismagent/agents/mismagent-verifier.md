@@ -56,6 +56,10 @@ only inspect and run verification commands. Your output is a verdict, not a patc
      is **only inside comments** — a doc-comment naming the forbidden tech is clean code. If every
      match is a comment line, that is a false positive: re-run comment-stripped / anchored to imports
      before deciding, and flag the ADR so its grep gets re-scoped at the source.
+   - **Portable grep (#3):** the rule must run on **this** machine's `grep` (BSD/macOS *or* GNU). If a
+     rule uses a GNU-only extension (`grep -z`, `-P`, PCRE `\d`/`\b`) it may error or silently mismatch
+     here → do not read that as a pass: report `adr-enforced` red with NOTE "non-portable grep — rewrite
+     in POSIX BRE/ERE" and flag the ADR so its rule gets re-scoped at the source (`write-adr`).
 7. **Domain invariants + error contract (only `produces` tasks of a WRITE):** the contract
    test captures the *shape*, NOT the cross-field rules. If the task has an AC on an invariant
    (e.g. "422 when subtype invalid for category"), verify that a **test** covering it exists →

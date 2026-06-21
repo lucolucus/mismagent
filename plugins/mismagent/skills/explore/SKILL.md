@@ -39,7 +39,9 @@ consumer, **do not write it**.
    NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
    `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides. The rest (`gate`,
    `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
-   invent it.
+   invent it. The bounded contexts here are the **provisional** ones (those you already know); the
+   **authoritative** map is the `context-map.md` that `mismagent-analyst` produces at step 3 — the
+   profile's list is superseded by it, no chicken-and-egg.
 1. **Diverge:** brainstorm the idea with the user — goals, users, constraints, alternatives.
 2. **Attack the idea BEFORE modeling it:** invoke **`mismagent-challenger`** (fresh context).
    `KILL` → stop and report back to the user; `RESHAPE` → redesign with them; `PROCEED` → close the

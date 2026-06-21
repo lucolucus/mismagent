@@ -50,6 +50,15 @@ enforced_by: "<executable grep/lint rule, ONLY if the constraint is mechanical>"
   to a non-existent filename **matches nothing and looks green** (a false-green, worse than a
   failure). Scope the target to a package/dir (`.../persistenza/`) or a symbol; the verifier FAILs a
   rule whose target path does not exist.
+- **Greps must be POSIX-PORTABLE** (friction-log #3). The `enforced_by` rule runs on whatever `grep`
+  the machine has (BSD/macOS *and* GNU/Linux). **Avoid GNU-only extensions** — no `grep -z`
+  (multiline/NUL match), no `-P` (PCRE), no `\d`/`\b`-style PCRE classes; stick to BRE/ERE
+  (`grep -rEn`), POSIX classes (`[[:space:]]`), and per-line matching. If a constraint truly needs a
+  multiline match, express it as two single-line greps combined with `&&`/`!` instead of `-z`.
+- **Validate every rule on a fixture — positive AND negative** before committing it: it must FAIL on
+  a snippet that violates the constraint and PASS on one that satisfies it. A rule that can't be made
+  to fail (or can't be made to pass) is a false-green/false-red — do not ship it. *(The architect
+  already does this spontaneously; make it part of the protocol.)*
 - **Numbering** progressive with 4 digits; check the last number in `decisions/`.
 - **`supersedes`**: if you replace an ADR, set `status: superseded` on the old one and link it.
 - Breaking change of the contract → the ADR fixes the **versioning protocol** BEFORE

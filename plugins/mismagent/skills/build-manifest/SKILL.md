@@ -1,6 +1,6 @@
 ---
 name: build-manifest
-description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
+description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner) and a DERIVED per-block task view (tasks/T01..TNN.md + index) for the human. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
 ---
 
 # build-manifest — the IDEA-2 → build bridge
@@ -44,12 +44,29 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    overflow/contrast) is not a `tests_nl` item — it is owned by `realize-ui` + the side's
    `ui_render_check` (profile).
 6. **build_order** derived: boundary owners first (aggregate, port), consumers in parallel.
+7. **scaffold block (greenfield only) — wave 0.** If the side has **no buildable project yet** (the
+   profile's `gate` cannot even run: no wrapper / no module / no `src` tree), emit **one `scaffold`
+   block per such side** with `wave: 0`, `type: scaffold`, no boundary, no `tests_nl`. Its acceptance
+   is the negative space: **the side's `gate` runs GREEN on the empty skeleton**. The worker-composer
+   builds it **before** every owner block (its `realize-scaffold` skill creates wrapper + module
+   structure + plugins + sourceSets per the stack ADR / infra-notes). Without it, in greenfield the
+   owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
 
 ## Output
-`building-blocks.yaml` (blocks + boundaries with `projection` + `tests_nl` + gates + `build_order`).
-Then the **worker-composer** reads it: its **Phase 1 (readiness)** re-verifies these rules before
-building (pinned types, contract_test, projection, gates, tests_nl).
+1. `building-blocks.yaml` (blocks + boundaries with `projection` + `tests_nl` + gates + `build_order`
+   + any wave-0 `scaffold` block). Then the **worker-composer** reads it: its **Phase 1 (readiness)**
+   re-verifies these rules before building (pinned types, contract_test, projection, gates, tests_nl).
+2. **A discrete per-block task view for the HUMAN** — `<output_dir>/<feature>/tasks/` with one
+   readable file per block, numbered by wave (`T01..TNN.md`), each with **Cosa fare** (what to do) /
+   **Accettazione** (the block's `tests_nl` / ACs) / **Dipendenze** (the boundary owners it waits on)
+   / **Wave** — plus a `README.md` index ordered by wave. This is the bridge to the file-driven mental
+   model ("a file per task"): the human looks here for "the tasks". **It is a DERIVED, regenerable
+   view — NOT authoritative and WITHOUT `status`.** The single source of truth stays the manifest; the
+   **status lives in the worker-composer's `blocks/<context>/{todo,doing,done}/` folders**, never here.
+   Re-run `build-manifest` to regenerate it when the manifest changes. *(Consumer = the human reading
+   the plan: that is why it is not a zombie — it is a view, not a second source of truth.)*
 
 ## Outcome
-Summary: N blocks per type, M boundaries (with projection), confirmation of pinned types, `tests_nl`
-elicited from the user, and what is missing before launching `/mismagent:worker-composer`.
+Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), confirmation of
+pinned types, `tests_nl` elicited from the user, the per-block `tasks/` view emitted, and what is
+missing before launching `/mismagent:worker-composer`.

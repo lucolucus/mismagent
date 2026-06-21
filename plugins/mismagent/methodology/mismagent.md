@@ -42,8 +42,8 @@ flowchart TD
         direction TB
         tact["mismagent-tactical-modeler — subagent<br/>aggregates/invariants/events/commands → context-map"]
         ux["ux-designer — skill<br/>imagines the UI → views (if there is UI)"]
-        arch["mismagent-architect — subagent<br/>architecture + ADRs<br/>stack DELIBERATED with the user, then finalizes the gate"]
-        bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED at the boundaries + tests_nl"]
+        arch["mismagent-architect — subagent<br/>two-pass DISCOVERY → stack + ARCH-STYLE + INFRA<br/>DELIBERATED with the user, then finalizes the gate"]
+        bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED + tests_nl + scaffold + per-block tasks/ view"]
         manifest[("building-blocks.yaml<br/>blocks + boundaries + projection")]
         ccon["create-contract — skill, cross-deploy MODULE<br/>ONLY cross-deploy boundaries → OpenAPI"]
         tact --> arch --> bman --> manifest
@@ -88,11 +88,17 @@ there is NO slash-command; `[skill]` = a slash-command you invoke yourself):*
    commands per context (it starts from the context-map's "Seeds for the tactical").
 2. **`/mismagent:ux-designer`** `[skill]` — imagines the UI → views (only if there is UI).
 3. **`mismagent-architect`** `[subagent]` — architecture + ADRs + boundaries with projection.
-   **Foundational decisions (stack/language) are deliberated WITH the user** (alternatives +
-   pros/cons + confirmation), never in a silent ADR; after the stack ADR it **finalizes the
+   **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
+   subagent, it can't talk to the user): pass-1 DISCOVERY writes nothing and returns
+   `STACK_PROPOSAL` + `ARCH_PROPOSAL` (architecture style + quality drivers) + `INFRA_QUESTIONS`
+   (deploy/data/retention/maintenance), the orchestrator brings them to the user, pass-2 WRITES the
+   ADRs/architecture/infra-notes — never a silent ADR. After the stack ADR it **finalizes the
    `gate` in the profile**.
 4. **`/mismagent:build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
-   blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`.
+   blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
+   in greenfield it also emits a **wave-0 `scaffold` block** (the buildable skeleton owner) and a
+   **derived per-block `tasks/` view** (`T01..TNN.md` + index) for the human — non-authoritative,
+   no status.
 5. **`/mismagent-cross-deploy:create-contract`** `[skill, from the cross-deploy module]` —
    **only if** at least one boundary is `cross-deploy`: the port is projected into ONE OpenAPI
    (names from the ubiquitous language). If the module is not enabled and you have no
@@ -101,8 +107,10 @@ there is NO slash-command; `[skill]` = a slash-command you invoke yourself):*
 
 **build** · *you delegate; confirm only at the end* — from manifest to released code.
 - command **`/mismagent:worker-composer <feature>`** — thin coordinator, the only one that merges and
-  moves state: readiness on the manifest (pinned types, or BOUNCE to IDEA-2) →
-  *boundary-owner-first* waves → dispatches **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
+  moves state: readiness on the manifest (pinned types, or BOUNCE to IDEA-2; **git present** — if the
+  side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
+  (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
+  **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
   projection + the side's dev-architecture + tier) → **D1** green on its own (fresh `mismagent-verifier` +
   `code-review`) → merge = composition → **D2** contract test on the welded boundary →
   **you confirm** → green release-tag = turn on the flag.
@@ -143,9 +151,11 @@ PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-anal
 *Gate:* `/mismagent:readiness-gate` (or directly Phase 1 of the worker-composer). → build.
 
 **3 · build — you delegate; confirm only at the end.**
-Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges).
+Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges) —
+if it isn't, the worker-composer's Phase 1 `git init`s it **after asking you to confirm**.
 You type **`/mismagent:worker-composer <feature>`**. It: readiness (unpinned boundary →
-BOUNCE to IDEA-2) → owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
+BOUNCE to IDEA-2; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
+owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
 code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
 You step in **only** if a worker returns `BOUNCED` (ambiguous AC: you decide) and **at the end**:
 you confirm the release → green tag → feature-flag.

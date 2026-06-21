@@ -23,8 +23,21 @@ Before starting, verify: ∀ block a complete spec · ∀ boundary **PINNED type
 primitive or shared-kernel, **never** the supplier's domain) + `contract_test` + `projection` · the
 profile's gate executable. **✗ → stop and BOUNCE to IDEA-2** (the manifest is incomplete: pin the
 boundary). *(This is where a Wave-1-style type bug stops, before wasting the workers.)*
+- **git present?** You live on worktrees and merges, so each side's repo **must be under git**. If a
+  side's repo is **not** a git repo (`git -C <repo> rev-parse` fails), **ask the user to confirm**,
+  then `git init` + an initial commit (you are the only git-writer — coherent with invariant #4; an
+  init + first commit on a fresh repo is fine *with* confirmation). Do **not** proceed on a non-git repo.
+- **greenfield?** If the manifest carries a wave-0 **`scaffold`** block (the side's `gate` cannot yet
+  run on an empty tree), that is expected — it is built first in Phase 2, before any owner. A
+  greenfield side with **no scaffold block and a non-runnable gate** → BOUNCE to IDEA-2 (missing the
+  scaffold owner).
 
 ## 2 · WAVES (boundary owners first)
+**Wave 0 — scaffold (greenfield).** If there is a `scaffold` block, build it **first and alone**:
+dispatch `mismagent-worker` with `realize-scaffold` to create the buildable skeleton, then require
+the side's **gate GREEN on the empty skeleton** (its only acceptance — no ACs, no contract test)
+before any owner wave starts. Then proceed with the owner-first waves below.
+
 `ready` = the blocks whose consumed boundaries' **owners** are in `done`. Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:

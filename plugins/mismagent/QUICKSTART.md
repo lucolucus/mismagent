@@ -57,6 +57,16 @@ you confirm → flag).
 - **Single-side is not a degraded case.** A single side ⇒ all boundaries `in-process`
   (port = interface + contract test): no OpenAPI, and the `mismagent-cross-deploy` module
   **simply doesn't get enabled** — the kernel is enough, and that's fine.
+- **Someone has to scaffold the buildable skeleton.** In greenfield there is no Gradle/npm/csproj
+  project yet, so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
+  worker-composer builds it **first** (via `realize-scaffold`) and only then the owner blocks have
+  something to compile against. Don't expect the architect to scaffold — it writes design, not code.
+- **The repo must be under git.** The worker-composer lives on worktrees + merges. If you start in a
+  non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
+- **"Where are the tasks?"** The architecture-driven flow's state is `building-blocks.yaml` +
+  `blocks/<context>/{todo,doing,done}/`, not a `tasks/` DAG. For a human-readable to-do list,
+  `build-manifest` emits a **derived** `tasks/T01..TNN.md` (+ index) — one file per block, no status
+  (status lives in the `blocks/` folders). The legacy file-driven `tasks/` model lives in `attic/`.
 
 ## When something doesn't add up
 The first real run surfaces the holes in the core. Keep a **`MISMAGENT-LOG.md`** in the project

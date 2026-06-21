@@ -1,13 +1,23 @@
 ---
 name: write-task
-description: 'mismAgent''s specialized writer of the lean task-file (model movement + Defer in build + spikes from explore). Produces tasks/<side>/<state>/<id>.md: boundary + Gherkin ACs + depends_on + contract_ref (by operationId) + references (anchors), MUTE on the how, state = the folder. Also handles type: spike (research/unknown node) and the spike closure protocol. Invoked by build-manifest, by the worker-composer (Defer) and to materialize the context-map''s spikes.'
+description: 'mismAgent''s specialized writer of the lean task-file. Produces tasks/<side>/<state>/<id>.md: boundary + Gherkin ACs + depends_on + contract_ref (by operationId) + references (anchors), MUTE on the how, state = the folder. Also handles type: spike (research/unknown node) + closure protocol and type: cleanup. SCOPE: the implementation-task template is the FILE-DRIVEN (legacy) flow; in the architecture-driven flow the BLOCKS in building-blocks.yaml + build-manifest''s derived tasks/ view replace it — there write-task only writes spike/cleanup nodes. Invoked by write-adr (cleanup), by the worker-composer (Defer), and to materialize the context-map''s spikes.'
 ---
 
 # MismAgent — Write Task (writer, model / Defer / spike)
 
 Write a **lean** task-file in `<output_dir>/<feature>/tasks/<side>/<state>/<id>.md` (the
-starting state is almost always `backlog/`). Orientation:
+starting state is almost always `backlog/`) — **but first check which flow you are in** (below):
+in the architecture-driven flow this is only for spike/cleanup nodes. Orientation:
 `methodology/mismagent.md`. Target **80-120 lines**.
+
+## Which flow are you in? (do not recreate the #8 dual-paradigm muddle)
+- **Architecture-driven (default):** the work-items are the **blocks** in `building-blocks.yaml`, and
+  the human reads `build-manifest`'s **derived `tasks/T01..TNN.md` view** (flat, status-less). Do
+  **NOT** write implementation tasks here — that view + the `blocks/<context>/{todo,doing,done}/`
+  state replace them. write-task is used **only** for `type: spike` and `type: cleanup` nodes; keep
+  them in their own `tasks/<side>/<state>/<id>.md` (stateful, `<id>` is a slug — never `T<NN>`, so they
+  never collide with the derived `T01..TNN.md`/`README.md` files).
+- **File-driven (legacy, `attic/`):** the full implementation-task template below is the unit of work.
 
 ## Invariants (also enforced by the `readiness-gate` and the CI guards)
 - **No state in the file:** `status:` in the frontmatter and the sections `## Status`,

@@ -21,6 +21,11 @@ only inspect and run verification commands. Your output is a verdict, not a patc
 
 ## Procedure
 
+**Scaffold carve-out:** a `type: scaffold` block (greenfield wave-0) has **no ACs, no contract, no
+`enforced_by`** — it is verified by the **gate only** and the worker-composer does not route it here.
+If you are ever handed one, run the side's gate and return PASS on green / FAIL on red; **skip** steps
+3–7 (nothing to cover). For every other block:
+
 1. **Authoritative diff from git (NOT from the handoff):**
    `git -C <REPO_PATH> diff $(git -C <REPO_PATH> merge-base <BASE> <BRANCH>)...<BRANCH>`.
    If `FILE_LIST` is provided: every file in the real diff **must** be in `FILE_LIST`; if the

@@ -33,10 +33,14 @@ boundary). *(This is where a Wave-1-style type bug stops, before wasting the wor
   scaffold owner).
 
 ## 2 · WAVES (boundary owners first)
-**Wave 0 — scaffold (greenfield).** If there is a `scaffold` block, build it **first and alone**:
-dispatch `mismagent-worker` with `realize-scaffold` to create the buildable skeleton, then require
-the side's **gate GREEN on the empty skeleton** (its only acceptance — no ACs, no contract test)
-before any owner wave starts. Then proceed with the owner-first waves below.
+**Wave 0 — scaffold (greenfield).** If there is a `scaffold` block (one per greenfield side), build
+it **before any owner**: `git mv` it `todo→doing`, dispatch `mismagent-worker` with `realize-scaffold`,
+and verify it **by the gate ALONE** — run the side's gate; **GREEN on the empty skeleton is its whole
+acceptance**. It has no ACs, no contract, no `enforced_by` yet, so it **bypasses §3 D1 and the
+`mismagent-verifier`** (which would have nothing to check — sending it there would FAIL on AC-coverage).
+GREEN → `git mv` it `→done` and start the owner waves; RED → rework (stays in `doing`), not a review
+bounce. A scaffold has **no boundary**, so §5 D2 never applies to it. *(The worker's `RESULT` token is
+informational on this branch — acceptance is the gate, not a §3 review.)*
 
 `ready` = the blocks whose consumed boundaries' **owners** are in `done`. Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in

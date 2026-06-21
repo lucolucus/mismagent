@@ -43,7 +43,8 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    must include the screen's **states** (empty/error/loading); the **rendering** itself (sizing/
    overflow/contrast) is not a `tests_nl` item — it is owned by `realize-ui` + the side's
    `ui_render_check` (profile).
-6. **build_order** derived: boundary owners first (aggregate, port), consumers in parallel.
+6. **build_order** derived: the wave-0 `scaffold` block (rule 7) precedes **all** owners; then the
+   boundary owners (aggregate, port); then the consumers in parallel.
 7. **scaffold block (greenfield only) — wave 0.** If the side has **no buildable project yet** (the
    profile's `gate` cannot even run: no wrapper / no module / no `src` tree), emit **one `scaffold`
    block per such side** with `wave: 0`, `type: scaffold`, no boundary, no `tests_nl`. Its acceptance
@@ -64,7 +65,9 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    view — NOT authoritative and WITHOUT `status`.** The single source of truth stays the manifest; the
    **status lives in the worker-composer's `blocks/<context>/{todo,doing,done}/` folders**, never here.
    Re-run `build-manifest` to regenerate it when the manifest changes. *(Consumer = the human reading
-   the plan: that is why it is not a zombie — it is a view, not a second source of truth.)*
+   the plan: that is why it is not a zombie — it is a view, not a second source of truth.)* The view's
+   files are **flat** (`T01..TNN.md` + `README.md`); any `write-task` spike/cleanup nodes live in
+   `tasks/<side>/<state>/<slug>.md` (stateful, slug ids) and so never collide with them.
 
 ## Outcome
 Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), confirmation of

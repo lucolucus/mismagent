@@ -168,7 +168,9 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
 2. **the boundary is executable**: every boundary has pinned types (Published Language) + contract
    tests (invariant-test on the aggregate · consumer-driven on the port); the OpenAPI exists only
    as the **cross-deploy** projection of the boundary.
-3. **no artifact that no machine downstream re-reads.**
+3. **no artifact that no machine downstream re-reads** — the one exception is a **derived view
+   regenerated from a source** (e.g. the human-facing `tasks/` view from the manifest): allowed
+   because it is regenerated, never hand-maintained, so it cannot drift; its consumer is the human.
 4. **every cross-movement handoff is a file**, never just a message.
 5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
 6. **never merge/push onto the base branch without an explicit user request.**

@@ -60,13 +60,19 @@ OpenAPI where there is no cross-deploy boundary:
 
 ## Useful verification commands (read-only)
 ```bash
-# forbidden state in tasks
+# ── ARCHITECTURE-DRIVEN mode (default): state = the manifest + blocks/ ──
+# no status: in any block file (state is the folder)
+grep -rlE '^status:' <output_dir>/<feature>/blocks/ && echo "VIOLATION: status in a block file"
+# the derived tasks/ view must stay status-less (it is a projection, not state)
+grep -rlE '^status:|^## (Status|Change Log|Dev Agent Record)' <output_dir>/<feature>/tasks/ \
+  && echo "VIOLATION: status leaked into the derived tasks/ view"
+# operationIds declared in the YAML (only if a cross-deploy boundary exists)
+grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openapi.yaml 2>/dev/null
+
+# ── FILE-DRIVEN mode (legacy, attic): state = tasks/<side>/<state>/ + dag.yaml ──
 grep -rlE '^status:' <output_dir>/<feature>/tasks/ && echo "VIOLATION: status in frontmatter"
 grep -rlE '^## (Status|File List|Change Log|Dev Agent Record)' <output_dir>/<feature>/tasks/
-# forbidden state in the dag
 grep -nE '^\s*status:' <output_dir>/<feature>/dag.yaml
-# operationIds declared in the YAML
-grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openapi.yaml
 ```
 
 ## Outcome

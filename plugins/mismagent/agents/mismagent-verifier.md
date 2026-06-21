@@ -1,6 +1,6 @@
 ---
 name: mismagent-verifier
-description: mismAgent's FRESH-CONTEXT structural verifier (build movement). Read-only: does NOT modify code. Computes the diff from the git merge-base (it doesn't trust the worker's handoff), re-runs build+test+contract-test, checks the ADRs' MECHANICAL constraints (enforced_by), that the contract is referenced and not duplicated, the shadow types, and that every AC has a test covering it. Returns PASS|FAIL|SKIP. Invoked by /dev-orchestrator-v2 with a parameterized REPO_PATH.
+description: mismAgent's FRESH-CONTEXT structural verifier (build movement). Read-only: does NOT modify code. Computes the diff from the git merge-base (it doesn't trust the worker's handoff), re-runs build+test+contract-test, checks the ADRs' MECHANICAL constraints (enforced_by), that the contract is referenced and not duplicated, the shadow types, and that every AC has a test covering it. Returns PASS|FAIL|SKIP. Invoked by the worker-composer (build movement) with the repo/worktree path of the block under review.
 tools: Bash, Read, Glob, Grep
 model: inherit
 ---
@@ -16,7 +16,7 @@ only inspect and run verification commands. Your output is a verdict, not a patc
 ## Input you receive in the prompt
 - absolute `REPO_PATH` of the sub-repo (or worktree);
 - `BRANCH` history to verify and `BASE` (epic/master) for the diff;
-- **absolute** path of the lean task file (for the ACs, the `contract_ref`, the `related_adrs`);
+- the **block-spec** from the manifest (for the ACs/`tests_nl`, the boundary it honors, the `related_adrs`);
 - (optional) the `FILE_LIST` declared by the worker, **only as a cross-check**.
 
 ## Procedure

@@ -1,13 +1,21 @@
-# The build as *composition* — spec of the new build movement
+# The build as *composition* — design rationale of the build movement
 
-> **Provenance:** distilled by walking through a real single-side build by hand (architecture
-> ready, aggregates with invariants). This spec is kept **abstract** — it speaks of Aggregates,
-> Ports and Application Services in general, naming no project; the **concrete derivation** (the
-> per-block walk-through, the welding sequence on a real feature) lives **with the pilot project**,
-> not in the portable core. **Purpose:** replace `dev-orchestrator-v2` (orchestrator) and revise
-> `mism-developer-lean` (worker). **Status:** process PROTOTYPE — not yet in the core.
-> **Vocabulary note:** this is v2, rewritten with the **established names** (DDD + Hexagonal +
-> CQRS + contract testing) in place of the first draft's neologisms (slot/seam/seam-test).
+> **What this is — and is NOT the authority.** This is the **rationale and derivation history** of the
+> architecture-driven build. The **authority is the live core** — the skills (`build-manifest`,
+> `realize-*`, `seam-*`), the agents (`mismagent-worker`, `mismagent-verifier`) and the command
+> (`worker-composer`): each states its own rules and is self-contained. The `§N` cross-references
+> elsewhere point **here for the WHY**, not for the law. Read this to understand *why* the build is
+> shaped this way; obey the skills for *what* to do.
+>
+> **Status:** SHIPPED — the design below is realized in the core (it is no longer a prototype). The
+> later sections still carry their original adversarial review and open-item history on purpose
+> (that record is how the design earned its shape).
+>
+> **Provenance:** distilled by walking a real single-side build by hand (architecture ready,
+> aggregates with invariants). Kept **abstract** — it names Aggregates, Ports and Application Services
+> in general, no project; the concrete per-block walk-through lives with the pilot project.
+> **Vocabulary note:** v2, rewritten with the **established names** (DDD + Hexagonal + CQRS + contract
+> testing) in place of the first draft's neologisms (slot/seam/seam-test).
 
 ---
 

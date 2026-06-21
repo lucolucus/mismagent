@@ -1,6 +1,6 @@
 ---
 name: build-manifest
-description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner) and a DERIVED per-block task view (tasks/T01..TNN.md + index) for the human. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
+description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). It always emits a DERIVED, VISIBLE per-block task view for the human at the project root (TASKS.md index + TASKS/T01..TNN files), so the work is findable without opening the hidden .mismagent. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
 ---
 
 # build-manifest — the IDEA-2 → build bridge
@@ -57,19 +57,25 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 1. `building-blocks.yaml` (blocks + boundaries with `projection` + `tests_nl` + gates + `build_order`
    + any wave-0 `scaffold` block). Then the **worker-composer** reads it: its **Phase 1 (readiness)**
    re-verifies these rules before building (pinned types, contract_test, projection, gates, tests_nl).
-2. **A discrete per-block task view for the HUMAN** — `<output_dir>/<feature>/tasks/` with one
-   readable file per block, numbered by wave (`T01..TNN.md`), each with **Cosa fare** (what to do) /
-   **Accettazione** (the block's `tests_nl` / ACs) / **Dipendenze** (the boundary owners it waits on)
-   / **Wave** — plus a `README.md` index ordered by wave. This is the bridge to the file-driven mental
-   model ("a file per task"): the human looks here for "the tasks". **It is a DERIVED, regenerable
-   view — NOT authoritative and WITHOUT `status`.** The single source of truth stays the manifest; the
-   **status lives in the worker-composer's `blocks/<context>/{todo,doing,done}/` folders**, never here.
-   Re-run `build-manifest` to regenerate it when the manifest changes. *(Consumer = the human reading
-   the plan: that is why it is not a zombie — it is a view, not a second source of truth.)* The view's
-   files are **flat** (`T01..TNN.md` + `README.md`); any `write-task` spike/cleanup nodes live in
-   `tasks/<side>/<state>/<slug>.md` (stateful, slug ids) and so never collide with them.
+2. **A discrete per-block task view for the HUMAN — in a VISIBLE place.** Write it at the **project
+   root** (the parent of `<output_dir>` — NOT inside the hidden `.mismagent/`, where a human won't
+   look):
+   - **`TASKS.md`** — the index: one line per block ordered by wave, linking the per-block files, with
+     a header naming the feature and pointing to where the real state lives.
+   - **`TASKS/T01-<slug>.md … TNN-<slug>.md`** — one readable file per block, numbered by wave
+     (`<slug>` from the block id), each: **Cosa fare** (what to do) / **Accettazione** (the block's
+     `tests_nl`/ACs) / **Dipendenze** (the boundary owners it waits on) / **Wave**.
+
+   Why visible: the human must find "the tasks" without spelunking a dotfolder (friction #8/#10).
+   **It is a DERIVED, regenerable view — NOT authoritative, WITHOUT `status`.** Source of truth = the
+   manifest; **status lives in the worker-composer's `blocks/<context>/{todo,doing,done}/`** (in
+   `.mismagent`, machine state), never in `TASKS/`. Re-run `build-manifest` to regenerate it.
+   *(Consumer = the human reading the plan — a derived view, not a second source of truth, so not a
+   zombie.)* Multi-feature: `TASKS.md` gets a section per feature and `TASKS/` namespaces by feature
+   (`TASKS/<feature>/`).
 
 ## Outcome
 Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), confirmation of
-pinned types, `tests_nl` elicited from the user, the per-block `tasks/` view emitted, and what is
-missing before launching `/mismagent:worker-composer`.
+pinned types, `tests_nl` elicited from the user, and what is missing before launching
+`/mismagent:worker-composer`. **Print the exact path of the human task view** so the user can't miss
+it, e.g. *"📋 I tuoi task: ./TASKS.md (apre TASKS/T01..TNN) — N blocchi, W wave"*.

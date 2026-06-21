@@ -1,6 +1,6 @@
 ---
 name: mismagent-verifier
-description: mismAgent's FRESH-CONTEXT structural verifier (build movement). Read-only: does NOT modify code. Computes the diff from the git merge-base (it doesn't trust the worker's handoff), re-runs build+test+contract-test, checks the ADRs' MECHANICAL constraints (enforced_by), that the contract is referenced and not duplicated, the shadow types, and that every AC has a test covering it. Returns PASS|FAIL|SKIP. Invoked by /dev-orchestrator-v2 with a parameterized REPO_PATH.
+description: mismAgent's FRESH-CONTEXT structural verifier (build movement). Read-only: does NOT modify code. Computes the diff from the git merge-base (it doesn't trust the worker's handoff), re-runs build+test+contract-test, checks the ADRs' MECHANICAL constraints (enforced_by), that the contract is referenced and not duplicated, the shadow types, and that every AC has a test covering it. Returns PASS|FAIL|SKIP. Invoked by the worker-composer (build movement) with the repo/worktree path of the block under review.
 tools: Bash, Read, Glob, Grep
 model: inherit
 ---
@@ -16,10 +16,15 @@ only inspect and run verification commands. Your output is a verdict, not a patc
 ## Input you receive in the prompt
 - absolute `REPO_PATH` of the sub-repo (or worktree);
 - `BRANCH` history to verify and `BASE` (epic/master) for the diff;
-- **absolute** path of the lean task file (for the ACs, the `contract_ref`, the `related_adrs`);
+- the **block-spec** from the manifest (for the ACs/`tests_nl`, the boundary it honors, the `related_adrs`);
 - (optional) the `FILE_LIST` declared by the worker, **only as a cross-check**.
 
 ## Procedure
+
+**Scaffold carve-out:** a `type: scaffold` block (greenfield wave-0) has **no ACs, no contract, no
+`enforced_by`** — it is verified by the **gate only** and the worker-composer does not route it here.
+If you are ever handed one, run the side's gate and return PASS on green / FAIL on red; **skip** steps
+3–7 (nothing to cover). For every other block:
 
 1. **Authoritative diff from git (NOT from the handoff):**
    `git -C <REPO_PATH> diff $(git -C <REPO_PATH> merge-base <BASE> <BRANCH>)...<BRANCH>`.
@@ -56,6 +61,10 @@ only inspect and run verification commands. Your output is a verdict, not a patc
      is **only inside comments** — a doc-comment naming the forbidden tech is clean code. If every
      match is a comment line, that is a false positive: re-run comment-stripped / anchored to imports
      before deciding, and flag the ADR so its grep gets re-scoped at the source.
+   - **Portable grep (#3):** the rule must run on **this** machine's `grep` (BSD/macOS *or* GNU). If a
+     rule uses a GNU-only extension (`grep -z`, `-P`, PCRE `\d`/`\b`) it may error or silently mismatch
+     here → do not read that as a pass: report `adr-enforced` red with NOTE "non-portable grep — rewrite
+     in POSIX BRE/ERE" and flag the ADR so its rule gets re-scoped at the source (`write-adr`).
 7. **Domain invariants + error contract (only `produces` tasks of a WRITE):** the contract
    test captures the *shape*, NOT the cross-field rules. If the task has an AC on an invariant
    (e.g. "422 when subtype invalid for category"), verify that a **test** covering it exists →

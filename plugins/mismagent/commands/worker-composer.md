@@ -1,5 +1,5 @@
 ---
-description: mismAgent's worker-composer (build movement — REPLACES dev-orchestrator-v2). Reads the building-block manifest, builds the pieces in WAVES (boundary owners first, consumers in parallel) by dispatching specialized mismagent-worker workers via skills, keeps every piece green (D1) and every SEAM green (D2 = contract test on the merge). The ONLY one that merges and moves state; writes no code. Thin coordinator. Full spec: redesign/composer-spec.md.
+description: mismAgent's worker-composer (build movement — REPLACES dev-orchestrator-v2). Reads the building-block manifest, builds the pieces in WAVES (boundary owners first, consumers in parallel) by dispatching specialized mismagent-worker workers via skills, keeps every piece green (D1) and every SEAM green (D2 = contract test on the merge). The ONLY one that merges and moves state; writes no code. Thin coordinator. This command is the authority on the build; redesign/composer-spec.md is its design rationale.
 argument-hint: "[feature | <output_dir>/<feature>/]"
 ---
 
@@ -18,13 +18,38 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`.
 The graph is only the *boundary-before-consumer* edge (derived from the manifest, not handwritten).
 
-## 1 · READINESS (model→build gate)
-Before starting, verify: ∀ block a complete spec · ∀ boundary **PINNED types** (Published Language:
-primitive or shared-kernel, **never** the supplier's domain) + `contract_test` + `projection` · the
-profile's gate executable. **✗ → stop and BOUNCE to IDEA-2** (the manifest is incomplete: pin the
-boundary). *(This is where a Wave-1-style type bug stops, before wasting the workers.)*
+## 1 · READINESS (model→build gate — the SINGLE door; this IS the old readiness-gate)
+This phase is the **one** survival-test gate (the `readiness-gate` skill is just a thin pre-flight
+that runs this same lens before you launch). Verify, on the manifest:
+- ∀ block: a **complete spec** + **concrete acceptance** (`tests_nl`/ACs — a high-value block with no
+  `tests_nl` is not ready: ask the user);
+- ∀ boundary: **PINNED types** (Published Language: primitive or shared-kernel, **never** the
+  supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its OpenAPI exists
+  and every cited `operationId` resolves;
+- the profile's **gate is executable**.
+
+**✗ → stop and BOUNCE to IDEA-2** (the manifest is incomplete: pin the boundary / add the test
+intent). *(This is where a Wave-1-style type bug stops, before wasting the workers.)* A `type: cleanup`
+node whose `ready_when` is still false is **not** a block — report it as an **explicit pending**, don't stall.
+- **git present?** You live on worktrees and merges, so each side's repo **must be under git**. If a
+  side's repo is **not** a git repo (`git -C <repo> rev-parse` fails), **ask the user to confirm**,
+  then `git init` + an initial commit (you are the only git-writer — coherent with invariant #4; an
+  init + first commit on a fresh repo is fine *with* confirmation). Do **not** proceed on a non-git repo.
+- **greenfield?** If the manifest carries a wave-0 **`scaffold`** block (the side's `gate` cannot yet
+  run on an empty tree), that is expected — it is built first in Phase 2, before any owner. A
+  greenfield side with **no scaffold block and a non-runnable gate** → BOUNCE to IDEA-2 (missing the
+  scaffold owner).
 
 ## 2 · WAVES (boundary owners first)
+**Wave 0 — scaffold (greenfield).** If there is a `scaffold` block (one per greenfield side), build
+it **before any owner**: `git mv` it `todo→doing`, dispatch `mismagent-worker` with `realize-scaffold`,
+and verify it **by the gate ALONE** — run the side's gate; **GREEN on the empty skeleton is its whole
+acceptance**. It has no ACs, no contract, no `enforced_by` yet, so it **bypasses §3 D1 and the
+`mismagent-verifier`** (which would have nothing to check — sending it there would FAIL on AC-coverage).
+GREEN → `git mv` it `→done` and start the owner waves; RED → rework (stays in `doing`), not a review
+bounce. A scaffold has **no boundary**, so §5 D2 never applies to it. *(The worker's `RESULT` token is
+informational on this branch — acceptance is the gate, not a §3 review.)*
+
 `ready` = the blocks whose consumed boundaries' **owners** are in `done`. Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:
@@ -56,7 +81,8 @@ feature-flag**. **Here the user confirms** (build = you delegate, confirm only a
 ## 7 · LOOP & REPORT
 Recompute `done` and repeat from §2 until all blocks are `done` and the boundaries welded (or only
 blocked, recorded work remains). Remove the worktrees. ~30-line report: green slices, done blocks,
-bounced/blocked and why, welded boundaries, anomalies, next action.
+bounced/blocked and why, welded boundaries, anomalies, next action. **Point the human to the plan**
+(`./TASKS.md`) and name where the live state is (`blocks/<context>/{todo,doing,done}/`).
 
 ## BOUNCE (where the flow goes back)
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to IDEA-2** (pin the Published Language);

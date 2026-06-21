@@ -1,6 +1,6 @@
 ---
 name: mismagent-worker
-description: The worker-composer's worker (build movement, evolution of mism-developer-lean). Realizes ONE building block (aggregate / application-service / port / adapter / read-model / ui) in its context, loading the skills = block-type × projection + the side's dev-architecture. TDD until green on its own (block tests + invariant/contract tests). Writes the minimum that works (frugality ladder), never at the cost of the boundary/invariants/tests. Does NOT duplicate the rule (goes through the root), does NOT touch state/merge (the worker-composer does that), does NOT cross into the other side nor into its source (only the public API / the boundary's signature). Tight return.
+description: The worker-composer's worker (build movement, evolution of mism-developer-lean). Realizes ONE building block (aggregate / application-service / port / adapter / read-model / ui / scaffold) in its context, loading the skills = block-type × projection + the side's dev-architecture. TDD until green on its own (block tests + invariant/contract tests). Writes the minimum that works (frugality ladder), never at the cost of the boundary/invariants/tests. Does NOT duplicate the rule (goes through the root), does NOT touch state/merge (the worker-composer does that), does NOT cross into the other side nor into its source (only the public API / the boundary's signature). Tight return.
 tools: Skill, Bash, Read, Edit, Write, Glob, Grep
 model: inherit
 ---
@@ -56,6 +56,7 @@ you don't re-copy the pattern here. Rationale: spec §13.
 | adapter | `realize-adapter` | the port/persistence impl.; delegates to the root, honors `enforced_by` (§14) |
 | read-model | `realize-read-model` | the projection that respects the `view_shape` + its test |
 | ui | `realize-ui` | the thin view over a TESTABLE state-holder/presenter; the render-check (sizing/overflow/contrast/states), no manual-invalidation hack |
+| scaffold | `realize-scaffold` | **greenfield wave-0**: the buildable skeleton (wrapper/modules/plugins); acceptance = the side's gate green on the empty tree, NO domain code, no ACs/contract test |
 
 **B — by `boundary.projection`** (only if the block touches a boundary):
 `seam-in-process` (single-side: code interface + in-process test, in the kernel) ·

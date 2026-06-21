@@ -25,15 +25,17 @@ skills, boundary rules, boundary projections and the commit format.
   - `build-manifest` (model) — from the tactical model → **building-block manifest**
     (types pinned at the boundaries, projection, `tests_nl`).
   - `readiness-gate` (model→build) — survival test on the manifest.
-  - `realize-{aggregate,application-service,port,adapter,read-model}` + `seam-in-process`
-    (build) — the worker's skills: block-type × boundary projection.
+  - `realize-{aggregate,application-service,port,adapter,read-model,ui,scaffold}` + `seam-in-process`
+    (build) — the worker's skills: block-type × boundary projection (`scaffold` = the greenfield
+    wave-0 buildable skeleton).
   - `ux-designer` (model) — imagines the UI → views (if the feature has a UI).
   - `code-review` (build) — adversarial semantic review with fresh context.
   - writers: `write-context-map`, `write-infra-notes`, `write-adr`, `write-task`.
 - `agents/`:
   - explore — `mismagent-challenger` (fresh-context adversary), `mismagent-researcher`, `mismagent-analyst`.
   - model — `mismagent-tactical-modeler` (DDD tactical), `mismagent-architect` (architecture + ADRs,
-    guarantor of the boundaries; stack decisions are deliberated with the user).
+    guarantor of the boundaries; foundational decisions — stack + architecture style + infra —
+    deliberated with the user via a two-pass headless pattern).
   - build — `mismagent-worker` (realizes ONE building block), `mismagent-verifier` (read-only, fresh context).
 - `commands/` — **`worker-composer`** (architecture-driven build: sole git-writer, merge =
   composition, D2 on the boundary).
@@ -68,7 +70,7 @@ then `/reload-plugins`.
 After installation **skills and commands are namespaced with the plugin name**: invoke them as
 `/mismagent:explore`, `/mismagent:worker-composer`, … (and from the module:
 `/mismagent-cross-deploy:create-contract`). **Agents**, on the other hand, show up in
-`/agents` under their bare `mism-*` name and are dispatched by the assistant (they are not
+`/agents` under their bare `mismagent-*` name and are dispatched by the assistant (they are not
 slash-commands). Verify: `/mismagent:explore` must appear among the available skills.
 
 ## Note

@@ -78,6 +78,9 @@ design rationale of the architecture-driven build.
 - **Every cross-movement handoff is a file**, never just a message — movements may run in different
   sessions.
 - **No artifact that no machine downstream reads.** If an output has no consumer, it isn't written.
+  *(One exception: a **derived view regenerated from a source** — e.g. the human-facing `tasks/`
+  view from the manifest — whose consumer is the human; allowed because it's never hand-edited, so
+  it can't drift.)*
 
 ## Core + profile
 
@@ -112,6 +115,6 @@ GitHub repo):
 ```
 
 Skills and commands are namespaced: `/mismagent:explore`, `/mismagent:worker-composer`, … Agents
-(`mism-*`) are dispatched by the assistant, not invoked as slash-commands. Start a feature with
+(`mismagent-*`) are dispatched by the assistant, not invoked as slash-commands. Start a feature with
 `/mismagent:explore <your idea>`.
 

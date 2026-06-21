@@ -1,13 +1,21 @@
-# The build as *composition* — spec of the new build movement
+# The build as *composition* — design rationale of the build movement
 
-> **Provenance:** distilled by walking through a real single-side build by hand (architecture
-> ready, aggregates with invariants). This spec is kept **abstract** — it speaks of Aggregates,
-> Ports and Application Services in general, naming no project; the **concrete derivation** (the
-> per-block walk-through, the welding sequence on a real feature) lives **with the pilot project**,
-> not in the portable core. **Purpose:** replace `dev-orchestrator-v2` (orchestrator) and revise
-> `mism-developer-lean` (worker). **Status:** process PROTOTYPE — not yet in the core.
-> **Vocabulary note:** this is v2, rewritten with the **established names** (DDD + Hexagonal +
-> CQRS + contract testing) in place of the first draft's neologisms (slot/seam/seam-test).
+> **What this is — and is NOT the authority.** This is the **rationale and derivation history** of the
+> architecture-driven build. The **authority is the live core** — the skills (`build-manifest`,
+> `realize-*`, `seam-*`), the agents (`mismagent-worker`, `mismagent-verifier`) and the command
+> (`worker-composer`): each states its own rules and is self-contained. The `§N` cross-references
+> elsewhere point **here for the WHY**, not for the law. Read this to understand *why* the build is
+> shaped this way; obey the skills for *what* to do.
+>
+> **Status:** SHIPPED — the design below is realized in the core (it is no longer a prototype). The
+> later sections still carry their original adversarial review and open-item history on purpose
+> (that record is how the design earned its shape).
+>
+> **Provenance:** distilled by walking a real single-side build by hand (architecture ready,
+> aggregates with invariants). Kept **abstract** — it names Aggregates, Ports and Application Services
+> in general, no project; the concrete per-block walk-through lives with the pilot project.
+> **Vocabulary note:** v2, rewritten with the **established names** (DDD + Hexagonal + CQRS + contract
+> testing) in place of the first draft's neologisms (slot/seam/seam-test).
 
 ---
 
@@ -450,6 +458,7 @@ All the specialization lives **in the skills**; the worker-composer stays thin.
 | `realize-port` | consumer-owned read-only interface (declaration of the boundary) | the spec of the consumer-driven contract test |
 | `realize-adapter` | impl. of a port — variants: *read* (toward another context) and *persistence* (repository) | round-trip tests; honors `enforced_by` |
 | `realize-read-model` | query/projection (CQRS) | the view's test |
+| `realize-scaffold` | **greenfield only**: the minimal buildable skeleton (wrapper/modules/plugins) — wave-0 owner | acceptance = the side's gate green on the empty tree (no domain, no ACs) |
 
 ### B — skills per boundary PROJECTION (core) — selected by #4
 | skill | boundary | weight |
@@ -542,9 +551,12 @@ Phase 0 · INGEST
 
 Phase 1 · READINESS (model→build gate, evolved)
   ∀ block: complete spec · ∀ boundary: PINNED TYPES + contract_test defined + projection chosen · executable gate
+  git present? (worktrees+merges) → else git init WITH user confirmation     (greenfield bootstrap, #7)
+  greenfield with no wave-0 scaffold block + non-runnable gate → BOUNCE       (missing scaffold owner, #6)
   ✗ → BOUNCE to IDEA-2 (incomplete manifest), don't start          ← Wave-1 lesson (see §16-proto)
 
 Phase 2 · WAVE LOOP (until all done)
+  wave 0 (greenfield): build the `scaffold` block ALONE → gate green on the empty skeleton, then go on
   ready = blocks whose consumed boundaries' OWNERS are in done      (owners first, §5)
   parallel (cap N, worktree per block):
      skills = select(block.type × projection) + dev-architecture(side) + tier   (§13)

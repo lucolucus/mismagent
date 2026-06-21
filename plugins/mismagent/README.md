@@ -38,7 +38,9 @@ skills, boundary rules, boundary projections and the commit format.
     deliberated with the user via a two-pass headless pattern).
   - build — `mismagent-worker` (realizes ONE building block), `mismagent-verifier` (read-only, fresh context).
 - `commands/` — **`worker-composer`** (architecture-driven build: sole git-writer, merge =
-  composition, D2 on the boundary).
+  composition, D2 on the boundary) + **a thin command per agent** (`challenger`, `researcher`,
+  `analyst`, `tactical-modeler`, `architect`, `verifier`, `worker`) so each agent is invocable as
+  `/mismagent:<name>` (it dispatches the `mismagent-<name>` subagent).
 
 ## The flow
 **explore** (`/mismagent:explore` → `mismagent-challenger` → `mismagent-analyst`) →
@@ -67,11 +69,12 @@ must be registered with the **ABSOLUTE path** (a relative path is interpreted as
 ```
 then `/reload-plugins`.
 
-After installation **skills and commands are namespaced with the plugin name**: invoke them as
-`/mismagent:explore`, `/mismagent:worker-composer`, … (and from the module:
-`/mismagent-cross-deploy:create-contract`). **Agents**, on the other hand, show up in
-`/agents` under their bare `mismagent-*` name and are dispatched by the assistant (they are not
-slash-commands). Verify: `/mismagent:explore` must appear among the available skills.
+After installation **everything you invoke is namespaced under `/mismagent:`**: skills and commands
+(`/mismagent:explore`, `/mismagent:worker-composer`, … and from the module
+`/mismagent-cross-deploy:create-contract`), **and each agent** via its thin command
+(`/mismagent:architect` → dispatches the `mismagent-architect` subagent). The agents also still show up
+in `/agents` under their bare `mismagent-*` name and can be dispatched directly. Verify:
+`/mismagent:explore` must appear among the available skills.
 
 ## Note
 The flow hard-codes no project specifics: the side repos' paths, the build/test commands (gate),

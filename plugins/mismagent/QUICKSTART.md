@@ -17,9 +17,10 @@ as a GitHub repo):
 `~/.claude/settings.json`, then `/reload-plugins` — see README §Installation).
 
 Verify: the skill **`/mismagent:explore`** (namespace included!) must appear among the
-available ones. **Agents** (`mismagent-challenger`, `mismagent-analyst`, …) are not slash-commands: they
-show up in `/agents` and the assistant dispatches them. *(After installing/changing, a
-`/reload-plugins` may be needed for the new ones to enter the registry.)*
+available ones. **Everything is invocable under `/mismagent:`** — skills, the `worker-composer`
+command, and each **agent** via its thin command (`/mismagent:architect`, `/mismagent:analyst`, … →
+they dispatch the `mismagent-<name>` subagent; the agents also still show up in `/agents`). *(After
+installing/changing, a `/reload-plugins` may be needed for the new ones to enter the registry.)*
 
 ## 2. Profile: the BOOTSTRAP is enough to start
 You don't need the full profile before explore — you need the **bootstrap** (`explore`
@@ -33,9 +34,9 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 `gate: "manual — TBD after the stack ADR"`. Template: `PROFILE.md`; filled-in example: `profiles/example.md`.
 
 ## 3. Launch the flow
-`/mismagent:explore` on the idea → `mismagent-challenger` (demolishes) → `mismagent-researcher`/
-`mismagent-analyst` (model) → **model** (ask to dispatch `mismagent-tactical-modeler`, then
-`mismagent-architect`; skill `/mismagent:ux-designer` if there is UI, `/mismagent:build-manifest`
+`/mismagent:explore` on the idea → `/mismagent:challenger` (demolishes) → `/mismagent:researcher` /
+`/mismagent:analyst` (model) → **model** (`/mismagent:tactical-modeler`, then
+`/mismagent:architect`; `/mismagent:ux-designer` if there is UI, `/mismagent:build-manifest`
 for the manifest; `/mismagent-cross-deploy:create-contract` — from the module — only if a
 boundary is cross-deploy) →
 **build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier + code-review →

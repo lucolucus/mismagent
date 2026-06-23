@@ -82,12 +82,14 @@ flowchart TD
 
 **model** · *you confirm the boundaries* — from understood problem to manifest (+ contract if cross-deploy).
 
-*How to invoke it (in order; `[subagent]` = the assistant dispatches it — ask it to dispatch it,
-there is NO slash-command; `[skill]` = a slash-command you invoke yourself):*
-1. **`mismagent-tactical-modeler`** `[subagent]` — completes the model: aggregates/invariants/events/
+*How to invoke it (in order). **Everything is a slash-command under `/mismagent:`** — `[skill]`/
+`[command]` do the work directly; `[agent]` is a thin command that **dispatches the subagent of the
+same name** (e.g. `/mismagent:architect` → the `mismagent-architect` subagent). You can still ask the
+assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
+1. **`/mismagent:tactical-modeler`** `[agent]` — completes the model: aggregates/invariants/events/
    commands per context (it starts from the context-map's "Seeds for the tactical").
 2. **`/mismagent:ux-designer`** `[skill]` — imagines the UI → views (only if there is UI).
-3. **`mismagent-architect`** `[subagent]` — architecture + ADRs + boundaries with projection.
+3. **`/mismagent:architect`** `[agent]` — architecture + ADRs + boundaries with projection.
    **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
    subagent, it can't talk to the user): pass-1 DISCOVERY writes nothing and returns
    `STACK_PROPOSAL` + `ARCH_PROPOSAL` (architecture style + quality drivers) + `INFRA_QUESTIONS`
@@ -123,8 +125,10 @@ there is NO slash-command; `[skill]` = a slash-command you invoke yourself):*
 
 ## Running it — the run-sheet (who types what)
 
-Legend: **you type** the slash-commands (`[skill]`/`[command]`); **subagents** are dispatched by
-the assistant — the right phrase is *"dispatch X"*, don't look for a slash-command that doesn't exist.
+Legend: **you type** the slash-commands — **all under `/mismagent:`**. `[skill]`/`[command]` do the
+work directly; `[agent]` is a thin command that **dispatches the subagent of the same name**
+(`/mismagent:architect` → the `mismagent-architect` subagent). Equivalent fallback: ask the assistant
+to *"dispatch `mismagent-X`"*.
 
 **0 · Setup (once).** `/plugin marketplace add <absolute-path-to-the-mismagent-repo>` →
 `/plugin install mismagent@mismagent-method` → *(only if the project will have boundaries between
@@ -140,12 +144,12 @@ PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-anal
 *Gate:* brief with problem/user/value/scope + context-map with the bounded contexts. → model.
 
 **2 · model — you confirm the boundaries.**
-1. You say: *"dispatch `mismagent-tactical-modeler`"* → Tactical model in the context-map (it absorbs
+1. You type **`/mismagent:tactical-modeler`** → Tactical model in the context-map (it absorbs
    the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
 2. *(if there is UI)* you type **`/mismagent:ux-designer`** → concept with you → `UI/ux-proposal.md`.
-3. You say: *"dispatch `mismagent-architect`"* → it presents the **stack alternatives with pros/cons
-   and YOU choose** (never a silent ADR) → ADRs + boundaries with projection → it finalizes the
-   `gate` in the profile.
+3. You type **`/mismagent:architect`** → it presents the **stack/architecture/infra alternatives with
+   pros/cons and YOU choose** (never a silent ADR) → ADRs + boundaries with projection → it finalizes
+   the `gate` in the profile.
 4. You type **`/mismagent:build-manifest`** → `building-blocks.yaml` (types PINNED at the
    boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
    writes the **visible `./TASKS.md`** (+ `./TASKS/`) so you can read the work. **Read your tasks there.**

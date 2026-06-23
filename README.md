@@ -115,6 +115,7 @@ GitHub repo):
 ```
 
 Skills and commands are namespaced: `/mismagent:explore`, `/mismagent:worker-composer`, … Agents
-(`mismagent-*`) are dispatched by the assistant, not invoked as slash-commands. Start a feature with
+are also reachable as **`/mismagent:<name>`** (a thin command that dispatches the `mismagent-<name>`
+subagent — e.g. `/mismagent:architect`), or just ask the assistant to dispatch them. Start a feature with
 `/mismagent:explore <your idea>`.
 

@@ -8,8 +8,8 @@ description: 'mismAgent pre-flight before the build — an OPTIONAL early run of
 A **thin, optional pre-check**: it runs the **worker-composer's Phase 1** survival test *early*, so an
 incomplete manifest is caught before you launch the build. **Ephemeral** verdict (not persisted).
 There is **one** gate, and it lives in the worker-composer — this skill does not duplicate it.
-Orientation: `methodology/mismagent.md`. You read the manifest in `<output_dir>/<feature>/` and the
-visible task view at the **project root** (`./TASKS.md`, `./TASKS/` — the parent of `<output_dir>`).
+Orientation: `methodology/mismagent.md`. You read the manifest (`building-blocks.yaml`, authoritative)
+and the derived rich block files in `<output_dir>/<feature>/blocks/<ctx>/{todo,doing,done}/`.
 
 ## Principle: survival test
 An artifact enters execution only if **something breaks loudly when it is wrong**. The gate makes that
@@ -27,11 +27,10 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
 
 ## Useful verification commands (read-only)
 ```bash
-# no status: anywhere — state is the folder (blocks/), never a field
-grep -rlE '^status:' <output_dir>/<feature>/blocks/ && echo "VIOLATION: status in a block file"
-# the visible TASKS/ view must stay status-less (it is a projection of the manifest, not state)
-grep -rlE '^status:|^## (Status|Change Log|Dev Agent Record)' ./TASKS ./TASKS.md 2>/dev/null \
-  && echo "VIOLATION: status leaked into the derived TASKS view"
+# the rich block files must stay status-less — state is the FOLDER, never a field or a checkbox
+grep -rlE '^status:' <output_dir>/<feature>/blocks/ && echo "VIOLATION: status field in a block file"
+grep -rlE '^\s*- \[[ x]\]' <output_dir>/<feature>/blocks/ \
+  && echo "VIOLATION: checkbox (progress-as-state) in a block file — the ## Task list is read-only criteria"
 # cross-deploy only: operationIds declared in the YAML
 grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openapi.yaml 2>/dev/null
 ```

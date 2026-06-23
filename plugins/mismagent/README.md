@@ -38,9 +38,11 @@ skills, boundary rules, boundary projections and the commit format.
     deliberated with the user via a two-pass headless pattern).
   - build — `mismagent-worker` (realizes ONE building block), `mismagent-verifier` (read-only, fresh context).
 - `commands/` — **`worker-composer`** (architecture-driven build: sole git-writer, merge =
-  composition, D2 on the boundary) + **a thin command per agent** (`challenger`, `researcher`,
-  `analyst`, `tactical-modeler`, `architect`, `verifier`, `worker`) so each agent is invocable as
-  `/mismagent:<name>` (it dispatches the `mismagent-<name>` subagent).
+  composition, D2 on the boundary) · **`board`** (read-only live view of the blocks + their state) ·
+  **a thin command per agent** (`challenger`, `researcher`, `analyst`, `tactical-modeler`, `architect`,
+  `verifier`, `worker`) so each agent is invocable as `/mismagent:<name>` (it dispatches the
+  `mismagent-<name>` subagent).
+- `tools/` — `board.py`: the zero-dep read-only board server (launched by `/mismagent:board`).
 
 ## The flow
 **explore** (`/mismagent:explore` → `mismagent-challenger` → `mismagent-analyst`) →

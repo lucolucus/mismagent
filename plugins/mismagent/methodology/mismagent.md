@@ -43,7 +43,7 @@ flowchart TD
         tact["mismagent-tactical-modeler — subagent<br/>aggregates/invariants/events/commands → context-map"]
         ux["ux-designer — skill<br/>imagines the UI → views (if there is UI)"]
         arch["mismagent-architect — subagent<br/>two-pass DISCOVERY → stack + ARCH-STYLE + INFRA<br/>DELIBERATED with the user, then finalizes the gate"]
-        bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED + tests_nl + scaffold + visible TASKS.md view"]
+        bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED + tests_nl + scaffold + rich block files"]
         manifest[("building-blocks.yaml<br/>blocks + boundaries + projection")]
         ccon["create-contract — skill, cross-deploy MODULE<br/>ONLY cross-deploy boundaries → OpenAPI"]
         tact --> arch --> bman --> manifest
@@ -98,11 +98,10 @@ assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
    `gate` in the profile**.
 4. **`/mismagent:build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
    blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
-   in greenfield it also emits a **wave-0 `scaffold` block** (the buildable skeleton owner). It
-   always emits a **visible, derived per-block task view at the project root** —
-   **`TASKS.md`** (index) + **`TASKS/T01..TNN`** — so you find the work without opening the hidden
-   `.mismagent` (non-authoritative, no status; the state lives in `blocks/`). **Read your tasks
-   there.**
+   in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
+   the **rich, derived block files** (`blocks/<ctx>/todo/<id>.md`: spec + `## Cosa fare`/`## Task`/
+   `## Dipendenze`, status-less, no checkboxes) so opening a block shows the whole block. **You read
+   them live via `/mismagent:board`** (read-only).
 5. **`/mismagent-cross-deploy:create-contract`** `[skill, from the cross-deploy module]` —
    **only if** at least one boundary is `cross-deploy`: the port is projected into ONE OpenAPI
    (names from the ubiquitous language). If the module is not enabled and you have no
@@ -152,7 +151,7 @@ PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-anal
    the `gate` in the profile.
 4. You type **`/mismagent:build-manifest`** → `building-blocks.yaml` (types PINNED at the
    boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
-   writes the **visible `./TASKS.md`** (+ `./TASKS/`) so you can read the work. **Read your tasks there.**
+   seeds the **rich block files** in `blocks/<ctx>/todo/`. **Watch them live with `/mismagent:board`.**
 5. *(only if a boundary is cross-deploy)* you type
    **`/mismagent-cross-deploy:create-contract`** → ONE OpenAPI.
 *Gate:* the worker-composer's **Phase 1** (the single survival-test gate) — optionally previewed early
@@ -177,8 +176,9 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    tests (invariant-test on the aggregate · consumer-driven on the port); the OpenAPI exists only
    as the **cross-deploy** projection of the boundary.
 3. **no artifact that no machine downstream re-reads** — the one exception is a **derived view
-   regenerated from a source** (e.g. the human-facing `TASKS/` view from the manifest): allowed
-   because it is regenerated, never hand-maintained, so it cannot drift; its consumer is the human.
+   regenerated from a source** (e.g. the rich block files + the read-only `/mismagent:board`, derived
+   from the manifest): allowed because it is regenerated, never hand-maintained, so it cannot drift;
+   its consumer is the human.
 4. **every cross-movement handoff is a file**, never just a message.
 5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
 6. **never merge/push onto the base branch without an explicit user request.**

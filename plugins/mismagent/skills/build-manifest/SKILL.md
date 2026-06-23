@@ -1,6 +1,6 @@
 ---
 name: build-manifest
-description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). It always emits a DERIVED, VISIBLE per-block task view for the human at the project root (TASKS.md index + TASKS/T01..TNN files), so the work is findable without opening the hidden .mismagent. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
+description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). Besides the authoritative YAML it seeds the DERIVED, status-less rich block files (one self-contained <id>.md per block in blocks/<ctx>/todo/, no checkboxes) so opening a block shows the whole block; the human reads them live via the read-only /mismagent:board. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
 ---
 
 # build-manifest — the IDEA-2 → build bridge
@@ -54,28 +54,36 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
 
 ## Output
-1. `building-blocks.yaml` (blocks + boundaries with `projection` + `tests_nl` + gates + `build_order`
-   + any wave-0 `scaffold` block). Then the **worker-composer** reads it: its **Phase 1 (readiness)**
-   re-verifies these rules before building (pinned types, contract_test, projection, gates, tests_nl).
-2. **A discrete per-block task view for the HUMAN — in a VISIBLE place.** Write it at the **project
-   root** (the parent of `<output_dir>` — NOT inside the hidden `.mismagent/`, where a human won't
-   look):
-   - **`TASKS.md`** — the index: one line per block ordered by wave, linking the per-block files, with
-     a header naming the feature and pointing to where the real state lives.
-   - **`TASKS/T01-<slug>.md … TNN-<slug>.md`** — one readable file per block, numbered by wave
-     (`<slug>` from the block id), each: **Cosa fare** (what to do) / **Accettazione** (the block's
-     `tests_nl`/ACs) / **Dipendenze** (the boundary owners it waits on) / **Wave**.
+1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
+   `projection` + `tests_nl` + gates + `build_order` + any wave-0 `scaffold`). The **worker-composer's
+   Phase 1** reads it (pinned types, contract_test, projection, gates, tests_nl). Keep the `boundaries:`
+   as a first-class section (the architect's coherence + `create-contract`'s input depend on it).
+2. **The rich block files** — a **DERIVED, status-less rendering** of the manifest, seeded one per
+   block into `blocks/<context>/todo/<id>.md`, so opening a block shows the *whole* block (no more
+   empty folder markers). Frontmatter mirrors the manifest row — `type`, `context`, `side`, `wave`,
+   `consumes`, `related_adrs`, **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
+   `tables`; port → `projection`/`pinned_types`/`contract_test`; read-model → `view_shape`). Body:
+   ```
+   # <id> — <title>
+   ## Cosa fare      — what to build (from the model), 1–3 sentences
+   ## Task           — the tests_nl/ACs as READ-ONLY acceptance criteria (plain list, NOT checkboxes)
+   ## Dipendenze     — the boundary owners it waits on
+   ```
+   **No `status:` field, no `[ ]` checkboxes** — the block's state **is its folder** (`todo/doing/done`),
+   moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
+   refreshes content **in place**, it never moves files). The YAML stays the source of truth; these
+   files are its **per-block projection** (the way OpenAPI is the cross-deploy projection of a boundary).
+   No static `TASKS.md` — the rich block files + the board (below) replace it.
 
-   Why visible: the human must find "the tasks" without spelunking a dotfolder (friction #8/#10).
-   **It is a DERIVED, regenerable view — NOT authoritative, WITHOUT `status`.** Source of truth = the
-   manifest; **status lives in the worker-composer's `blocks/<context>/{todo,doing,done}/`** (in
-   `.mismagent`, machine state), never in `TASKS/`. Re-run `build-manifest` to regenerate it.
-   *(Consumer = the human reading the plan — a derived view, not a second source of truth, so not a
-   zombie.)* Multi-feature: `TASKS.md` gets a section per feature and `TASKS/` namespaces by feature
-   (`TASKS/<feature>/`).
+## The live human view — the board (read-only)
+The human reads the work via **`/mismagent:board [feature]`**: a read-only server that scans the block
+files + their **folder position** (= block status) + (optionally) the **last test run** (per-AC
+green/red) → a live kanban with each block's `## Cosa fare`/`## Task`. It **derives** progress, it
+**never writes** the block files (no checkbox mutation) — coherent with "only the worker-composer moves
+state". This is the visible surface that the hidden `.mismagent/.../blocks/` would otherwise bury.
 
 ## Outcome
 Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), confirmation of
 pinned types, `tests_nl` elicited from the user, and what is missing before launching
-`/mismagent:worker-composer`. **Print the exact path of the human task view** so the user can't miss
-it, e.g. *"📋 I tuoi task: ./TASKS.md (apre TASKS/T01..TNN) — N blocchi, W wave"*.
+`/mismagent:worker-composer`. Tell the user the block files are seeded in
+`blocks/<context>/todo/` and that **`/mismagent:board`** shows them live.

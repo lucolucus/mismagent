@@ -201,8 +201,19 @@ mismAgent principle: *"the contract is a consequence, not a source"*. Same for t
 | ADR `enforced_by` | mechanical constraint of the block |
 
 So **`mism-build-dag` (or its successor) emits the manifest** in place of the file-task `dag.yaml`.
-The manifest **is** the bridge: the only artifact the worker-composer reads. No zombies — every row has
-a downstream consumer (the worker-composer itself).
+The manifest **is** the bridge and the authoritative source (graph, boundaries, build_order). No
+zombies — every row has a downstream consumer (the worker-composer itself).
+
+> **Per-block projection (derived, not a second source).** `build-manifest` also renders each block
+> as a **rich, status-less `<id>.md`** seeded into `blocks/<ctx>/todo/` — so a human (and the
+> read-only `/mismagent:board`) can open one block and see its spec + `## Cosa fare`/`## Task`/
+> `## Dipendenze`. The file's *content* is derived from the manifest (regenerable, in place); its
+> *folder* is the block's state, moved only by the worker-composer. **No `status:` field, no
+> checkboxes** — progress is read off the folder + tests, never written into the file (that would make
+> the worker a state-writer, §10). It is to the manifest what OpenAPI is to a cross-deploy boundary: a
+> projection. (Adversarial review 2026-06: dropping the YAML in favour of these files was rejected —
+> it would fuse the plan with execution state and demote the first-class boundary; the files stay a
+> *view*, the YAML stays the source.)
 
 > The manifest is the **product of the architecture-discovery step** (IDEA-2, see §9), not a
 > separate artifact: that's where Aggregates/Ports/boundaries get chosen deliberately, and from

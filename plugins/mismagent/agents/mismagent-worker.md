@@ -83,6 +83,9 @@ re-read the diff against every AC, repeat until green and every AC covered.
 ## You do NOT touch state
 State is the **folder**, and only the **worker-composer** moves it (`git mv`/merge). You: **code + commits
 in your worktree** (the profile's commit format), never `git mv`, never merge, never the other side.
+Your **block file** (`blocks/<ctx>/<id>.md`) is **read-only spec** — its `## Task` list is your
+acceptance criteria; **never edit it, never tick a checkbox** (there are none): progress is shown by the
+board from your tests + the folder position, not by mutating the file. You realize code/tests, not state.
 
 ## Outcome (tight return)
 ```

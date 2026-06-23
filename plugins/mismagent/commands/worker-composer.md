@@ -13,9 +13,11 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 
 ## 0 · INGEST
 `$ARGUMENTS` = feature or path → resolve `<output_dir>/<feature>/`. Read **`building-blocks.yaml`**
-(the only input: blocks + boundaries + projection + PINNED TYPES; produced by IDEA-2) and the
-**active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
-branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`.
+(the **authoritative** input: blocks + boundaries + projection + PINNED TYPES; produced by IDEA-2) and
+the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
+branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`, where each block is a
+**rich `<id>.md` file** (derived from the manifest: spec + `## Cosa fare`/`## Task`/`## Dipendenze`,
+status-less). You move those files (`git mv`); you never rewrite their content (that is build-manifest's).
 The graph is only the *boundary-before-consumer* edge (derived from the manifest, not handwritten).
 
 ## 1 · READINESS (model→build gate — the SINGLE door; this IS the old readiness-gate)
@@ -54,8 +56,8 @@ informational on this branch — acceptance is the gate, not a §3 review.)*
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
-- dispatch **`mismagent-worker`** (Agent tool) with: the **block-spec** from the manifest (incl.
-  `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
+- dispatch **`mismagent-worker`** (Agent tool) with: the block's **rich `<id>.md` spec** (its
+  `## Cosa fare`/`## Task` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
   projection)` + the side's `dev-architecture` (profile) + the model `tier`, and the **interfaces
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);
@@ -81,8 +83,9 @@ feature-flag**. **Here the user confirms** (build = you delegate, confirm only a
 ## 7 · LOOP & REPORT
 Recompute `done` and repeat from §2 until all blocks are `done` and the boundaries welded (or only
 blocked, recorded work remains). Remove the worktrees. ~30-line report: green slices, done blocks,
-bounced/blocked and why, welded boundaries, anomalies, next action. **Point the human to the plan**
-(`./TASKS.md`) and name where the live state is (`blocks/<context>/{todo,doing,done}/`).
+bounced/blocked and why, welded boundaries, anomalies, next action. **Point the human to
+`/mismagent:board`** (the live read-only view) and name where the state is
+(`blocks/<context>/{todo,doing,done}/`).
 
 ## BOUNCE (where the flow goes back)
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to IDEA-2** (pin the Published Language);

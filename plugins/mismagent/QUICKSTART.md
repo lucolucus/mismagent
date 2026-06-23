@@ -64,12 +64,13 @@ you confirm → flag).
   something to compile against. Don't expect the architect to scaffold — it writes design, not code.
 - **The repo must be under git.** The worker-composer lives on worktrees + merges. If you start in a
   non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
-- **"Where are the tasks?"** Read **`./TASKS.md`** at the project root (it indexes `./TASKS/T01..TNN`,
-  one file per block) — `build-manifest` writes it there, **visible**, on purpose: the machine state
-  lives in the hidden `.mismagent/<feature>/blocks/<context>/{todo,doing,done}/`, but you should never
-  have to open a dotfolder to see the work. `TASKS/` is a **derived, status-less** view (regenerate it
-  by re-running `build-manifest`); the state is the `blocks/` folders. The legacy file-driven flow
-  lives in `attic/`.
+- **"Where are the tasks?"** Run **`/mismagent:board`** — a read-only live view of the blocks and
+  their state. The work-item *is* the block: `build-manifest` seeds one **rich `<id>.md` file per
+  block** in `.mismagent/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## Cosa fare`/
+  `## Task`/`## Dipendenze`, **status-less, no checkboxes**) — its **folder is its status**, moved only
+  by the worker-composer. The board renders those files + their folder position; it never writes them.
+  The block files are a derived projection of the authoritative `building-blocks.yaml` (re-run
+  `build-manifest` to refresh). The legacy file-driven flow lives in `attic/`.
 
 ## When something doesn't add up
 The first real run surfaces the holes in the core. Keep a **`MISMAGENT-LOG.md`** in the project

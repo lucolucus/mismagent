@@ -99,8 +99,8 @@ assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
 4. **`/mismagent:build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
    blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
    in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
-   the **rich, derived block files** (`blocks/<ctx>/todo/<id>.md`: spec + `## Cosa fare`/`## Task`/
-   `## Dipendenze`, status-less, no checkboxes) so opening a block shows the whole block. **You read
+   the **rich, derived block files** (`blocks/<ctx>/todo/<id>.md`: spec + `## What to do`/`## Tasks`/
+   `## Dependencies`, status-less, no checkboxes) so opening a block shows the whole block. **You read
    them live via `/mismagent:board`** (read-only).
 5. **`/mismagent-cross-deploy:create-contract`** `[skill, from the cross-deploy module]` —
    **only if** at least one boundary is `cross-deploy`: the port is projected into ONE OpenAPI
@@ -127,7 +127,9 @@ assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
 Legend: **you type** the slash-commands — **all under `/mismagent:`**. `[skill]`/`[command]` do the
 work directly; `[agent]` is a thin command that **dispatches the subagent of the same name**
 (`/mismagent:architect` → the `mismagent-architect` subagent). Equivalent fallback: ask the assistant
-to *"dispatch `mismagent-X`"*.
+to *"dispatch `mismagent-X`"*. Every skill **not** named in this run-sheet (`write-*`, `realize-*`,
+`seam-*`, `code-review`) is **internal** — invoked *by* the agents mid-flow, not a user entry point:
+typed out of flow it has no block/context to work on.
 
 **0 · Setup (once).** `/plugin marketplace add <absolute-path-to-the-mismagent-repo>` →
 `/plugin install mismagent@mismagent-method` → *(only if the project will have boundaries between

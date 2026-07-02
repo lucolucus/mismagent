@@ -11,6 +11,7 @@
 output_dir: .mismagent
 ubiquitous_language:
   lang: en          # the language the domain speaks — keep the domain's own terms, never translate them
+validation_mode: normal   # a rebuild-from-requirements validation run would say greenfield_from_requirements
 ```
 
 ## Sides (independent deploy units)
@@ -21,11 +22,13 @@ sides:
     repo: machinecare-be                    # e.g. .NET, Clean Arch + DDD, PostgreSQL
     dev_architecture: be-dev-architecture   # golden files in machinecare-be/docs/dev-architecture/
     gate: "dotnet build && dotnet test && dotnet test --filter Contract"
+    toolchain: ".NET SDK 8 (pinned by global.json)"
     contract: "swagger.json compared against the YAML + response-shape tests on the real body"
   fe:
     repo: machinecare-fe                    # e.g. Next.js + TypeScript
     dev_architecture: fe-dev-architecture   # golden files in machinecare-fe/docs/dev-architecture/
     gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
+    toolchain: "Node 20 (pinned by .nvmrc)"
     ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"
     contract: "openapi-typescript → src/types/api.generated.ts + contract.test.ts per operationId"
   infra:

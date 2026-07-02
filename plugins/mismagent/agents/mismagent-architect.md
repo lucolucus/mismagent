@@ -74,6 +74,11 @@ Every boundary between contexts is a **consumer-owned Port** with its **contract
 - **In-process** (including single-side, `contract: none`): the port remains a **code
   interface** in Published Language types (primitives/shared-kernel) + an in-process
   consumer-driven contract test. No YAML, no operationId: the boundary is already executable as is.
+  **Default the Published Language here to the domain's shared-kernel VOs** — above all for
+  correctness-critical types (money, quantities): projecting `Money` to a decimal `String` at a
+  code seam adds the parse/format step exactly where a rounding/locale bug enters, and throws away
+  type safety the seam keeps for free. "Primitives only" is the **cross-deploy** discipline (JSON
+  crosses a wire); do not import it in-process.
 - **Cross-deploy**: the port is projected into **OpenAPI** (`architetture/api/<feature>.openapi.yaml`),
   reconciled by `create-contract` (the `mismagent-cross-deploy` module — must be enabled) as
   a consequence of the blocks. Non-negotiable rules:
@@ -110,6 +115,10 @@ enforced_by: "grep -rn 'DefaultAzureCredential' src/ && ! grep -rn 'ConnectionSt
 # 0004 — Blob access via Managed Identity, never connection string   # (e.g. of a mechanical constraint)
 ```
 Discursive ADRs (without `enforced_by`) will be checked by the semantic code review, not by the verifier.
+
+**A deferred decision lives in ONE place — its ADR.** If you postpone a choice ("reconcile in the
+manifest"), record it in that ADR and have the overview/boundaries/other docs *reference* the ADR;
+never repeat the provisional concrete type across them — reconciling later must be one edit, not nine.
 
 ## 4. Boundary breaking changes
 The "evolving contract" depends on the projection:

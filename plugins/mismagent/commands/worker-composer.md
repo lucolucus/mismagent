@@ -16,7 +16,7 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 (the **authoritative** input: blocks + boundaries + projection + PINNED TYPES; produced by IDEA-2) and
 the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
 branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`, where each block is a
-**rich `<id>.md` file** (derived from the manifest: spec + `## Cosa fare`/`## Task`/`## Dipendenze`,
+**rich `<id>.md` file** (derived from the manifest: spec + `## What to do`/`## Tasks`/`## Dependencies`,
 status-less). You move those files (`git mv`); you never rewrite their content (that is build-manifest's).
 The graph is only the *boundary-before-consumer* edge (derived from the manifest, not handwritten).
 
@@ -57,7 +57,7 @@ informational on this branch — acceptance is the gate, not a §3 review.)*
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
 - dispatch **`mismagent-worker`** (Agent tool) with: the block's **rich `<id>.md` spec** (its
-  `## Cosa fare`/`## Task` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
+  `## What to do`/`## Tasks` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
   projection)` + the side's `dev-architecture` (profile) + the model `tier`, and the **interfaces
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);

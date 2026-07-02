@@ -1,5 +1,5 @@
 ---
-description: Launch mismAgent's read-only board — a live, lightweight localhost view of a feature's building blocks and their state (which folder: todo/doing/done) + each block's Cosa fare / Task. Reads the rich derived block files (blocks/<ctx>/{todo,doing,done}/<id>.md); NEVER writes. Use during build to watch progress.
+description: Launch mismAgent's read-only board — a live, lightweight localhost view of a feature's building blocks and their state (which folder: todo/doing/done) + each block's What to do / Tasks. Reads the rich derived block files (blocks/<ctx>/{todo,doing,done}/<id>.md); NEVER writes. Use during build to watch progress.
 argument-hint: "[feature | <output_dir>/<feature>/ | project root]"
 ---
 

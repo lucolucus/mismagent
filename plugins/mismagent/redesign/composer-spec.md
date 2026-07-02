@@ -206,8 +206,8 @@ zombies — every row has a downstream consumer (the worker-composer itself).
 
 > **Per-block projection (derived, not a second source).** `build-manifest` also renders each block
 > as a **rich, status-less `<id>.md`** seeded into `blocks/<ctx>/todo/` — so a human (and the
-> read-only `/mismagent:board`) can open one block and see its spec + `## Cosa fare`/`## Task`/
-> `## Dipendenze`. The file's *content* is derived from the manifest (regenerable, in place); its
+> read-only `/mismagent:board`) can open one block and see its spec + `## What to do`/`## Tasks`/
+> `## Dependencies`. The file's *content* is derived from the manifest (regenerable, in place); its
 > *folder* is the block's state, moved only by the worker-composer. **No `status:` field, no
 > checkboxes** — progress is read off the folder + tests, never written into the file (that would make
 > the worker a state-writer, §10). It is to the manifest what OpenAPI is to a cross-deploy boundary: a

@@ -66,8 +66,8 @@ you confirm → flag).
   non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
 - **"Where are the tasks?"** Run **`/mismagent:board`** — a read-only live view of the blocks and
   their state. The work-item *is* the block: `build-manifest` seeds one **rich `<id>.md` file per
-  block** in `.mismagent/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## Cosa fare`/
-  `## Task`/`## Dipendenze`, **status-less, no checkboxes**) — its **folder is its status**, moved only
+  block** in `.mismagent/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## What to do`/
+  `## Tasks`/`## Dependencies`, **status-less, no checkboxes**) — its **folder is its status**, moved only
   by the worker-composer. The board renders those files + their folder position; it never writes them.
   The block files are a derived projection of the authoritative `building-blocks.yaml` (re-run
   `build-manifest` to refresh). The legacy file-driven flow lives in `attic/`.

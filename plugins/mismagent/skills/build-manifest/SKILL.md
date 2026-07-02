@@ -39,7 +39,10 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    **package/dir or symbols**, never a guessed filename (#11/#12 — see §14).
 5. **tests_nl (§16):** for every high-value block/boundary, **ask the user, in natural
    language, which tests they want** and attach them as `tests_nl` (the worker translates them into
-   tests). A boundary **without** `tests_nl` is not ready: ask. For a **`ui` block** the `tests_nl`
+   tests). A boundary **without** `tests_nl` is not ready: ask. Each item must be **falsifiable on
+   the block's real path**: an AC the slice satisfies *by construction* (it cannot fail — e.g. "no
+   future date" where the date is always `now`) proves nothing; rework it into a failable test or
+   mark it `by-construction` so nobody counts it as coverage. For a **`ui` block** the `tests_nl`
    must include the screen's **states** (empty/error/loading); the **rendering** itself (sizing/
    overflow/contrast) is not a `tests_nl` item — it is owned by `realize-ui` + the side's
    `ui_render_check` (profile).
@@ -50,7 +53,9 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    block per such side** with `wave: 0`, `type: scaffold`, no boundary, no `tests_nl`. Its acceptance
    is the negative space: **the side's `gate` runs GREEN on the empty skeleton**. The worker-composer
    builds it **before** every owner block (its `realize-scaffold` skill creates wrapper + module
-   structure + plugins + sourceSets per the stack ADR / infra-notes). Without it, in greenfield the
+   structure + plugins + sourceSets per the stack ADR / infra-notes). If the side renders UI and its
+   `ui_render_check` (profile) is an **automated** check, the scaffold also wires the **UI-test
+   dependency/config**, so the gate can execute the render proof from wave 0. Without it, in greenfield the
    owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
 
 ## Output
@@ -65,9 +70,9 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    `tables`; port → `projection`/`pinned_types`/`contract_test`; read-model → `view_shape`). Body:
    ```
    # <id> — <title>
-   ## Cosa fare      — what to build (from the model), 1–3 sentences
-   ## Task           — the tests_nl/ACs as READ-ONLY acceptance criteria (plain list, NOT checkboxes)
-   ## Dipendenze     — the boundary owners it waits on
+   ## What to do     — what to build (from the model), 1–3 sentences
+   ## Tasks          — the tests_nl/ACs as READ-ONLY acceptance criteria (plain list, NOT checkboxes)
+   ## Dependencies   — the boundary owners it waits on
    ```
    **No `status:` field, no `[ ]` checkboxes** — the block's state **is its folder** (`todo/doing/done`),
    moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
@@ -78,7 +83,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 ## The live human view — the board (read-only)
 The human reads the work via **`/mismagent:board [feature]`**: a read-only server that scans the block
 files + their **folder position** (= block status) + (optionally) the **last test run** (per-AC
-green/red) → a live kanban with each block's `## Cosa fare`/`## Task`. It **derives** progress, it
+green/red) → a live kanban with each block's `## What to do`/`## Tasks`. It **derives** progress, it
 **never writes** the block files (no checkbox mutation) — coherent with "only the worker-composer moves
 state". This is the visible surface that the hidden `.mismagent/.../blocks/` would otherwise bury.
 

@@ -37,7 +37,11 @@ consumer, **do not write it**.
 0. **Profile bootstrap (if missing):** explore writes into `<output_dir>` and fixes canonical names,
    so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
    NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
-   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides. The rest (`gate`,
+   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides, and
+   **`validation_mode`**. The mode should surface from the dialogue itself (normal feature work, or
+   a *rebuild-from-the-stated-requirements* validation run?); **if it does not surface, ask the user
+   explicitly** — it decides whether challenger/analyst may treat a prior implementation of the
+   deliverable as ground truth (`greenfield_from_requirements` forbids it). The rest (`gate`,
    `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
    invent it. The bounded contexts here are the **provisional** ones (those you already know); the
    **authoritative** map is the `context-map.md` that `mismagent-analyst` produces at step 3 — the

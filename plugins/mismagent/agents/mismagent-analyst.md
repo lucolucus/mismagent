@@ -19,7 +19,9 @@ The project's **active profile** is `<output_dir>/profile.md` — default **`.mi
 - the **idea** / problem and the notes of the user's dialogue (what is needed, for whom, why);
 - (opt.) the critique from `mismagent-challenger` already run — model what survived;
 - the existing `<output_dir>/<feature>/context-map.md`, `sample/` (domain PDFs/screenshots);
-- the **domain's bounded contexts (from the profile)** if relevant.
+- the **domain's bounded contexts (from the profile)** if relevant. If the profile sets
+  `validation_mode: greenfield_from_requirements`, the stated requirements are the **only** domain
+  source for the deliverable — never model from a prior implementation of it.
 
 ## Procedure — big-picture EventStorming (strategic)
 You use EventStorming as a *hammer* to find boundaries and language, but you stop at the
@@ -33,7 +35,10 @@ You use EventStorming as a *hammer* to find boundaries and language, but you sto
    slice boundaries.
 4. **Processes** — for each flow: actor, trigger, expected outcome (→ fan-out into tasks in `model`).
 5. **Spikes** — every unknown/risk becomes a *question + closing criterion* (in `model` they become
-   `type: spike` task nodes). Don't invent answers: mark the uncertainty.
+   `type: spike` task nodes). **A spike exists ONLY if the requirements do not answer it:** before
+   emitting one, check the candidate against the stated requirements (PRD/requirements doc) — if
+   they state the answer, resolve it citing the requirement instead of hedging it into a false
+   spike. Where the sources are genuinely silent, don't invent answers: mark the uncertainty.
 
 The **tactical detail** per context (aggregates, invariants, events, commands) is added afterwards
 by **`mismagent-tactical-modeler`** on the same `context-map.md`: you leave it clean boundaries and language.

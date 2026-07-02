@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE task. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the task REALLY satisfied?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by /dev-orchestrator-v2 after the verifier. Read-only: finds and triages, does not fix.'
+description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix.'
 ---
 
 # mismAgent — Code Review (semantic, adversarial, build movement)
@@ -21,7 +21,7 @@ dev (Patch) or becomes a new task (Defer). Your output is a verdict + findings, 
 
 ## Input you receive in the prompt
 - the authoritative **diff**: `git -C <side-repo> diff <base>...<branch>`;
-- the **task-file** (the Gherkin ACs, the `contract_ref`, the `related_adrs`);
+- the **block-file** (the Gherkin ACs, the `contract_ref`, the `related_adrs`);
 - the **side** and the **profile's boundary rules**.
 
 ## The three lenses (run each over the diff)
@@ -30,7 +30,7 @@ dev (Patch) or becomes a new task (Defer). Your output is a verdict + findings, 
    value. **Do not trust names and comments**: read the actual logic.
 2. **Edge Case Hunter** — walk **every branch and every boundary**: empty state, error path, dirty/
    partial data, concurrency, volumes, and the invariant/422 paths. Which input breaks it?
-3. **Acceptance Auditor** — for **every** AC (Gherkin) of the task: is it really satisfied, or is
+3. **Acceptance Auditor** — for **every** AC (Gherkin) of the block: is it really satisfied, or is
    there a test that passes trivially? Is the invariant *enforced* or only declared? Is the contract
    shape respected on the real body? Is an implicit AC missing (e.g. the error the contract declares)?
 
@@ -44,7 +44,7 @@ dev (Patch) or becomes a new task (Defer). Your output is a verdict + findings, 
 ## Outcome — strict handoff
 ```
 CODE-REVIEW: APPROVE | CHANGES | BLOCKED
-TASK_ID: <id>
+BLOCK_ID: <id>
 FINDINGS: [{lens: blind|edge|acceptance, sev: HIGH|MED|LOW, at: <file:line>, issue: <1 sentence>, fix: Patch|Defer|Decision}, ...]
 HIGH_COUNT: <n>
 NOTES: <1-2 sentences>

@@ -49,12 +49,15 @@ def parse_frontmatter(text):
     return fm, body
 
 
-def section(body, name):
-    """Text under a `## <name>` heading, until the next `## ` heading."""
+def section(body, names):
+    """Text under a `## <name>` heading (any of `names`), until the next `## ` heading."""
+    if isinstance(names, str):
+        names = (names,)
     out, capturing = [], False
     for line in body.splitlines():
         if line.strip().startswith("## "):
-            capturing = line.strip()[3:].strip().lower().startswith(name.lower())
+            heading = line.strip()[3:].strip().lower()
+            capturing = any(heading.startswith(n.lower()) for n in names)
             continue
         if capturing:
             out.append(line)
@@ -95,15 +98,16 @@ def scan(blocks_dir):
                     "wave": str(fm.get("wave", "")),
                     "consumes": fm.get("consumes", []) if isinstance(fm.get("consumes"), list) else [],
                     "status": st,
-                    "cosa_fare": section(body, "cosa fare"),
-                    "tasks": bullets(section(body, "task")),
+                    # "cosa fare" kept as a fallback for block files seeded before v0.8.0
+                    "what_to_do": section(body, ("what to do", "cosa fare")),
+                    "tasks": bullets(section(body, ("task",))),
                     "file": os.path.join(ctx, st, fn),
                 })
     return blocks
 
 
 # ---- server -----------------------------------------------------------------
-PAGE = """<!doctype html><html lang=it><head><meta charset=utf-8>
+PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
 <title>mismAgent board</title><style>
 :root{--bg:#0e1116;--card:#1a1f27;--mut:#8b949e;--ok:#2ea043;--go:#d29922;--td:#30363d}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 -apple-system,system-ui,sans-serif;background:var(--bg);color:#e6edf3}
@@ -123,13 +127,13 @@ footer{color:var(--mut);padding:6px 18px;font-size:12px;border-top:1px solid #21
 </style></head><body>
 <header><b>mismAgent board</b><span id=meta></span><span id=blocksdir></span></header>
 <div class=cols id=cols></div>
-<footer>read-only · si aggiorna ogni 1.5s · lo stato è la cartella (todo/doing/done)</footer>
+<footer>read-only · refreshes every 1.5s · state = the folder (todo/doing/done)</footer>
 <script>
 const STATES=["todo","doing","done"];
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
 async function tick(){
  let d; try{d=await(await fetch("state.json",{cache:"no-store"})).json()}catch(e){return}
- document.getElementById("meta").textContent=d.blocks.length+" blocchi";
+ document.getElementById("meta").textContent=d.blocks.length+" blocks";
  document.getElementById("blocksdir").textContent=d.blocks_dir;
  const cols=document.getElementById("cols");cols.innerHTML="";
  for(const s of STATES){
@@ -142,7 +146,7 @@ async function tick(){
    col.innerHTML+="<div class=card><div class=id>"+esc(b.id)+"</div>"
     +"<div class=badges><span class=b>"+esc(b.type)+"</span><span class=b>"+esc(b.context)+"</span>"
     +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")+"</div>"
-    +(b.cosa_fare?"<div class=cf>"+esc(b.cosa_fare)+"</div>":"")
+    +(b.what_to_do?"<div class=cf>"+esc(b.what_to_do)+"</div>":"")
     +(tasks?"<ul class=tasks>"+tasks+"</ul>":"")+"</div>";
   }
   cols.appendChild(col);
@@ -188,8 +192,8 @@ def resolve_blocks(arg):
         if len(feats) == 1:
             return os.path.abspath(os.path.join(mm, feats[0], "blocks"))
         if feats:
-            raise SystemExit("Più feature trovate (%s). Passane una: board.py .mismagent/<feature>" % ", ".join(feats))
-    raise SystemExit("Nessuna cartella blocks/ trovata sotto %r" % arg)
+            raise SystemExit("Several features found (%s). Pass one: board.py .mismagent/<feature>" % ", ".join(feats))
+    raise SystemExit("No blocks/ folder found under %r" % arg)
 
 
 def main():
@@ -211,7 +215,7 @@ def main():
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         port = httpd.server_address[1]
     print("mismAgent board → http://127.0.0.1:%d   (blocks: %s)" % (port, blocks_dir), flush=True)
-    print("read-only · Ctrl-C per fermare", flush=True)
+    print("read-only · Ctrl-C to stop", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

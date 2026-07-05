@@ -102,6 +102,19 @@ fictional instance).
 - **`attic/`** — the superseded file-driven flow, kept out of the plugin registry on purpose (a
   loaded superseded piece is a zombie in waiting). The history is in `git log`.
 
+## Codex / OpenAI packaging (generated)
+
+`codex/` is the same method packaged for **OpenAI Codex**: skills in `.agents/skills/`
+(`$mismagent-<name>`), subagents as TOML in `.codex/agents/`, the methodology map as `AGENTS.md`,
+the board script inside the `mismagent-board` skill. It is a **generated view** — the Claude Code
+plugin stays the single source of truth (`tools/generate-codex.py` regenerates it; never edit
+`codex/` by hand). Install into a project with:
+
+```
+codex/install.sh /path/to/your/project            # kernel
+codex/install.sh /path/to/your/project --with-cross-deploy   # + cross-deploy module
+```
+
 ## Install (local marketplace)
 
 The repo root is the marketplace. Register it with an **absolute path** (a relative one is read as a

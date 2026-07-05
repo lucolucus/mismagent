@@ -1,6 +1,6 @@
 ---
 name: write-task
-description: 'mismAgent''s writer of the two NODE kinds the architecture-driven flow still needs as files: type: spike (a research/unknown node, with its closure protocol) and type: cleanup (removal of a deprecated cross-deploy operationId after consumers migrate, gated by ready_when). Writes <output_dir>/<feature>/tasks/<side>/<state>/<slug>.md, state = the folder. The old implementation-task is NOT here anymore: in the architecture-driven flow the work-items are the BLOCKS in building-blocks.yaml + build-manifest''s visible TASKS.md view; the file-driven implementation-task flow is retired to attic/. Invoked by write-adr (cleanup) and in explore/model to materialize the context-map''s spikes.'
+description: 'mismAgent''s writer of the two NODE kinds the architecture-driven flow still needs as files: type: spike (a research/unknown node, with its closure protocol) and type: cleanup (removal of a deprecated cross-deploy operationId after consumers migrate, gated by ready_when). Writes <output_dir>/<feature>/tasks/<side>/<state>/<slug>.md, state = the folder. The old implementation-task is NOT here anymore: in the architecture-driven flow the work-items are the BLOCKS (rich files in blocks/, viewed via /mismagent:board); the file-driven implementation-task flow is retired to attic/. Invoked by write-adr (cleanup) and in explore/model to materialize the context-map''s spikes.'
 ---
 
 # MismAgent — Write Task (spike / cleanup nodes)
@@ -10,12 +10,12 @@ almost always `backlog/`). State **IS the folder** — no `status:` in the file.
 `methodology/mismagent.md`.
 
 > **Not the implementation-task writer.** In the **architecture-driven** flow the units of work are
-> the **blocks** in `building-blocks.yaml`, and the human reads them in `build-manifest`'s visible
-> **`TASKS.md`** view — there is no per-feature implementation-task file. This skill writes only the
+> the **blocks** (rich `<id>.md` files in `blocks/<ctx>/{todo,doing,done}/`, viewed live via
+> `/mismagent:board`) — there is no per-feature implementation-task file. This skill writes only the
 > two node kinds that are *not* blocks: **spike** and **cleanup**. The full implementation-task
 > template of the superseded **file-driven** flow lives in **`attic/`**.
-> *(De-confliction: these node files use **slug** ids under `tasks/<side>/<state>/`; the human view
-> uses `TASKS/T01..TNN` at the project root — different place, different ids, no collision.)*
+> *(De-confliction: spike/cleanup nodes live under **`tasks/`**`<side>/<state>/`; the blocks live under
+> **`blocks/`**`<ctx>/<state>/` — different trees, no collision.)*
 
 ## Template — `type: spike` node (unknown/research; from the context-map or a Defer)
 ```markdown

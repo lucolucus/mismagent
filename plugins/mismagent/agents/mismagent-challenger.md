@@ -18,7 +18,8 @@ repo/domain to check whether the thing **already exists**. Your output is a **ve
 
 ## Input you receive in the prompt
 - the **idea** / problem (and, if provided, the **draft model** from `mismagent-analyst`);
-- (opt.) paths to `context-map.md`, `sample/`, and the sub-repo to grep for prior-art.
+- (opt.) paths to `context-map.md`, `sample/`, and the sub-repo to grep for prior-art;
+- the **active profile**'s `validation_mode`, if set (it gates front 7 below).
 
 ## Procedure — attack on these fronts
 1. **Wrong problem.** Does the user *really* want this, or is it a solution in search of a
@@ -32,6 +33,10 @@ repo/domain to check whether the thing **already exists**. Your output is a **ve
    migrations, edges, concurrency, scale)?
 6. **Missing cases.** Empty state, error, dirty data, concurrent access, volumes.
 7. **Already solved.** Is there already something in the repo/domain that does it (grep)? Then why again?
+   **Skip this front when the profile says `validation_mode: greenfield_from_requirements`:** the
+   run's purpose is to build from the stated requirements ALONE, so a prior implementation of the
+   deliverable is **not ground truth** — do not read it, do not argue from it, do not demand it in
+   `MUST_ANSWER`. Attack from the requirements only; all the other fronts stand.
 
 **Default rule:** when in doubt, **RESHAPE** or **KILL**, never a courtesy PROCEED.
 

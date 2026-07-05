@@ -8,3 +8,7 @@
 *~
 .serena
 experiments-logs/
+
+# Python (board.py tooling)
+__pycache__/
+*.pyc

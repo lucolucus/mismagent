@@ -13,9 +13,11 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 
 ## 0 · INGEST
 `$ARGUMENTS` = feature or path → resolve `<output_dir>/<feature>/`. Read **`building-blocks.yaml`**
-(the only input: blocks + boundaries + projection + PINNED TYPES; produced by IDEA-2) and the
-**active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
-branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`.
+(the **authoritative** input: blocks + boundaries + projection + PINNED TYPES; produced by IDEA-2) and
+the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
+branching). **State lives in the folders** `blocks/<context>/{todo,doing,done}/`, where each block is a
+**rich `<id>.md` file** (derived from the manifest: spec + `## What to do`/`## Tasks`/`## Dependencies`,
+status-less). You move those files (`git mv`); you never rewrite their content (that is build-manifest's).
 The graph is only the *boundary-before-consumer* edge (derived from the manifest, not handwritten).
 
 ## 1 · READINESS (model→build gate — the SINGLE door; this IS the old readiness-gate)
@@ -23,6 +25,11 @@ This phase is the **one** survival-test gate (the `readiness-gate` skill is just
 that runs this same lens before you launch). Verify, on the manifest:
 - ∀ block: a **complete spec** + **concrete acceptance** (`tests_nl`/ACs — a high-value block with no
   `tests_nl` is not ready: ask the user);
+- ∀ block file: the **block-spec standard** holds (build-manifest's per-type completeness lint —
+  `## What to do` + ≥1 criterion + `Sources:`; aggregate invariants each covered by a criterion;
+  every command with happy-path + failure criteria; port/adapter with the pinned signature inlined
+  in `## Dependencies`; read-model criteria reflect the `view_shape`; ui states covered). A gap →
+  **not ready**: BOUNCE to build-manifest **with the gap named** (regenerate, never hand-patch);
 - ∀ boundary: **PINNED types** (Published Language: primitive or shared-kernel, **never** the
   supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its OpenAPI exists
   and every cited `operationId` resolves;
@@ -54,8 +61,8 @@ informational on this branch — acceptance is the gate, not a §3 review.)*
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, off the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
-- dispatch **`mismagent-worker`** (Agent tool) with: the **block-spec** from the manifest (incl.
-  `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
+- dispatch **`mismagent-worker`** (Agent tool) with: the block's **rich `<id>.md` spec** (its
+  `## What to do`/`## Tasks` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
   projection)` + the side's `dev-architecture` (profile) + the model `tier`, and the **interfaces
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);
@@ -81,8 +88,9 @@ feature-flag**. **Here the user confirms** (build = you delegate, confirm only a
 ## 7 · LOOP & REPORT
 Recompute `done` and repeat from §2 until all blocks are `done` and the boundaries welded (or only
 blocked, recorded work remains). Remove the worktrees. ~30-line report: green slices, done blocks,
-bounced/blocked and why, welded boundaries, anomalies, next action. **Point the human to the plan**
-(`./TASKS.md`) and name where the live state is (`blocks/<context>/{todo,doing,done}/`).
+bounced/blocked and why, welded boundaries, anomalies, next action. **Point the human to
+`/mismagent:board`** (the live read-only view) and name where the state is
+(`blocks/<context>/{todo,doing,done}/`).
 
 ## BOUNCE (where the flow goes back)
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to IDEA-2** (pin the Published Language);

@@ -22,6 +22,10 @@
 output_dir: .mismagent          # where mismAgent writes its artifacts (recommended default)
 ubiquitous_language:
   lang: <it|en|...>             # language of the canonical names = the language the domain speaks
+validation_mode: normal         # or: greenfield_from_requirements — the deliverable is (re)built
+                                # from the stated requirements ONLY: challenger/analyst never treat
+                                # a prior implementation of it as ground truth. It should surface at
+                                # bootstrap; if it doesn't, explore ASKS the user explicitly.
 ```
 
 ## Sides (independent deploy units)
@@ -36,6 +40,10 @@ sides:
     dev_architecture: <skill>   # the repo's "architecture memory" skill (or: none)
     gate: "<commands>"          # build + test that must turn green
                                 # bootstrap: "manual — TBD after the stack ADR" (the architect finalizes it)
+    toolchain: "<prerequisite>" # what the gate needs to even START (e.g. "JDK 21 — set JAVA_HOME if
+                                # the shell default differs"): the same gate string must not flip
+                                # red on a differently-configured shell. Workers and the verifier
+                                # run the gate under this. none if the gate is self-sufficient
     ui_render_check: "<mechanism>"  # ONLY for sides that render UI: how a `ui` block proves it
                                 # RENDERS (not just that the presenter is green). Either an automated
                                 # UI smoke/screenshot test folded INTO the gate, or "manual run-the-app

@@ -37,8 +37,8 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
    Any red → **FAIL** (report the command and the error excerpt).
 
 3. **AC coverage (YOU are the owner of this check):** for **every** Gherkin scenario of the
-   task, find in the diff the test that covers it. AC without a test → **FAIL** (list which ones).
-   For a BE `produces` task: the **response-shape test** on the real JSON body of the
+   block, find in the diff the test that covers it. AC without a test → **FAIL** (list which ones).
+   For a BE `produces` block: the **response-shape test** on the real JSON body of the
    `contract_ref` endpoint must exist → if missing, **FAIL**.
 
 4. **Contract referenced, not duplicated:** verify that the code uses the contract via generated
@@ -65,17 +65,26 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
      rule uses a GNU-only extension (`grep -z`, `-P`, PCRE `\d`/`\b`) it may error or silently mismatch
      here → do not read that as a pass: report `adr-enforced` red with NOTE "non-portable grep — rewrite
      in POSIX BRE/ERE" and flag the ADR so its rule gets re-scoped at the source (`write-adr`).
-7. **Domain invariants + error contract (only `produces` tasks of a WRITE):** the contract
-   test captures the *shape*, NOT the cross-field rules. If the task has an AC on an invariant
+7. **Domain invariants + error contract (only `produces` blocks of a WRITE):** the contract
+   test captures the *shape*, NOT the cross-field rules. If the block has an AC on an invariant
    (e.g. "422 when subtype invalid for category"), verify that a **test** covering it exists →
    without one, **FAIL**. Also verify that the **error responses** declared in the
    contract (e.g. `422 ValidationError`) have a test.
 
+8. **UI render-check (`ui` blocks only) — a DISTINCT dimension, not ac-coverage:** green presenter
+   tests do **not** prove the screen renders (the most-confirmed gap of the validation runs: sizing,
+   overflow, contrast). Read the side's **`ui_render_check`** from the profile:
+   - **automated** (UI smoke/screenshot folded into the gate) → the check must exist and be green in
+     step 2; missing or red → **FAIL** (`render-check` red);
+   - **manual run-the-app (recorded)** → the worker's handoff must carry the recorded evidence (note/
+     screenshot path); absent → **FAIL** (`render-check` red, NOTE: "render proof not recorded").
+   Non-`ui` blocks (or sides with no UI): `render-check=n/a`.
+
 ## Outcome — tight handoff
 ```
 VERIFIER: PASS | FAIL | SKIP
-TASK_ID: <id>
-CHECKS: build=✓/✗ test=✓/✗ contract=✓/✗ ac-coverage=✓/✗ invariants=✓/✗ no-dup-contract=✓/✗ no-shadow=✓/✗ adr-enforced=✓/✗ filelist-match=✓/✗
+BLOCK_ID: <id>
+CHECKS: build=✓/✗ test=✓/✗ contract=✓/✗ ac-coverage=✓/✗ invariants=✓/✗ no-dup-contract=✓/✗ no-shadow=✓/✗ adr-enforced=✓/✗ filelist-match=✓/✗ render-check=✓/✗/n-a
 FAILURES: [<check>: <command/excerpt/uncovered AC/violated ADR>, ...]
 NOTES: <1-2 sentences>
 ```

@@ -18,7 +18,10 @@ against. Greenfield only — if the project already builds, this block does not 
 - the **plugins / dev-deps** the gate needs (test runner, the persistence/UI plugins named in the
   stack ADR / infra-notes), pinned to a working version;
 - the minimal config so the **gate's build + test phases execute** (an empty/placeholder test is fine
-  — the point is the toolchain runs, not that there is behavior).
+  — the point is the toolchain runs, not that there is behavior);
+- if the side renders UI and the profile's **`ui_render_check`** is an **automated** check: the
+  UI-test dependency/config, wired so the gate can execute it (a placeholder smoke test is fine —
+  the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness).
 
 ## Boundaries — you write NO domain
 You create **only** the skeleton: no aggregate, no port, no invariant, no business rule. Those are the

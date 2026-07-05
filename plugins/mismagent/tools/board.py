@@ -91,6 +91,17 @@ def scan(blocks_dir):
                 except OSError:
                     continue
                 fm, body = parse_frontmatter(text)
+                what = section(body, ("what to do", "cosa fare"))
+                tasks = bullets(section(body, ("task",)))
+                # structural floor only (the semantic lint is the worker-composer's readiness)
+                gaps = []
+                if not what:
+                    gaps.append("no What-to-do")
+                if not tasks:
+                    gaps.append("no criteria")
+                inv = fm.get("invariants", [])
+                if isinstance(inv, list) and inv and len(tasks) < len(inv):
+                    gaps.append("criteria %d < invariants %d" % (len(tasks), len(inv)))
                 blocks.append({
                     "id": fm.get("id", fn[:-3]),
                     "type": fm.get("type", ""),
@@ -99,8 +110,9 @@ def scan(blocks_dir):
                     "consumes": fm.get("consumes", []) if isinstance(fm.get("consumes"), list) else [],
                     "status": st,
                     # "cosa fare" kept as a fallback for block files seeded before v0.8.0
-                    "what_to_do": section(body, ("what to do", "cosa fare")),
-                    "tasks": bullets(section(body, ("task",))),
+                    "what_to_do": what,
+                    "tasks": tasks,
+                    "spec_gaps": gaps,
                     "file": os.path.join(ctx, st, fn),
                 })
     return blocks
@@ -120,6 +132,7 @@ header b{font-size:16px}header span{color:var(--mut)}
 .card{background:var(--card);border:1px solid #262c36;border-radius:8px;padding:10px 12px;margin-bottom:10px}
 .card .id{font-weight:600}.badges{margin:4px 0;display:flex;gap:6px;flex-wrap:wrap}
 .b{font-size:11px;color:var(--mut);background:#21262d;border-radius:5px;padding:1px 6px}
+.b.warn{color:#f85149;background:#3d1d20}
 .cf{color:#c9d1d9;margin:6px 0}
 .tasks{margin:6px 0 0;padding-left:16px;color:var(--mut)}.tasks li{margin:2px 0}
 .empty{color:var(--mut);font-style:italic}
@@ -145,7 +158,8 @@ async function tick(){
    const tasks=b.tasks.map(t=>"<li>"+esc(t)+"</li>").join("");
    col.innerHTML+="<div class=card><div class=id>"+esc(b.id)+"</div>"
     +"<div class=badges><span class=b>"+esc(b.type)+"</span><span class=b>"+esc(b.context)+"</span>"
-    +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")+"</div>"
+    +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")
+    +(b.spec_gaps&&b.spec_gaps.length?"<span class=\\"b warn\\">⚠ "+esc(b.spec_gaps.join(" · "))+"</span>":"")+"</div>"
     +(b.what_to_do?"<div class=cf>"+esc(b.what_to_do)+"</div>":"")
     +(tasks?"<ul class=tasks>"+tasks+"</ul>":"")+"</div>";
   }

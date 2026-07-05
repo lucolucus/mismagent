@@ -28,6 +28,11 @@ This phase is the **one** survival-test gate (the `readiness-gate` skill is just
 that runs this same lens before you launch). Verify, on the manifest:
 - ∀ block: a **complete spec** + **concrete acceptance** (`tests_nl`/ACs — a high-value block with no
   `tests_nl` is not ready: ask the user);
+- ∀ block file: the **block-spec standard** holds (build-manifest's per-type completeness lint —
+  `## What to do` + ≥1 criterion + `Sources:`; aggregate invariants each covered by a criterion;
+  every command with happy-path + failure criteria; port/adapter with the pinned signature inlined
+  in `## Dependencies`; read-model criteria reflect the `view_shape`; ui states covered). A gap →
+  **not ready**: BOUNCE to build-manifest **with the gap named** (regenerate, never hand-patch);
 - ∀ boundary: **PINNED types** (Published Language: primitive or shared-kernel, **never** the
   supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its OpenAPI exists
   and every cited `operationId` resolves;

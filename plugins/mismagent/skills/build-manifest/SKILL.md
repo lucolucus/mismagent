@@ -80,6 +80,24 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    files are its **per-block projection** (the way OpenAPI is the cross-deploy projection of a boundary).
    No static `TASKS.md` — the rich block files + the board (below) replace it.
 
+   ### The block-spec standard — completeness is LINTED, not judged
+   The file is derived, so richness costs nothing: hold every block to this per-type standard.
+   You enforce it at generation; the **worker-composer's Phase 1 re-checks it** (a gap ⇒ the block
+   is **not ready**, gap named, BOUNCE back here — regenerate, never hand-patch the file):
+   - **every block:** `## What to do` non-empty; `## Tasks` ≥ 1 criterion; a closing `Sources:`
+     line pointing at the `related_adrs` + the context-map section it derives from;
+   - **aggregate:** every frontmatter `invariants` item is spelled out in the body AND covered by
+     ≥ 1 `## Tasks` criterion (an invariant nobody tests is a wish, not an invariant);
+   - **application-service:** every `commands` item has ≥ 1 happy-path criterion AND ≥ 1
+     rejection/failure criterion;
+   - **port / adapter:** every boundary the block touches appears in `## Dependencies` with the
+     **pinned signature inlined** (the Published-Language types + the `contract_test` name) — the
+     reader must not open another file to know the seam;
+   - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
+   - **ui:** the screen's states (empty/error/loading) are covered (rule 5).
+   The lint is structural and mechanical: it governs the **floor** of detail a human can rely on
+   when opening any block; the ceiling stays the user's `tests_nl`.
+
 ## The live human view — the board (read-only)
 The human reads the work via **`/mismagent:board [feature]`**: a read-only server that scans the block
 files + their **folder position** (= block status) + (optionally) the **last test run** (per-AC

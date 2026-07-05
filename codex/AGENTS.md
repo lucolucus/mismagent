@@ -103,8 +103,10 @@ flowchart TD
    blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
    in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
    the **rich, derived block files** (`blocks/<ctx>/todo/<id>.md`: spec + `## What to do`/`## Tasks`/
-   `## Dependencies`, status-less, no checkboxes) so opening a block shows the whole block. **You read
-   them live via `$mismagent-board`** (read-only).
+   `## Dependencies`, status-less, no checkboxes) so opening a block shows the whole block, **held to
+   a per-type completeness standard** (invariants covered by criteria, commands with happy+failure,
+   pinned signatures inlined — linted by the worker-composer's readiness, surfaced on the board).
+   **You read them live via `$mismagent-board`** (read-only).
 5. **`$mismagent-create-contract`** `[skill, from the cross-deploy module]` —
    **only if** at least one boundary is `cross-deploy`: the port is projected into ONE OpenAPI
    (names from the ubiquitous language). If the module is not enabled and you have no

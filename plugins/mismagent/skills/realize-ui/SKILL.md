@@ -33,8 +33,10 @@ needs **both**:
    gate** (`ui_render_check`):
    - the side has a **UI-test capability** → an automated **smoke/screenshot test** in the gate
      (containers render without throwing, are sized, key elements present & visible);
-   - it has **none** → a **recorded run-the-app render-check** (the boundary proof is a human render,
-     written down — **never silent**).
+   - it has **none** → a **recorded run-the-app render-check** — produce it with the
+     **`run-app-smoke`** skill (launches the side via the profile's `run` command, walks the
+     checklist below, records the evidence in `render-proof/<block-id>/`): the boundary proof is a
+     real render, written down — **never silent**.
 
    **Presenter-green alone is NOT done.**
 

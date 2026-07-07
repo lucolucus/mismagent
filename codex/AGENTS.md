@@ -167,6 +167,11 @@ owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
 code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
 You step in **only** if a worker returns `BOUNCED` (ambiguous AC: you decide) and **at the end**:
 you confirm the release → green tag → feature-flag.
+*Optional build steps:* **`$mismagent-run-app-smoke`** `[skill]` — before you confirm, the recorded
+render proof of the slice's `ui` blocks (launches the app via the profile's `run`, evidence in
+`render-proof/`); **`$mismagent-harvest-dev-architecture`** `[skill]` — after the first green slice,
+turns the done blocks' real conventions into the side's dev-architecture skill (the profile's
+`dev_architecture` stops being `none`).
 
 **When it jams:** write the entry in the project's `MISMAGENT-LOG.md` *immediately* (which
 skill/agent, what it was attempting, what broke, `core` vs `profile`) — that is how the method matures.
@@ -180,6 +185,9 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    regenerated from a source** (e.g. the rich block files + the read-only `$mismagent-board`, derived
    from the manifest): allowed because it is regenerated, never hand-maintained, so it cannot drift;
    its consumer is the human.
-4. **every cross-movement handoff is a file**, never just a message.
+4. **every cross-movement handoff is a file**, never just a message. If the harness is in a
+   **read-only/plan mode**, dispatch only read-only subagents (the challenger) and **materialize the
+   pending files as the first action once writes reopen** — a plan's text is not a handoff (see
+   the explore skill's "Harness read-only mode").
 5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
 6. **never merge/push onto the base branch without an explicit user request.**

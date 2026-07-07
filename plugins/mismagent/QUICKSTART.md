@@ -46,9 +46,9 @@ you confirm → flag).
 
 ## Greenfield traps (read BEFORE starting)
 - **`dev_architecture: none` at the start.** On a new project you don't have golden
-  files/conventions yet: put `none`. When the patterns stabilize, write a
-  `<side>-dev-architecture` skill (modeled on a real per-side golden-files doc) and point the
-  profile at it.
+  files/conventions yet: put `none`. After the first green slice, run
+  **`/mismagent:harvest-dev-architecture`**: it harvests the real conventions from the done blocks'
+  code, generates the `<side>-dev-architecture` skill and points the profile at it.
 - **The stack is decided in model, WITH you.** Don't fill in `gate`/stack in the profile by
   guessing: the architect presents the alternatives, you choose, the stack ADR gets written
   afterwards — and the architect finalizes the `gate` in the profile.

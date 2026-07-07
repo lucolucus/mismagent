@@ -30,6 +30,7 @@ sides:
     gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
     toolchain: "Node 20 (pinned by .nvmrc)"
     ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"
+    run: "npm run dev (http://localhost:3000)"
     contract: "openapi-typescript → src/types/api.generated.ts + contract.test.ts per operationId"
   infra:
     repo: machinecare-infra

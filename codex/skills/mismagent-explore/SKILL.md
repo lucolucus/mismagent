@@ -60,7 +60,20 @@ consumer, **do not write it**.
 5. **Infra, if needed:** invoke `write-infra-notes` for the `infra-notes.md` draft.
 6. **Research on-demand:** if a decision requires investigation → `research/<topic>.md`.
 
-## Gate towards model
+## Harness read-only mode (e.g. plan mode)
+If the harness forbids writes until a plan is approved, explore does **not stall** and does **not
+bypass** — the conflict is only mechanical (plan mode and explore want the same thing: understand
+before acting):
+- the **dialogue proceeds** (it is the high-presence part) and **`mismagent-challenger` dispatches
+  normally** — it is read-only by design;
+- do **NOT** dispatch `mismagent-researcher` or `mismagent-analyst` while writes are forbidden:
+  their handoffs are **FILES** (rule #4) and a return message is not a valid substitute — the
+  work would evaporate with the context;
+- the pending writes (the bootstrap profile with the answers already collected, the brief draft)
+  go into the plan as an **explicit list of files to materialize**, never as replacement content;
+- when writes reopen, **materializing the files is the FIRST action** (profile → brief), then
+  dispatch the analyst for the context-map. The explore→model gate stays on the **files**: an
+  approved plan's text is not a handoff.
 `model` starts **only** if `product-brief.md` (problem/user/value) **and**
 `context-map.md` (at least the bounded contexts with the ubiquitous language) exist. Otherwise stay
 in explore.

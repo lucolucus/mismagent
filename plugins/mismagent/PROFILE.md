@@ -48,6 +48,9 @@ sides:
                                 # RENDERS (not just that the presenter is green). Either an automated
                                 # UI smoke/screenshot test folded INTO the gate, or "manual run-the-app
                                 # (recorded)". Read by realize-ui. Sides with no UI: none
+    run: "<command>"            # ONLY for sides that render UI: how to LAUNCH the side locally —
+                                # read by run-app-smoke to produce the recorded render proof
+                                # (render-proof/). Headless sides: none
     contract: "<mechanism>"     # ONLY for sides with cross-deploy boundaries: how it verifies the
                                 # contract / generates the types. Single-side: none
 ```

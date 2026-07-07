@@ -92,7 +92,24 @@ bounced/blocked and why, welded boundaries, anomalies, next action. **Point the 
 `/mismagent:board`** (the live read-only view) and name where the state is
 (`blocks/<context>/{todo,doing,done}/`).
 
-## BOUNCE (where the flow goes back)
+## RE-ENTRANT by design — running under /loop
+Every invocation recomputes ALL its state from the **folders** (`blocks/<ctx>/{todo,doing,done}/`)
+and **git** — nothing depends on in-session memory. So you can run as a recurring loop — any
+harness feature that re-invokes this command on an interval or self-paced (e.g. Claude Code's
+`/loop`): each firing advances what is ready, processes what has returned, reports, and **ends the
+turn**; the next firing picks up where the folders say. Human waits stop the *firing*, never the *flow*: a `BOUNCED` block or a pending
+release confirmation is reported as the open question and left in place — the user answers
+whenever, the next firing resumes from it.
+
+**Orphan reconciliation (first thing, every firing).** A block in `doing/` with **no live worker**
+is an orphan of a previous firing. Reconcile it from git, never from memory:
+- its branch/worktree **has commits** → treat as `READY-FOR-REVIEW` → route to §3 D1 (the verifier
+  judges the code, not the story);
+- **no commits** → the work never landed: re-dispatch the worker (does not count as a rework cycle);
+- an orphan **worktree with no block** in `doing/` → remove it (state lives in the folders, not in
+  the worktree's existence).
+Pacing: while workers run in the background the harness notifies on completion — use a **long
+fallback** interval, don't poll; waiting on the human → long interval too.
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to IDEA-2** (pin the Published Language);
 - worker `BOUNCED` → to the manifest/spec; · D1 `FAIL` / D2 `RED` → to the worker (rework, max 2 cycles).
 

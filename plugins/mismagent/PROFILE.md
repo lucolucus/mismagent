@@ -50,7 +50,8 @@ sides:
                                 # (recorded)". Read by realize-ui. Sides with no UI: none
     run: "<command>"            # ONLY for sides that render UI: how to LAUNCH the side locally —
                                 # read by run-app-smoke to produce the recorded render proof
-                                # (render-proof/). Headless sides: none
+                                # (render-proof/). REQUIRED when ui_render_check is manual (the
+                                # worker-composer's readiness bounces without it). Headless sides: none
     contract: "<mechanism>"     # ONLY for sides with cross-deploy boundaries: how it verifies the
                                 # contract / generates the types. Single-side: none
 ```

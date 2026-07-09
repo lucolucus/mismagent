@@ -22,15 +22,14 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
 - ∀ boundary: **PINNED types** (Published Language, never the supplier's domain) + `contract_test` +
   `projection`; **cross-deploy** → its OpenAPI exists and every cited `operationId` resolves;
 - the profile's **gate is executable**, and the side's repo is **under git** (the worker-composer
-  init's it with confirmation if not);
-- **leanness:** a block/slice that overflows its budget → too big → BLOCK (split with `build-manifest`).
+  init's it with confirmation if not).
 
 ## Useful verification commands (read-only)
 ```bash
 # the rich block files must stay status-less — state is the FOLDER, never a field or a checkbox
 grep -rlE '^status:' <output_dir>/<feature>/blocks/ && echo "VIOLATION: status field in a block file"
 grep -rlE '^\s*- \[[ x]\]' <output_dir>/<feature>/blocks/ \
-  && echo "VIOLATION: checkbox (progress-as-state) in a block file — the ## Task list is read-only criteria"
+  && echo "VIOLATION: checkbox (progress-as-state) in a block file — the ## Tasks list is read-only criteria"
 # cross-deploy only: operationIds declared in the YAML
 grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openapi.yaml 2>/dev/null
 ```
@@ -41,4 +40,6 @@ grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openap
 - **BLOCKED** → report the **precise** misalignments and **which step to rework** (architecture / the
   manifest / a missing `tests_nl`). Promote nothing.
 - **EXPLICIT PENDING** → a `type: cleanup` node whose `ready_when` is not yet satisfied (waiting for
-  consumers to migrate): list it separately — neither actionable nor an error.
+  consumers to migrate), a **parked bounce** (`open-questions/<block-id>.md` awaiting the user), or
+  an **open `type: spike` node** (its `Unblocks` blocks are not dispatched while it is open):
+  list them separately — neither actionable nor an error.

@@ -492,6 +492,10 @@ All the specialization lives **in the skills**; the worker-composer stays thin.
 
 ### Non-skill, dispatch parameter
 - **model tier** (IDEA-1): high for a delicate `realize-aggregate`, low for a trivial `realize-adapter`.
+  *(DECLINED 2026-07-05 after adversarial counter-validation: no logged friction demands it, and this
+  type→difficulty heuristic is inverted on the cassa2 evidence — ui/adapters are the failure magnets,
+  not aggregates. Reserve design if evidence arrives: a stateless `model_per_type` map in the
+  PROFILE. The live flow dispatches every worker at the session's model — no `tier` parameter.)*
 
 ### Synthesis
 - **One invocation = A(block) [+ B(projection) if boundary] + D(per-side memory) + tier.** That's
@@ -568,9 +572,10 @@ Phase 1 · READINESS (model→build gate, evolved)
 
 Phase 2 · WAVE LOOP (until all done)
   wave 0 (greenfield): build the `scaffold` block ALONE → gate green on the empty skeleton, then go on
-  ready = blocks whose consumed boundaries' OWNERS are in done      (owners first, §5)
+  ready = blocks whose consumed boundaries' OWNERS are MERGED on the integration line   (owners first, §5;
+          NOT "in done": done = welded needs the consumer merged → keying on done would deadlock)
   parallel (cap N, worktree per block):
-     skills = select(block.type × projection) + dev-architecture(side) + tier   (§13)
+     skills = select(block.type × projection) + dev-architecture(side)   (§13)
      worker.realize(block_spec, skills, boundary-interfaces)   # TDD → green on its own
      return: READY | BOUNCED | BLOCKED
 

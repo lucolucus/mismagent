@@ -30,9 +30,12 @@ consumer, **do not write it**.
    → consumed by `mismagent-tactical-modeler` (the seeds → tactical model) and by
    **`build-manifest`** (bounded contexts → boundaries; aggregates/invariants →
    blocks; **canonical names** → types and, on cross-deploy boundaries, OpenAPI schemas via
-   `create-contract`); the `mismagent-verifier` greps those terms on the diff → drift = **FAIL**,
-   and demands a test for every invariant. That is why it is not a zombie.
-3. **Spikes** for the unknowns → listed in `context-map.md`; in `model` they become task nodes.
+   `create-contract`); the `mismagent-verifier`'s anti-shadow check holds the diff's domain types
+   to those canonical names (cross-deploy: via the contract-generated types; in-process: a
+   synonym/rename of a canonical term → **FAIL**), and it demands a test for every invariant.
+   That is why it is not a zombie.
+3. **Spikes** for the unknowns → listed in `context-map.md`; in `model` the **tactical-modeler
+   materializes them** as `type: spike` nodes via `write-task`.
 4. (if needed) `infra-notes.md` (draft) via **`write-infra-notes`** → consumed in `model`.
 5. (optional) `research/<topic>.md` → cited by an ADR in `model`.
 

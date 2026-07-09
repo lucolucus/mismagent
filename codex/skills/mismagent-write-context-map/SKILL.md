@@ -38,7 +38,7 @@ If an element has no consumer, **do not write it** — this holds row by row of 
 - **Aggregates / entities:** <Aggregate (root)> guards <entities / value objects>
    → manifest `aggregate` block + architectural decision (architect)
 - **Invariants:** [INV-1] <cross-field rule, e.g. extraordinary maintenance ⇒ requires an attachment>
-   → Gherkin AC + invariant-test on the aggregate block (verified by mismagent-verifier)
+   → acceptance criterion + invariant-test on the aggregate block (verified by mismagent-verifier)
 - **Domain events:** <PastTenseEvent, e.g. MaintenanceRecorded>
    → `read-model` block (query/view) / side-effect / guard of the write
 - **Commands (+ actor):** <Command, e.g. RecordMaintenance> (actor: <who expects it>)

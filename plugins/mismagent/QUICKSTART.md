@@ -35,10 +35,10 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 
 ## 3. Launch the flow
 `/mismagent:explore` on the idea → `/mismagent:challenger` (demolishes) → `/mismagent:researcher` /
-`/mismagent:analyst` (model) → **model** (`/mismagent:tactical-modeler`, then
-`/mismagent:architect`; `/mismagent:ux-designer` if there is UI, `/mismagent:build-manifest`
-for the manifest; `/mismagent-cross-deploy:create-contract` — from the module — only if a
-boundary is cross-deploy) →
+`/mismagent:analyst` (model) → **model** (**`/mismagent:model <feature>`** — the conductor: it runs
+tactical-modeler → ux-designer if there is UI → architect → build-manifest →
+`create-contract` if a boundary is cross-deploy, stopping only where YOU decide; the single
+commands stay invocable step-by-step) →
 **build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier + code-review →
 you confirm → flag).
 

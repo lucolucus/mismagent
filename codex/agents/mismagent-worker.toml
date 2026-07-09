@@ -43,7 +43,7 @@ tests.
 
 ## The skill matrix (load the skills, don't duplicate the pattern)
 One invocation composes **A (block-type) + B (projection, if you touch a boundary) + D (per-side
-memory) + tier**. All the specialization lives **in the skills**: you **load and apply** them,
+memory)**. All the specialization lives **in the skills**: you **load and apply** them,
 you don't re-copy the pattern here. Rationale: spec §13.
 
 **A — by `block.type`** (core skills):
@@ -64,8 +64,7 @@ you don't re-copy the pattern here. Rationale: spec §13.
 report `BLOCKED`, don't improvise the projection).
 
 **D — per-side memory** (from the profile, provided by the project): `<side>-dev-architecture`,
-`<stack>-persistence`, `git-branching`. **model tier** = dispatch parameter (high for a
-delicate aggregate, low for a trivial adapter).
+`<stack>-persistence`, `git-branching`.
 
 **ui** — A skill `realize-ui`: it consumes the read-models, triggers the use-cases; **the `tests_nl`
 are the screen's ACs**, tested on a plain **state-holder/presenter** (not on the view). You lean on
@@ -82,7 +81,7 @@ re-read the diff against every AC, repeat until green and every AC covered.
 ## You do NOT touch state
 State is the **folder**, and only the **worker-composer** moves it (`git mv`/merge). You: **code + commits
 in your worktree** (the profile's commit format), never `git mv`, never merge, never the other side.
-Your **block file** (`blocks/<ctx>/<id>.md`) is **read-only spec** — its `## Task` list is your
+Your **block file** (`blocks/<ctx>/<state>/<id>.md`) is **read-only spec** — its `## Tasks` list is your
 acceptance criteria; **never edit it, never tick a checkbox** (there are none): progress is shown by the
 board from your tests + the folder position, not by mutating the file. You realize code/tests, not state.
 

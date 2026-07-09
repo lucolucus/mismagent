@@ -56,15 +56,17 @@ pass-1 → checkpoint → pass-2 cycle is a **process defect**, even if the choi
    packaging/backup/signing without asking).
 
 ## Input
-- `prd.md` (numbered FR/NFR), `product-brief.md`, `UI/` (authoritative visual source),
-  the per-side guides (from the profile), any existing `architetture/*`.
+- `context-map.md` (bounded contexts + relationships + the tactical model — the boundaries you
+  guarantee derive from it), `product-brief.md`, `UI/` (authoritative visual source), the stated
+  requirements when the run has them (e.g. a PRD with numbered FR/NFR — validation runs), the
+  per-side guides (from the profile), any existing `architetture/*`.
 
 ## 1. Architecture
 Produce:
 - `architetture/architecture-overview.md` (decision table `D-1..D-N` with rationale),
   the per-side architecture docs (e.g. `architecture-<side>-*.md`).
-- Large docs (>~15KB): **shard the large docs** into sections with **stable anchors**, so tasks
-  point to them by anchor (not by whole file) — context budget, §3 of the methodology.
+- Large docs (>~15KB): **shard the large docs** into sections with **stable anchors**, so blocks
+  point to them by anchor (not by whole file) — context budget.
 
 ## 2. Boundaries — you are their GUARANTOR (the projection is a consequence, not the center)
 Every boundary between contexts is a **consumer-owned Port** with its **contract test**; the
@@ -135,7 +137,7 @@ later be taken by **`code-review`** in build.
 
 ## NFR
 **Assess the NFRs** (performance, security, reliability) and pin them as **verifiable**
-constraints: either an **`enforced_by` ADR**, or a **measurable AC** on a task (not NFRs in words).
+constraints: either an **`enforced_by` ADR**, or a **measurable AC** on a block (not NFRs in words).
 
 ## Outcome
 Summary: architecture files produced/sharded (with anchors); **boundaries** with their projection

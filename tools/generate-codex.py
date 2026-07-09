@@ -168,7 +168,8 @@ COMPOSER_CODEX_NOTES = """
 
 
 def convert_commands():
-    for cmd, skill in (("worker-composer", "worker-composer"), ("board", "board")):
+    for cmd, skill in (("worker-composer", "worker-composer"), ("board", "board"),
+                       ("model", "model")):
         with open(os.path.join(KERNEL, "commands", "%s.md" % cmd), encoding="utf-8") as f:
             fm, body = parse_frontmatter(f.read())
         if cmd == "worker-composer":

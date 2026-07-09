@@ -1,9 +1,9 @@
 ---
 name: build-manifest
-description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the IDEA-2→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). Besides the authoritative YAML it seeds the DERIVED, status-less rich block files (one self-contained <id>.md per block in blocks/<ctx>/todo/, no checkboxes) so opening a block shows the whole block; the human reads them live via the read-only /mismagent:board. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
+description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the model→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). Besides the authoritative YAML it seeds the DERIVED, status-less rich block files (one self-contained <id>.md per block in blocks/<ctx>/todo/, no checkboxes) so opening a block shows the whole block; the human reads them live via the read-only /mismagent:board. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
 ---
 
-# build-manifest — the IDEA-2 → build bridge
+# build-manifest — the model → build bridge
 
 Emits `<output_dir>/<feature>/building-blocks.yaml`: the **worker-composer's only input**. The manifest is
 a **consequence of the model** (anti-zombie: every row has a consumer = the worker-composer), not
@@ -63,6 +63,39 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    `projection` + `tests_nl` + gates + `build_order` + any wave-0 `scaffold`). The **worker-composer's
    Phase 1** reads it (pinned types, contract_test, projection, gates, tests_nl). Keep the `boundaries:`
    as a first-class section (the architect's coherence + `create-contract`'s input depend on it).
+
+   ### The manifest's shape (NORMATIVE — Phase 1 reads exactly these fields)
+   ```yaml
+   blocks:
+     - id: <slug>                  # unique
+       type: aggregate | application-service | port | adapter | read-model | ui | scaffold
+       context: <bounded-context>
+       side: <side>                # from the profile
+       wave: 0 | 1 | 2 …           # 0 ONLY for scaffold; otherwise derived (owners before consumers)
+       consumes: [<boundary-id>…]  # boundaries this block consumes (empty for owners/scaffold)
+       tests_nl: [<falsifiable AC in natural language>…]   # rule 5; `by-construction` marked as such
+       related_adrs: [<NNNN>…]
+       # per-type fields:
+       invariants: [<INV-n rule>…]         # aggregate
+       invariant_fields: [<field>…]        # aggregate (the §14 gates derive from these)
+       identity: <id strategy>             # aggregate
+       tables: [<table>…]                  # aggregate
+       commands: [<Command>…]              # application-service
+       view_shape: { <field>: <type>… }    # read-model
+       consumes_rm: [<read-model id>…]     # ui
+       triggers: [<Command>…]              # ui
+   boundaries:                     # FIRST-CLASS section
+     - id: <slug>
+       owner: <block-id>           # aggregate | port — built before its consumers
+       consumers: [<block-id>…]
+       projection: in-process | cross-deploy       # rule 2 (from the profile's sides)
+       pinned_types: { <Name>: <primitive or shared-kernel VO>… }   # rule 1, Published Language
+       contract_test: invariant-test | consumer-driven              # rule 3
+       operation_ids: [<operationId>…]     # cross-deploy ONLY — each must resolve in the OpenAPI
+   build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]          # derived, rule 6
+   ```
+   Anything a consumer needs that is not in this shape **does not exist**: extend THIS section
+   first, then the readers (worker-composer Phase 1, the block files, the board).
 2. **The rich block files** — a **DERIVED, status-less rendering** of the manifest, seeded one per
    block into `blocks/<context>/todo/<id>.md`, so opening a block shows the *whole* block (no more
    empty folder markers). Frontmatter mirrors the manifest row — `type`, `context`, `side`, `wave`,
@@ -76,7 +109,10 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    ```
    **No `status:` field, no `[ ]` checkboxes** — the block's state **is its folder** (`todo/doing/done`),
    moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
-   refreshes content **in place**, it never moves files). The YAML stays the source of truth; these
+   refreshes content **in place**, it never moves files). Re-running is also how a **parked bounce
+   un-parks**: fold the user's answer into the spec (`tests_nl`/criteria) and **delete that block's
+   `<output_dir>/<feature>/open-questions/<block-id>.md`** — the worker-composer wrote it when the
+   worker bounced, and regeneration is what clears it. The YAML stays the source of truth; these
    files are its **per-block projection** (the way OpenAPI is the cross-deploy projection of a boundary).
    No static `TASKS.md` — the rich block files + the board (below) replace it.
 

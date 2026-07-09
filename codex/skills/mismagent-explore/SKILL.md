@@ -30,9 +30,12 @@ consumer, **do not write it**.
    → consumed by `mismagent-tactical-modeler` (the seeds → tactical model) and by
    **`build-manifest`** (bounded contexts → boundaries; aggregates/invariants →
    blocks; **canonical names** → types and, on cross-deploy boundaries, OpenAPI schemas via
-   `create-contract`); the `mismagent-verifier` greps those terms on the diff → drift = **FAIL**,
-   and demands a test for every invariant. That is why it is not a zombie.
-3. **Spikes** for the unknowns → listed in `context-map.md`; in `model` they become task nodes.
+   `create-contract`); the `mismagent-verifier`'s anti-shadow check holds the diff's domain types
+   to those canonical names (cross-deploy: via the contract-generated types; in-process: a
+   synonym/rename of a canonical term → **FAIL**), and it demands a test for every invariant.
+   That is why it is not a zombie.
+3. **Spikes** for the unknowns → listed in `context-map.md`; in `model` the **tactical-modeler
+   materializes them** as `type: spike` nodes via `write-task`.
 4. (if needed) `infra-notes.md` (draft) via **`write-infra-notes`** → consumed in `model`.
 5. (optional) `research/<topic>.md` → cited by an ADR in `model`.
 
@@ -60,7 +63,20 @@ consumer, **do not write it**.
 5. **Infra, if needed:** invoke `write-infra-notes` for the `infra-notes.md` draft.
 6. **Research on-demand:** if a decision requires investigation → `research/<topic>.md`.
 
-## Gate towards model
+## Harness read-only mode (e.g. plan mode)
+If the harness forbids writes until a plan is approved, explore does **not stall** and does **not
+bypass** — the conflict is only mechanical (plan mode and explore want the same thing: understand
+before acting):
+- the **dialogue proceeds** (it is the high-presence part) and **`mismagent-challenger` dispatches
+  normally** — it is read-only by design;
+- do **NOT** dispatch `mismagent-researcher` or `mismagent-analyst` while writes are forbidden:
+  their handoffs are **FILES** (rule #4) and a return message is not a valid substitute — the
+  work would evaporate with the context;
+- the pending writes (the bootstrap profile with the answers already collected, the brief draft)
+  go into the plan as an **explicit list of files to materialize**, never as replacement content;
+- when writes reopen, **materializing the files is the FIRST action** (profile → brief), then
+  dispatch the analyst for the context-map. The explore→model gate stays on the **files**: an
+  approved plan's text is not a handoff.
 `model` starts **only** if `product-brief.md` (problem/user/value) **and**
 `context-map.md` (at least the bounded contexts with the ubiquitous language) exist. Otherwise stay
 in explore.

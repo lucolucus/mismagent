@@ -35,10 +35,10 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 
 ## 3. Launch the flow
 `/mismagent:explore` on the idea → `/mismagent:challenger` (demolishes) → `/mismagent:researcher` /
-`/mismagent:analyst` (model) → **model** (`/mismagent:tactical-modeler`, then
-`/mismagent:architect`; `/mismagent:ux-designer` if there is UI, `/mismagent:build-manifest`
-for the manifest; `/mismagent-cross-deploy:create-contract` — from the module — only if a
-boundary is cross-deploy) →
+`/mismagent:analyst` (model) → **model** (**`/mismagent:model <feature>`** — the conductor: it runs
+tactical-modeler → ux-designer if there is UI → architect → build-manifest →
+`create-contract` if a boundary is cross-deploy, stopping only where YOU decide; the single
+commands stay invocable step-by-step) →
 **build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier + code-review →
 you confirm → flag).
 
@@ -46,9 +46,9 @@ you confirm → flag).
 
 ## Greenfield traps (read BEFORE starting)
 - **`dev_architecture: none` at the start.** On a new project you don't have golden
-  files/conventions yet: put `none`. When the patterns stabilize, write a
-  `<side>-dev-architecture` skill (modeled on a real per-side golden-files doc) and point the
-  profile at it.
+  files/conventions yet: put `none`. After the first green slice, run
+  **`/mismagent:harvest-dev-architecture`**: it harvests the real conventions from the done blocks'
+  code, generates the `<side>-dev-architecture` skill and points the profile at it.
 - **The stack is decided in model, WITH you.** Don't fill in `gate`/stack in the profile by
   guessing: the architect presents the alternatives, you choose, the stack ADR gets written
   afterwards — and the architect finalizes the `gate` in the profile.

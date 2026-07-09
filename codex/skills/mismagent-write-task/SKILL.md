@@ -1,6 +1,6 @@
 ---
 name: mismagent-write-task
-description: "mismAgent''s writer of the two NODE kinds the architecture-driven flow still needs as files: type: spike (a research/unknown node, with its closure protocol) and type: cleanup (removal of a deprecated cross-deploy operationId after consumers migrate, gated by ready_when). Writes <output_dir>/<feature>/tasks/<side>/<state>/<slug>.md, state = the folder. The old implementation-task is NOT here anymore: in the architecture-driven flow the work-items are the BLOCKS (rich files in blocks/, viewed via $mismagent-board); the file-driven implementation-task flow is retired to attic/. Invoked by write-adr (cleanup) and in explore/model to materialize the context-map''s spikes."
+description: "mismAgent''s writer of the two NODE kinds the architecture-driven flow still needs as files: type: spike (a research/unknown node, with its closure protocol) and type: cleanup (removal of a deprecated cross-deploy operationId after consumers migrate, gated by ready_when). Writes <output_dir>/<feature>/tasks/<side>/<state>/<slug>.md, state = the folder. The old implementation-task is NOT here anymore: in the architecture-driven flow the work-items are the BLOCKS (rich files in blocks/, viewed via $mismagent-board); the file-driven implementation-task flow is retired to attic/. Invoked by write-adr (cleanup) and by the tactical-modeler in model to materialize the context-map''s spikes."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the

@@ -49,8 +49,11 @@ and don't write down is lost work: whoever writes the blocks will rewrite it —
    (aggregates/invariants/events/commands).
 2. Write the **"Tactical model"** section via the **`write-context-map`** skill.
 3. Write **every** invariant you discover (see anti-zombie).
-4. Unknowns → **spike**. A domain decision is missing that only the user can make → `NEEDS-INPUT`,
-   do **not** invent it.
+4. Unknowns → **spike**: materialize each as a `type: spike` **node** via **`write-task`**
+   (`tasks/<side>/backlog/` — question + closure criterion + `Unblocks`), so it exists as a FILE,
+   not a bullet lost in a return message (you own this step; the worker-composer's Phase 1 reports
+   open spikes and won't dispatch a block an open spike names in `Unblocks`). A domain decision
+   missing that only the user can make → `NEEDS-INPUT`, do **not** invent it.
 
 ## Boundaries
 - **No strategic level** (that's the analyst's), **no contract/tasks/code** (those are `model`/`build`).

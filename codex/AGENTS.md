@@ -88,6 +88,11 @@ flowchart TD
 
 **model** · *you confirm the boundaries* — from understood problem to manifest (+ contract if cross-deploy).
 
+**One command conducts the whole movement: `$mismagent-model <feature>`** `[command]` — it runs the
+five steps below in order, stopping **only** at the human checkpoints (`NEEDS-INPUT` ambiguities ·
+the stack/architecture/infra deliberation · the `tests_nl` elicitation), and resumes re-entrantly
+at the first missing artifact. The step-by-step form stays equivalent:
+
 *How to invoke it (in order). `[skill]`/`[command]` are Codex **skills** — invoke with `$mismagent-<name>`; `[agent]` is a Codex **subagent** — ask Codex to *"spawn `mismagent-<name>` on <input>"* (it spawns subagents only on explicit request).:*
 1. **`$mismagent-tactical-modeler`** `[agent]` — completes the model: aggregates/invariants/events/
    commands per context (it starts from the context-map's "Seeds for the tactical").
@@ -115,11 +120,11 @@ flowchart TD
 
 **build** · *you delegate; confirm only at the end* — from manifest to released code.
 - command **`$mismagent-worker-composer <feature>`** — thin coordinator, the only one that merges and
-  moves state: readiness on the manifest (pinned types, or BOUNCE to IDEA-2; **git present** — if the
+  moves state: readiness on the manifest (pinned types, or BOUNCE to the model movement; **git present** — if the
   side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
   (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
   **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
-  projection + the side's dev-architecture + tier) → **D1** green on its own (fresh `mismagent-verifier` +
+  projection + the side's dev-architecture) → **D1** green on its own (fresh `mismagent-verifier` +
   `code-review`) → merge = composition → **D2** contract test on the welded boundary →
   **you confirm** → green release-tag = turn on the flag.
 - output: code composed at the boundaries, deployed behind a flag.
@@ -144,6 +149,8 @@ PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-anal
 *Gate:* brief with problem/user/value/scope + context-map with the bounded contexts. → model.
 
 **2 · model — you confirm the boundaries.**
+You type **`$mismagent-model <feature>`** — the conductor drives the five steps below and stops at
+the checkpoints (you decide; it types). Or step-by-step, equivalently:
 1. You type **`$mismagent-tactical-modeler`** → Tactical model in the context-map (it absorbs
    the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
 2. *(if there is UI)* you type **`$mismagent-ux-designer`** → concept with you → `UI/ux-proposal.md`.
@@ -162,11 +169,20 @@ with `$mismagent-readiness-gate`. → build.
 Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges) —
 if it isn't, the worker-composer's Phase 1 `git init`s it **after asking you to confirm**.
 You type **`$mismagent-worker-composer <feature>`**. It: readiness (unpinned boundary →
-BOUNCE to IDEA-2; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
+BOUNCE to the model movement; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
 owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
 code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
-You step in **only** if a worker returns `BOUNCED` (ambiguous AC: you decide) and **at the end**:
+You step in **only** if a worker returns `BOUNCED` (ambiguous AC — the block is parked in `todo/`
+with the question in `open-questions/<block-id>.md`: you decide, then re-run
+`$mismagent-build-manifest` to fold the answer in) and **at the end**:
 you confirm the release → green tag → feature-flag.
+*Other build steps:* **`$mismagent-run-app-smoke`** `[skill]` — the recorded render proof of `ui`
+blocks (launches the app via the profile's `run`, evidence in `render-proof/`). **Not optional on a
+manual-`ui_render_check` side: the worker-composer runs it itself at D1** when the proof is missing;
+typing it yourself is the *slice-wide* re-proof before you confirm the release.
+**`$mismagent-harvest-dev-architecture`** `[skill]` *(optional)* — after the first green slice,
+turns the done blocks' real conventions into the side's dev-architecture skill (the profile's
+`dev_architecture` stops being `none`).
 
 **When it jams:** write the entry in the project's `MISMAGENT-LOG.md` *immediately* (which
 skill/agent, what it was attempting, what broke, `core` vs `profile`) — that is how the method matures.
@@ -180,6 +196,9 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    regenerated from a source** (e.g. the rich block files + the read-only `$mismagent-board`, derived
    from the manifest): allowed because it is regenerated, never hand-maintained, so it cannot drift;
    its consumer is the human.
-4. **every cross-movement handoff is a file**, never just a message.
+4. **every cross-movement handoff is a file**, never just a message. If the harness is in a
+   **read-only/plan mode**, dispatch only read-only subagents (the challenger) and **materialize the
+   pending files as the first action once writes reopen** — a plan's text is not a handoff (see
+   the explore skill's "Harness read-only mode").
 5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
 6. **never merge/push onto the base branch without an explicit user request.**

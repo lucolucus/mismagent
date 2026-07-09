@@ -4,7 +4,9 @@ mismAgent board — a lightweight, READ-ONLY live view of the building blocks an
 
 It scans the feature's `blocks/<context>/{todo,doing,done}/<id>.md` (the rich, status-less block
 files emitted by build-manifest) and serves a live kanban at a localhost URL. Status = the FOLDER
-(todo/doing/done); the block's spec/criteria come from the file body. It NEVER writes anything —
+(todo/doing/done); the block's spec/criteria come from the file body. A sibling
+`open-questions/<block-id>.md` (a bounce the worker-composer parked, awaiting the user) shows as a
+⏳ badge on the block. It NEVER writes anything —
 coherent with mismAgent's invariant "only the worker-composer moves state". Zero dependencies
 (Python 3 stdlib only).
 
@@ -74,6 +76,11 @@ def scan(blocks_dir):
     blocks = []
     if not os.path.isdir(blocks_dir):
         return blocks
+    # parked bounces: open-questions/<block-id>.md is a sibling of blocks/ (worker-composer writes it)
+    oq_dir = os.path.join(os.path.dirname(blocks_dir), "open-questions")
+    open_qs = set()
+    if os.path.isdir(oq_dir):
+        open_qs = {fn[:-3] for fn in os.listdir(oq_dir) if fn.endswith(".md")}
     for ctx in sorted(os.listdir(blocks_dir)):
         ctx_dir = os.path.join(blocks_dir, ctx)
         if not os.path.isdir(ctx_dir):
@@ -102,8 +109,10 @@ def scan(blocks_dir):
                 inv = fm.get("invariants", [])
                 if isinstance(inv, list) and inv and len(tasks) < len(inv):
                     gaps.append("criteria %d < invariants %d" % (len(tasks), len(inv)))
+                bid = fm.get("id", fn[:-3])
                 blocks.append({
-                    "id": fm.get("id", fn[:-3]),
+                    "id": bid,
+                    "open_question": bid in open_qs or fn[:-3] in open_qs,
                     "type": fm.get("type", ""),
                     "context": fm.get("context", ctx),
                     "wave": str(fm.get("wave", "")),
@@ -133,6 +142,7 @@ header b{font-size:16px}header span{color:var(--mut)}
 .card .id{font-weight:600}.badges{margin:4px 0;display:flex;gap:6px;flex-wrap:wrap}
 .b{font-size:11px;color:var(--mut);background:#21262d;border-radius:5px;padding:1px 6px}
 .b.warn{color:#f85149;background:#3d1d20}
+.b.wait{color:#d29922;background:#3a2d10}
 .cf{color:#c9d1d9;margin:6px 0}
 .tasks{margin:6px 0 0;padding-left:16px;color:var(--mut)}.tasks li{margin:2px 0}
 .empty{color:var(--mut);font-style:italic}
@@ -140,7 +150,7 @@ footer{color:var(--mut);padding:6px 18px;font-size:12px;border-top:1px solid #21
 </style></head><body>
 <header><b>mismAgent board</b><span id=meta></span><span id=blocksdir></span></header>
 <div class=cols id=cols></div>
-<footer>read-only · refreshes every 1.5s · state = the folder (todo/doing/done)</footer>
+<footer>read-only · refreshes every 1.5s · state = the folder (todo/doing/done) · ⏳ = parked on an open question</footer>
 <script>
 const STATES=["todo","doing","done"];
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
@@ -159,6 +169,7 @@ async function tick(){
    col.innerHTML+="<div class=card><div class=id>"+esc(b.id)+"</div>"
     +"<div class=badges><span class=b>"+esc(b.type)+"</span><span class=b>"+esc(b.context)+"</span>"
     +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")
+    +(b.open_question?"<span class=\\"b wait\\">⏳ awaiting user (open-questions/)</span>":"")
     +(b.spec_gaps&&b.spec_gaps.length?"<span class=\\"b warn\\">⚠ "+esc(b.spec_gaps.join(" · "))+"</span>":"")+"</div>"
     +(b.what_to_do?"<div class=cf>"+esc(b.what_to_do)+"</div>":"")
     +(tasks?"<ul class=tasks>"+tasks+"</ul>":"")+"</div>";

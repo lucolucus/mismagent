@@ -28,6 +28,17 @@ validation_mode: normal         # or: greenfield_from_requirements — the deliv
                                 # bootstrap; if it doesn't, explore ASKS the user explicitly.
 ```
 
+## Project definition files (the architect writes these in *model* — user-visible)
+
+```yaml
+architecture: .mismagent/architecture.md  # the chosen style + module map + allowed dependency
+                                          # directions — source for the scaffold's skeleton and
+                                          # for the gate's dependency-lint config
+code_rules: .mismagent/code-rules.md      # the deliberated code-writing rules, each with its
+                                          # enforcement channel (workers apply them; the
+                                          # code-review audits the discursive ones)
+```
+
 ## Sides (independent deploy units)
 
 One entry for every unit you deploy autonomously. **A single side is legitimate** (desktop app/

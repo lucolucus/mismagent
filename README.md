@@ -38,7 +38,7 @@ flowchart TD
         direction TB
         tact["tactical-modeler<br/>aggregates · invariants · events · commands"]
         ux["ux-designer<br/>(only if there is UI)"]
-        arch{{"architect, two-pass:<br/>stack · style · infra — YOU choose"}}
+        arch{{"architect, two-pass:<br/>stack · style · infra · code rules — YOU choose"}}
         bman{{"build-manifest:<br/>types PINNED · tests_nl — YOU state them"}}
         tact --> ux --> arch --> bman
     end
@@ -93,7 +93,7 @@ Seven agents carry the flow. Each is also invocable directly as **`/mismagent:<n
 | `mismagent-researcher` | explore | Gathers domain material *per feature* (prior art, constraints, real terminology) → `research/<topic>.md`. Dispatched only when the domain is new. |
 | `mismagent-analyst` | explore | Models the **strategic** level: bounded contexts, relationships, **ubiquitous language** → `context-map.md` (+ seeds for the tactical). |
 | `mismagent-tactical-modeler` | model | Fills the **tactical** level per context: aggregates, invariants, domain events, commands; unknowns become spike nodes. |
-| `mismagent-architect` | model | Architecture + ADRs (`enforced_by` for mechanical constraints); **guarantor of the boundaries** and their projection; foundational decisions deliberated **with you** (two-pass), then finalizes the profile's `gate`. |
+| `mismagent-architect` | model | Architecture + ADRs (`enforced_by` for mechanical constraints); **guarantor of the boundaries** and their projection; stack, style, infra **and the code-writing rules** (SOLID / Clean-Architecture, each rule with its enforcement channel) deliberated **with you** (two-pass), then finalizes the profile's `gate`. |
 | `mismagent-worker` | build | Realizes **one building block** in its own worktree — skills = block-type × projection + the side's memory — TDD until green on its own. Returns `BOUNCED` on ambiguity instead of inventing. |
 | `mismagent-verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, `enforced_by` greps, anti-shadow types, render check. Read-only. |
 
@@ -107,7 +107,7 @@ And the four commands you actually type:
 | `/mismagent:board [feature]` | Read-only live kanban of the blocks — state *is* the folder; parked blocks show as ⏳. |
 
 Everything else is a **supporting skill invoked by the flow**, not a user entry point:
-`build-manifest`, `write-context-map` / `write-adr` / `write-infra-notes` / `write-task`,
+`build-manifest`, `write-context-map` / `write-adr` / `write-code-rules` / `write-infra-notes` / `write-task`,
 `readiness-gate` (optional pre-flight), `ux-designer`, the worker's matrix `realize-{aggregate,
 application-service, port, adapter, read-model, ui, scaffold}` × `seam-in-process`, `code-review`,
 `run-app-smoke` (the recorded render proof), `harvest-dev-architecture` (turns the first green

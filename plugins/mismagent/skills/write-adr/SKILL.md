@@ -12,7 +12,7 @@ Orientation: `methodology/mismagent.md`.
 - ADRs with **`enforced_by`** → the `mismagent-verifier` runs the grep/lint rule on the diff → if the
   constraint is violated, **FAIL**. This is what makes the ADR non-zombie.
 - **Discursive** ADRs (without `enforced_by`) → verified by the semantic **code-review**.
-- Tasks reference them in `related_adrs` → the verifier knows which rules to apply to that task.
+- Blocks reference them in `related_adrs` → the verifier knows which rules to apply to that block.
 
 ## Template
 ```markdown

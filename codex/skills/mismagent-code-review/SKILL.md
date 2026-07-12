@@ -1,6 +1,6 @@
 ---
 name: mismagent-code-review
-description: "mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses \u2014 Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied?) \u2014 and finding triage (HIGH|MED|LOW \u2192 Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix."
+description: "mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses \u2014 Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied? do the profile''s discursive code rules hold?) \u2014 and finding triage (HIGH|MED|LOW \u2192 Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -26,6 +26,9 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
 - the authoritative **diff**: `git -C <side-repo> diff <base>...<branch>`;
 - the **block-file** (its `## Tasks` criteria = the ACs/`tests_nl`, the pinned boundary signatures
   in `## Dependencies`, the `related_adrs`);
+- the project's **`code-rules.md`** (via the profile's `code_rules` binding): its **discursive**
+  rules are review criteria — cite the violated rule in the finding; the mechanical ones the
+  **gate** already enforced (its dependency lint) — don't re-run them;
 - the **side** and the **profile's boundary rules**.
 
 ## The three lenses (run each over the diff)
@@ -37,7 +40,9 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
 3. **Acceptance Auditor** — for **every** AC (`## Tasks` criterion) of the block: is it really
    satisfied, or is there a test that passes trivially? Is the invariant *enforced* or only declared?
    Is the contract shape respected on the real body (cross-deploy)? Is an implicit AC missing
-   (e.g. the error the contract declares)?
+   (e.g. the error the contract declares)? And do the profile's **discursive code rules**
+   (`code-rules.md`: error-handling policy, immutability stance, …) hold on this diff — citing the
+   violated rule in the finding?
 
 ## Triage of every finding
 - **Severity:** `HIGH` (blocks the merge: correctness/security/AC-not-satisfied) · `MED`

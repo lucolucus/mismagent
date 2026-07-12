@@ -16,15 +16,20 @@ against. Greenfield only — if the project already builds, this block does not 
 ## What you create (stack-agnostic — the SHAPE; the stack ADR gives the concrete commands)
 - the **build entry**: wrapper / build descriptor (e.g. `gradlew` + `settings`/`build` files,
   `package.json`, `*.csproj`/solution) — read the concrete stack from the **stack ADR**;
-- the **module structure** the architecture chose (the bounded contexts → modules — the architect's
-  pass-1 probe (b), architecture style) — directories + empty sourceSets, **no domain logic**;
+- the **module structure** the architecture chose (the bounded contexts → modules — read it from
+  **`<output_dir>/architecture.md`**, the project module map) — directories + empty sourceSets,
+  **no domain logic**;
 - the **plugins / dev-deps** the gate needs (test runner, the persistence/UI plugins named in the
   stack ADR / infra-notes), pinned to a working version;
 - the minimal config so the **gate's build + test phases execute** (an empty/placeholder test is fine
   — the point is the toolchain runs, not that there is behavior);
 - if the side renders UI and the profile's **`ui_render_check`** is an **automated** check: the
   UI-test dependency/config, wired so the gate can execute it (a placeholder smoke test is fine —
-  the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness).
+  the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness);
+- if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
+  lint** (Konsist/ArchUnit, dependency-cruiser, import-linter, …): wire its config so the **gate
+  executes it from wave 0** — the lint config is the *executable projection of the module map*,
+  and it lives in this repo (the workers maintain it on rename, like any build file).
 
 ## Boundaries — you write NO domain
 You create **only** the skeleton: no aggregate, no port, no invariant, no business rule. Those are the

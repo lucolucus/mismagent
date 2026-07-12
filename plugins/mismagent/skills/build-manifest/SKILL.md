@@ -11,7 +11,8 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 
 ## Input
 - `context-map.md` — tactical model (aggregates/invariants/commands/events) + Customer/Supplier relationships;
-- `architetture/` + ADRs (including the §14 `enforced_by`);
+- `<output_dir>/architecture.md` (the project module map) + `architetture/` + ADRs (including the
+  §14 `enforced_by`);
 - the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`) —
   sides (→ projection), gate, identity/stack.
 

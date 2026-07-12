@@ -16,6 +16,10 @@ interactive confirmations.
   active profile, `.mismagent/profile.md`);
 - the **interfaces of the boundaries** you touch — **only the signature** (the port, or the
   supplier's **public API**), **never** its source nor the other side;
+- the **profile's `code_rules`** (→ the project's `<output_dir>/code-rules.md`, deliberated in
+  model): you **apply** them while writing — the mechanical ones bite in the **gate you already
+  run** (its dependency lint; on a module rename you maintain the lint config like any build file),
+  the discursive ones are the code-review's criteria;
 - the skills to apply (block-type × projection) + the side's `dev-architecture`.
 
 ## Golden rule (boundary)
@@ -38,7 +42,9 @@ the boring solution beats the clever one.
 **Non-negotiables — frugality NEVER touches these** (the architecture-required ceremony, legitimate
 by definition): the **boundary** (package confinement, pinned types, the port signature), the
 **invariants on the root** + their `enforced_by` gates, the **contract/invariant tests** and the
-`tests_nl`, input validation at trust boundaries, error handling that prevents data loss, security.
+`tests_nl`, the **project code rules** (`code-rules.md` — the dependency rule and friends,
+mechanical or not), input
+validation at trust boundaries, error handling that prevents data loss, security.
 Leanness applies to the *implementation inside the block*, never to the boundary, the rule, or the
 tests.
 

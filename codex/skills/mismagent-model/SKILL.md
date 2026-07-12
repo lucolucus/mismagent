@@ -29,13 +29,16 @@ the user**, re-dispatch with the answers. `MODEL-READY` → go on.
 Concept dialogued **with the user** → `UI/ux-proposal.md`. No UI → skip, say so.
 
 ## 3 · ARCHITECT — dispatch `mismagent-architect`, two-pass; the deliberation is the USER'S
-- **Pass 1 — DISCOVERY** (it writes nothing): returns `STACK_PROPOSAL` + `ARCH_PROPOSAL` +
-  `INFRA_QUESTIONS`.
+- **Pass 1 — DISCOVERY** (it writes nothing): returns `STACK_PROPOSAL` + `ARCH_PROPOSAL` (style +
+  quality drivers **+ the code-writing rules that follow**: the dependency-lint per candidate
+  stack, the contested knobs) + `INFRA_QUESTIONS`.
 - **CHECKPOINT: present them to the user — they choose.** Never skip this even when one option
   looks obvious: a foundational decision without the checkpoint is a **process defect** (silent
   ADR), whatever the choice.
 - **Pass 2 — WRITE**: re-dispatch with the decisions → `architecture-overview.md` + ADRs +
-  infra-notes; it **finalizes the profile's `gate`**.
+  infra-notes + the **user-visible project definition files** `<output_dir>/architecture.md` and
+  `<output_dir>/code-rules.md` (via `write-code-rules`; profile pointed at both); it **finalizes
+  the profile's `gate`** (incl. the dependency lint).
 
 ## 4 · MANIFEST — `build-manifest` skill
 Tactical model → `building-blocks.yaml` (the normative shape in its § "The manifest's shape") +

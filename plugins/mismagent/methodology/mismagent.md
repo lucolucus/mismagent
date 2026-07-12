@@ -42,7 +42,7 @@ flowchart TD
         direction TB
         tact["mismagent-tactical-modeler — subagent<br/>aggregates/invariants/events/commands → context-map"]
         ux["ux-designer — skill<br/>imagines the UI → views (if there is UI)"]
-        arch["mismagent-architect — subagent<br/>two-pass DISCOVERY → stack + ARCH-STYLE + INFRA<br/>DELIBERATED with the user, then finalizes the gate"]
+        arch["mismagent-architect — subagent<br/>two-pass DISCOVERY → stack + ARCH-STYLE + INFRA + CODE-RULES<br/>DELIBERATED with the user, then finalizes the gate"]
         bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED + tests_nl + scaffold + rich block files"]
         manifest[("building-blocks.yaml<br/>blocks + boundaries + projection")]
         ccon["create-contract — skill, cross-deploy MODULE<br/>ONLY cross-deploy boundaries → OpenAPI"]
@@ -97,10 +97,16 @@ assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
 3. **`/mismagent:architect`** `[agent]` — architecture + ADRs + boundaries with projection.
    **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
    subagent, it can't talk to the user): pass-1 DISCOVERY writes nothing and returns
-   `STACK_PROPOSAL` + `ARCH_PROPOSAL` (architecture style + quality drivers) + `INFRA_QUESTIONS`
+   `STACK_PROPOSAL` + `ARCH_PROPOSAL` (architecture style + quality drivers **+ the code-writing
+   rules that follow from the style** — the dependency-lint per candidate stack, the contested
+   knobs; catalogue from `write-code-rules`) + `INFRA_QUESTIONS`
    (deploy/data/retention/maintenance), the orchestrator brings them to the user, pass-2 WRITES the
-   ADRs/architecture/infra-notes — never a silent ADR. After the stack ADR it **finalizes the
-   `gate` in the profile**.
+   ADRs/architecture/infra-notes **and the user-visible project definition files** —
+   `<output_dir>/architecture.md` (style + module map) and `<output_dir>/code-rules.md` (each rule
+   with its enforcement: mechanical → the **gate's dependency lint**, discursive → code-review
+   criteria, structural → cited owner), profile pointed at both — never a
+   silent ADR. After the stack ADR it **finalizes the `gate` in the profile** (build + test + the
+   dependency lint).
 4. **`/mismagent:build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
    blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
    in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
@@ -157,9 +163,11 @@ the checkpoints (you decide; it types). Or step-by-step, equivalently:
 1. You type **`/mismagent:tactical-modeler`** → Tactical model in the context-map (it absorbs
    the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
 2. *(if there is UI)* you type **`/mismagent:ux-designer`** → concept with you → `UI/ux-proposal.md`.
-3. You type **`/mismagent:architect`** → it presents the **stack/architecture/infra alternatives with
-   pros/cons and YOU choose** (never a silent ADR) → ADRs + boundaries with projection → it finalizes
-   the `gate` in the profile.
+3. You type **`/mismagent:architect`** → it presents the **stack/architecture/infra alternatives AND
+   the code-writing rules with pros/cons and YOU choose** (never a silent ADR) → ADRs + boundaries
+   with projection + **your project definition files in `<output_dir>`** — `architecture.md`
+   (style + module map) and `code-rules.md` (each rule with its enforcement channel), yours to
+   open and read — → it finalizes the `gate` in the profile (incl. the dependency lint).
 4. You type **`/mismagent:build-manifest`** → `building-blocks.yaml` (types PINNED at the
    boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
    seeds the **rich block files** in `blocks/<ctx>/todo/`. **Watch them live with `/mismagent:board`.**

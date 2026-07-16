@@ -27,7 +27,10 @@ You don't need the full profile before explore — you need the **bootstrap** (`
 also creates it at step 0 if it's missing): in `.mismagent/profile.md` put
 - **output_dir** (recommended default: `.mismagent`),
 - **ubiquitous_language.lang** (the language the domain speaks),
-- the known **bounded contexts** and the **list of sides** (a single one is perfectly fine).
+- the known **bounded contexts** and the **list of sides** (a single one is perfectly fine),
+- **materials** (what source material exists — `sample:`/`ui:` path or `none`: declared once, so
+  no skill hunts for folders that don't exist) and **capacity** (who builds, with how many hours —
+  the architecture is sized to the team).
 
 The rest is completed **inside model**: `gate` and `dev_architecture` only become knowable
 after the **stack ADR** (which the architect **deliberates with you**, never alone) — until then
@@ -51,7 +54,8 @@ you confirm → flag).
   code, generates the `<side>-dev-architecture` skill and points the profile at it.
 - **The stack is decided in model, WITH you.** Don't fill in `gate`/stack in the profile by
   guessing: the architect presents the alternatives, you choose, the stack ADR gets written
-  afterwards — and the architect finalizes the `gate` in the profile.
+  afterwards — and the architect finalizes the `gate` in the profile (and, for UI sides, the
+  `run` binding: pinned **before** the scaffold, which must then satisfy it).
 - **Boundaries pinned before the workers.** The worker-composer's readiness blocks a manifest with
   unpinned boundary types (Published Language): it is the most expensive lesson of the first run —
   two workers blind on an under-specified boundary produce pieces that do NOT compose.

@@ -32,6 +32,16 @@ The producer-before-consumer rule **survives as the CDC publish/verify** on the 
 no longer as a universal dogma of the orchestrator. At merge/deploy: additive-vs-breaking on the
 contract, the producer must turn the pact green before the consumer depends on the new shape.
 
+## The `event-schema` form (replication/sync wires)
+When the boundary declares **`contract_form: event-schema`** (event-replication, local-first sync,
+warm-standby coordination — decided by an ADR), the projection is **not** OpenAPI: the contract is
+the **versioned event-schema** at the declared `schema_paths` (e.g. proto + event catalogue),
+**additive evolution** only, versioning protocol fixed in the ADR before the first breaking touch.
+Same discipline, different artifact: per-side **generated types from the schema**, canonical names
+from the ubiquitous language on events/messages, and the **CDC runs on the events** (the consumer
+publishes what it expects to replicate/receive; the producer verifies real-on-real at D2). OpenAPI
+is the *request/response* form of cross-deploy, not its definition (friction-log-4 #5/#16).
+
 ## When NOT this skill
 If `boundary.projection = in-process` (consumer and supplier on the same side) → `seam-in-process`
 (light).

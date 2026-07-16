@@ -93,7 +93,7 @@ Seven agents carry the flow. Each is also invocable directly as **`/mismagent:<n
 | `mismagent-researcher` | explore | Gathers domain material *per feature* (prior art, constraints, real terminology) → `research/<topic>.md`. Dispatched only when the domain is new. |
 | `mismagent-analyst` | explore | Models the **strategic** level: bounded contexts, relationships, **ubiquitous language** → `context-map.md` (+ seeds for the tactical). |
 | `mismagent-tactical-modeler` | model | Fills the **tactical** level per context: aggregates, invariants, domain events, commands; unknowns become spike nodes. |
-| `mismagent-architect` | model | Architecture + ADRs (`enforced_by` for mechanical constraints); **guarantor of the boundaries** and their projection; stack, style, infra **and the code-writing rules** (SOLID / Clean-Architecture, each rule with its enforcement channel) deliberated **with you** (two-pass), then finalizes the profile's `gate`. |
+| `mismagent-architect` | model | Architecture + ADRs (`enforced_by` for mechanical constraints); **guarantor of the boundaries** and their projection; stack, style, infra **and the code-writing rules** (SOLID / Clean-Architecture, each rule with its enforcement channel) deliberated **with you** (two-pass), then finalizes the profile's `gate` and the UI sides' `run` binding, and leaves ADRs ↔ context-map reconciled (spikes its ADRs answer get closed, not left `[ ]`). |
 | `mismagent-worker` | build | Realizes **one building block** in its own worktree — skills = block-type × projection + the side's memory — TDD until green on its own. Returns `BOUNCED` on ambiguity instead of inventing. |
 | `mismagent-verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, `enforced_by` greps, anti-shadow types, render check. Read-only. |
 
@@ -102,7 +102,7 @@ And the four commands you actually type:
 | You type | What happens |
 |---|---|
 | `/mismagent:explore <idea>` | The explore movement: dialogue + challenger + analyst → brief + context-map. |
-| `/mismagent:model <feature>` | Conducts tactical → ux → architect → manifest (→ contract if cross-deploy), pausing only at the three checkpoints. Re-entrant: resumes at the first missing artifact. |
+| `/mismagent:model <feature>` | Conducts tactical → ux → architect → manifest (→ contract if cross-deploy), pausing only at the three checkpoints. Re-entrant: resumes at the first missing artifact — and the single commands share the guard: an artifact that already exists is stated and reopened on request, never re-deliberated. |
 | `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** one that merges and moves state. Loop-safe. |
 | `/mismagent:board [feature]` | Read-only live kanban of the blocks — state *is* the folder; parked blocks show as ⏳. |
 
@@ -136,8 +136,9 @@ method matures from those logs (see the friction-log trail in the commit history
   (`open-questions/<id>.md`) — visible, never lost, cleared by regeneration.
 - **The boundary is executable.** Every boundary carries pinned types (Published Language) + a
   contract test — invariant tests on an aggregate, consumer-driven tests on a port. The "contract"
-  is the contract test on a Bounded-Context boundary; OpenAPI is just its *cross-deploy projection*,
-  present only when the boundary crosses a deploy unit.
+  is the contract test on a Bounded-Context boundary; the cross-deploy artifact exists only when
+  the boundary crosses a deploy unit, **in the form the boundary declares** — OpenAPI for
+  request/response, a versioned event-schema for replication/sync wires.
 - **The build composes, it doesn't orchestrate.** `git merge` *is* the composition; the contract
   test runs on the merge result. No conductor, no epics — the seam is everything, the order almost
   nothing.
@@ -163,8 +164,8 @@ fictional instance).
   skill-matrix (`realize-*` block types × `seam-in-process`). Enough on its own for a single-side
   project.
 - **`plugins/mismagent-cross-deploy`** — a module enabled **only when** a boundary crosses a deploy
-  unit: the port projects into OpenAPI + generated types + CDC (`seam-cross-deploy`,
-  `create-contract`).
+  unit: the port projects into the declared contract form — OpenAPI request/response or a versioned
+  event-schema — + generated types + CDC (`seam-cross-deploy`, `create-contract`).
 - **`attic/`** — the superseded file-driven flow, kept out of the plugin registry on purpose (a
   loaded superseded piece is a zombie in waiting). The history is in `git log`.
 

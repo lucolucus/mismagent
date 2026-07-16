@@ -39,8 +39,10 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
 3. **AC coverage (YOU are the owner of this check):** for **every** acceptance criterion of the
    block (its block file's `## Tasks` = the `tests_nl`), find in the diff the test that covers it.
    AC without a test → **FAIL** (list which ones). For a block exposing a **cross-deploy**
-   operation: the **response-shape test** on the real JSON body of its `operationId` must exist →
-   if missing, **FAIL**.
+   operation, the shape test matches the boundary's `contract_form`: `openapi` → the
+   **response-shape test** on the real JSON body of its `operationId` · `event-schema` → the
+   **shape test on the schema-generated event/message types** it publishes or consumes. Missing →
+   **FAIL**.
 
 4. **Contract referenced, not duplicated — per the boundary's projection:** the seam is *imported*,
    never re-declared. **Cross-deploy:** domain types come from the side's **contract-generated

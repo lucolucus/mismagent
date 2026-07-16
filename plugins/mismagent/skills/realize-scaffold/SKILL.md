@@ -23,6 +23,16 @@ against. Greenfield only — if the project already builds, this block does not 
 - if the side renders UI and the profile's **`ui_render_check`** is an **automated** check: the
   UI-test dependency/config, wired so the gate can execute it (a placeholder smoke test is fine —
   the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness);
+- if the side renders UI: **honor the profile's `run` binding** — create exactly what it names (the
+  launch task/entry point and the pinned port), so the command launches on the empty skeleton. The
+  binding was pinned *before you existed* (the architect finalized it with the gate): it is a
+  **contract you satisfy**, not a value you choose — if the skeleton can't honor it, that is a
+  finding to report, not a license to pick another command/port (friction-log-4 #15). *(Proving it
+  renders stays `run-app-smoke`'s job, at the first `ui` block.)*
+- if a cross-deploy boundary declares **`contract_form: event-schema`** with `schema_paths` in this
+  side's tree: create that **contract location** (dirs + build wiring for schema
+  compilation/codegen the stack ADR names) — the contract files are an output of this scaffold,
+  which is why Phase 1 deferred their check (friction-log-4 #16);
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
   lint** (Konsist/ArchUnit, dependency-cruiser, import-linter, …): wire its config so the **gate
   executes it from wave 0** — the lint config is the *executable projection of the module map*,
@@ -45,5 +55,6 @@ There is no behavior to TDD here. The loop is: run the **side's gate** → fix t
 green. Climb the frugality ladder (smallest skeleton that makes the gate pass), never adding scope.
 
 ## Return (to the worker)
-`SCAFFOLD_READY`: gate green on the empty skeleton? module structure = the architecture's? no domain
+`SCAFFOLD_READY`: gate green on the empty skeleton? module structure = the architecture's? `run`
+binding honored (UI side)? declared contract locations created (event-schema)? no domain
 code introduced? no unrequested deps? yes/no.

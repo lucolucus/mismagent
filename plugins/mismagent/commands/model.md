@@ -35,7 +35,8 @@ Concept dialogued **with the user** → `UI/ux-proposal.md`. No UI → skip, say
 - **Pass 2 — WRITE**: re-dispatch with the decisions → `architecture-overview.md` + ADRs +
   infra-notes + the **user-visible project definition files** `<output_dir>/architecture.md` and
   `<output_dir>/code-rules.md` (via `write-code-rules`; profile pointed at both); it **finalizes
-  the profile's `gate`** (incl. the dependency lint).
+  the profile's `gate`** (incl. the dependency lint) **and the UI sides' `run` binding** (pinned
+  a priori: the wave-0 scaffold must satisfy it).
 
 ## 4 · MANIFEST — `build-manifest` skill
 Tactical model → `building-blocks.yaml` (the normative shape in its § "The manifest's shape") +
@@ -44,8 +45,11 @@ for the high-value blocks (falsifiable on the real path, or marked `by-construct
 the user at **`/mismagent:board`** (live, read-only).
 
 ## 5 · CONTRACT (only if ≥1 boundary is `cross-deploy`)
-`/mismagent-cross-deploy:create-contract` → ONE OpenAPI. Module not enabled but a boundary is
-cross-deploy → report **BLOCKED** (enable the module), do **not** improvise the projection.
+`contract_form: openapi` → `/mismagent-cross-deploy:create-contract` → ONE OpenAPI. Module not
+enabled but a boundary is cross-deploy → report **BLOCKED** (enable the module), do **not**
+improvise the projection. A **`contract_form: event-schema`** boundary has no OpenAPI to reconcile:
+its contract is the versioned schema (the ADR fixes the evolution protocol; the schema files may be
+a wave-0 scaffold **output** — the worker-composer's Phase 1 defers their check accordingly).
 All boundaries in-process → this step **does not exist**.
 
 ## 6 · HANDOFF
@@ -57,7 +61,9 @@ with the user**, open spikes/ambiguities, and the next command:
 ## RE-ENTRANT by design
 Every invocation re-reads the **files** and resumes at the **first missing artifact**: no
 "Tactical model" section → §1 · UI feature with no `UI/ux-proposal.md` → §2 · no ADRs / `gate`
-still TBD → §3 · no `building-blocks.yaml` → §4 · cross-deploy boundary with no OpenAPI → §5.
+still TBD → §3 · no `building-blocks.yaml` → §4 · cross-deploy boundary whose declared contract
+is missing → §5. The **single commands share the guard** (friction-log-4 #14): an artifact that
+already exists is *stated* and reopened only on request — never re-deliberated from scratch.
 Handoffs are FILES (rule #4), so the movement can span sessions. In a **read-only/plan-mode
 harness**: only the dialogue-and-propose parts run (pass-1, checkpoints); **materialize the
 pending files as the FIRST action once writes reopen** — a plan's text is not a handoff.

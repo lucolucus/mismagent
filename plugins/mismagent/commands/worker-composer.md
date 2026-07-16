@@ -36,21 +36,40 @@ that runs this same lens before you launch). Verify, on the manifest:
   NORMATIVE statement of the standard lives in build-manifest — on any divergence, that file wins).
   A gap → **not ready**: BOUNCE to build-manifest **with the gap named** (regenerate, never hand-patch);
 - ∀ boundary: **PINNED types** (Published Language: primitive or shared-kernel, **never** the
-  supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its OpenAPI exists
-  and every cited `operationId` resolves;
+  supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its **declared
+  contract exists, in the FORM the boundary declares** (`contract_form`): `openapi` → the YAML
+  exists and every cited `operationId` resolves · `event-schema` → the versioned schema files
+  (proto/event catalogue) exist at the declared `schema_paths`. You verify the contract the model
+  **declared**, never assume OpenAPI — an ADR may have decided the wire is event-replication, not
+  request/response (friction-log-4 #16). **Greenfield exemption, symmetric with the scaffold's:**
+  a contract whose files are an **output of the wave-0 scaffold** (e.g. `contracts/proto/` that the
+  scaffold creates) is checked **when the first block consuming that boundary becomes ready**, not
+  at this gate — the D2 contract test on the weld stays the real welder;
 - the profile's **gate is executable**; a side that renders UI with a **manual `ui_render_check`**
-  also carries its **`run` binding** (`sides.<side>.run` — §3's render proof launches with it;
-  missing → **not ready**: the profile is incomplete).
+  also carries its **`run` binding** (`sides.<side>.run` — §3's render proof launches with it).
+  Demanding `run` here is **deliberate, not premature**: the binding is **pinned a priori** — the
+  architect finalizes it with the gate, *before* any scaffold — so the wave-0 scaffold receives
+  launch command + port as a **contract to satisfy**, not as a wave-3 discovery (friction-log-4
+  #15). Missing → **not ready**, bounce target = **the profile** (below).
 
 **✗ → stop and BOUNCE to the model movement** — name the gap and *which command re-runs it*:
 `/mismagent:build-manifest` (incomplete manifest/spec: add the test intent, regenerate the files) or
-`/mismagent:architect` (the boundary itself: pin the Published Language). *(This is where a
+`/mismagent:architect` (the boundary itself: pin the Published Language) or **the profile itself**
+(a missing *binding* — `run`, `toolchain`, a contract form/location: a **targeted field edit
+deliberated with the user**, never a full architect re-run for one field — its re-entrance guard
+would rightly balk). *(This is where a
 Wave-1-style type bug stops, before wasting the workers.)* A `type: cleanup` node whose `ready_when`
 is still false is **not** a block — report it as an **explicit pending**, don't stall; same for every
 **`open-questions/<block-id>.md`** left by a previous firing (§2: a parked bounce) — report the
 question, don't re-dispatch its block — and for every **open `type: spike` node**
 (`tasks/<side>/{backlog,todo}/`): report its question; a block named in an open spike's `Unblocks`
 is **not ready** while the spike is open (the spike's closure protocol is the answer).
+- **stale spikes (context-map)?** With the model movement concluded, an **`[ ]` entry in the
+  context-map's "Open spikes"** is either **already answered** (an ADR satisfies its closure
+  criterion but nobody closed it → close via `write-adr`'s backlink discipline: `closes_spike:` +
+  `[x]`) or **never materialized** (no `type: spike` node exists → materialize it or close it).
+  **Report both, never pass them in silence** (friction-log-4 #13): the map is what the human — and
+  every future feature — reads.
 - **git present?** You live on worktrees and merges, so each side's repo **must be under git**. If a
   side's repo is **not** a git repo (`git -C <repo> rev-parse` fails), **ask the user to confirm**,
   then `git init` + an initial commit (you are the only git-writer — coherent with invariant #4; an

@@ -43,7 +43,8 @@ and don't write down is lost work: whoever writes the blocks will rewrite it —
   "Seeds for the tactical" section**: it is the analyst's persisted handoff (aggregates/invariants
   glimpsed). **Read it from the file** (don't expect a message: explore may be from another session),
   absorb it into the "Tactical model" and then **empty it** (absorbed seeds don't stay duplicated);
-- (opt.) the `mismagent-challenger` critique, `research/<topic>.md`, `sample/`.
+- (opt.) the `mismagent-challenger` critique, `research/<topic>.md`, the profile's
+  `materials.sample` (if not `none`).
 
 ## Procedure
 1. For **each** of the analyst's bounded contexts, model the tactical level

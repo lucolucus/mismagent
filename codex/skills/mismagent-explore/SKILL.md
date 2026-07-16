@@ -43,11 +43,17 @@ consumer, **do not write it**.
 0. **Profile bootstrap (if missing):** explore writes into `<output_dir>` and fixes canonical names,
    so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
    NOW from the `.agents/skills/mismagent-explore/references/PROFILE.md` template with only the bootstrap fields: `output_dir` (default
-   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides, and
-   **`validation_mode`**. The mode should surface from the dialogue itself (normal feature work, or
+   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides,
+   **`validation_mode`**, **`materials`** and **`capacity`**. The mode should surface from the dialogue itself (normal feature work, or
    a *rebuild-from-the-stated-requirements* validation run?); **if it does not surface, ask the user
    explicitly** — it decides whether challenger/analyst may treat a prior implementation of the
-   deliverable as ground truth (`greenfield_from_requirements` forbids it). The rest (`gate`,
+   deliverable as ground truth (`greenfield_from_requirements` forbids it).
+   **`materials`** declares ONCE what source material exists — `sample:` (domain PDFs/screenshots)
+   and `ui:` (pre-existing mockups), path or `none`: every downstream skill that names those inputs
+   (analyst, researcher, challenger, ux-designer, architect) reads THIS field instead of hunting
+   for folders that don't exist (friction-log-4 #3/#8). **`capacity`** declares who builds and with
+   how many hours — the architect and build-manifest size stack and waves on it (friction-log-4
+   #10); like the mode, **ask explicitly if they don't surface**. The rest (`gate`,
    `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
    invent it. The bounded contexts here are the **provisional** ones (those you already know); the
    **authoritative** map is the `context-map.md` that `mismagent-analyst` produces at step 3 — the

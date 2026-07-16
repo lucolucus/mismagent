@@ -14,10 +14,13 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 
 ## Input
 - `context-map.md` — tactical model (aggregates/invariants/commands/events) + Customer/Supplier relationships;
+- `UI/ux-proposal.md` (if the feature has UI) — the screens/surfaces its `ui` blocks must land (rule 9);
 - `<output_dir>/architecture.md` (the project module map) + `architetture/` + ADRs (including the
   §14 `enforced_by`);
 - the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`) —
-  sides (→ projection), gate, identity/stack.
+  sides (→ projection), gate, identity/stack, **`capacity`** (who builds, with how many hours —
+  wave width and block granularity are sized to the TEAM, not to the idealized problem;
+  friction-log-4 #10).
 
 ## Tactical → block map (§8.1)
 | source in the model | → manifest row |
@@ -34,8 +37,11 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    Sales→Catalog. The `value class` lives **inside** the context; at the seam you speak primitives.
    *(Wave-1 lesson: an unpinned boundary ⇒ the workers, built blind, do not compose.)*
 2. **projection** for every inter boundary: `in-process` if consumer and supplier are **the same side**
-   (profile), otherwise `cross-deploy` (→ the port projects into OpenAPI + generated types + CDC; and
-   the BE‖FE parallelism re-emerges as an *effect*, not dogma).
+   (profile), otherwise `cross-deploy` → the port projects into the **declared contract form**
+   (`contract_form`, from the profile/ADR): request/response → **OpenAPI** + generated types + CDC;
+   a replication/sync wire → a **versioned event-schema** (e.g. proto + event catalogue, additive
+   evolution) + CDC on the events (friction-log-4 #5/#16). The BE‖FE parallelism re-emerges as an
+   *effect*, not dogma.
 3. **contract_test**: `invariant-test` (aggregate boundary) · `consumer-driven` (port, read-model).
 4. **§14 gate** for every aggregate boundary (from the `invariant_fields`/`tables`): no writes outside
    the adapter; the invariant field is **confined** → consumers use the **named predicate**. The
@@ -51,7 +57,8 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    overflow/contrast) is not a `tests_nl` item — it is owned by `realize-ui` + the side's
    `ui_render_check` (profile).
 6. **build_order** derived: the wave-0 `scaffold` block (rule 7) precedes **all** owners; then the
-   boundary owners (aggregate, port); then the consumers in parallel.
+   boundary owners (aggregate, port); then the consumers in parallel (width sized to the profile's
+   `capacity`).
 7. **scaffold block (greenfield only) — wave 0.** If the side has **no buildable project yet** (the
    profile's `gate` cannot even run: no wrapper / no module / no `src` tree), emit **one `scaffold`
    block per such side** with `wave: 0`, `type: scaffold`, no boundary, no `tests_nl`. Its acceptance
@@ -59,8 +66,23 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    builds it **before** every owner block (its `realize-scaffold` skill creates wrapper + module
    structure + plugins + sourceSets per the stack ADR / infra-notes). If the side renders UI and its
    `ui_render_check` (profile) is an **automated** check, the scaffold also wires the **UI-test
-   dependency/config**, so the gate can execute the render proof from wave 0. Without it, in greenfield the
+   dependency/config**, so the gate can execute the render proof from wave 0. If the side renders UI,
+   the scaffold also **honors the profile's `run` binding** (the launch task/entry + port the
+   profile pins *a priori* — the command must work on the empty skeleton; friction-log-4 #15). If a
+   cross-deploy boundary declares `contract_form: event-schema` whose `schema_paths` live in this
+   side's tree, the scaffold **creates that contract location** (the files are its output — Phase 1
+   defers their check, friction-log-4 #16). Without the scaffold, in greenfield the
    owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
+8. **Re-entrant by regeneration** (the single-command rule, friction-log-4 #14): re-running
+   refreshes the YAML + the derived block files **in place** from the current model — it is never a
+   re-deliberation. `tests_nl` already elicited **stay**; ask the user only for **new or changed**
+   blocks/boundaries, and report the delta (added/changed/unchanged) so a re-run is reviewable.
+9. **Every ux-prescribed surface lands or is declared cut** (friction-log-4 #11): for each `ui`
+   block, check the ux-proposal's prescriptions against the manifest — every screen
+   surface/interaction it assigns to the block has a matching `triggers`/`consumes_rm` entry, **or**
+   an explicit cut (a `notes`/deferred line naming where it went — e.g. "writes node config, not
+   the versioned aggregate"). Never leave a surface implicit: ambiguity discovered at seeding time
+   is a model bug, not a worker's judgment call.
 
 ## Output
 1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
@@ -93,9 +115,17 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
        owner: <block-id>           # aggregate | port — built before its consumers
        consumers: [<block-id>…]
        projection: in-process | cross-deploy       # rule 2 (from the profile's sides)
+       contract_form: openapi | event-schema       # cross-deploy ONLY — the FORM the contract takes
+                                                   # (profile/ADR): request/response → openapi;
+                                                   # replication/sync wire → event-schema (versioned,
+                                                   # additive evolution)
        pinned_types: { <Name>: <primitive or shared-kernel VO>… }   # rule 1, Published Language
        contract_test: invariant-test | consumer-driven              # rule 3
-       operation_ids: [<operationId>…]     # cross-deploy ONLY — each must resolve in the OpenAPI
+       operation_ids: [<operationId>…]     # contract_form: openapi ONLY — each must resolve in the OpenAPI
+       schema_paths: [<path>…]             # contract_form: event-schema ONLY — the versioned schema
+                                           # files (proto/event catalogue); may be a wave-0 scaffold
+                                           # OUTPUT (Phase 1 defers their check until the first
+                                           # consuming block is ready)
    build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]          # derived, rule 6
    ```
    Anything a consumer needs that is not in this shape **does not exist**: extend THIS section
@@ -111,6 +141,9 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    ## Tasks          — the tests_nl/ACs as READ-ONLY acceptance criteria (plain list, NOT checkboxes)
    ## Dependencies   — the boundary owners it waits on
    ```
+   The ADR set a block must read is **derived from the manifest** — its `related_adrs` ∪ those of
+   the boundaries it consumes — **never a hand-compiled list in a prompt** (a hand list diverges
+   from the manifest silently; friction-log-4 #12).
    **No `status:` field, no `[ ]` checkboxes** — the block's state **is its folder** (`todo/doing/done`),
    moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
    refreshes content **in place**, it never moves files). Re-running is also how a **parked bounce

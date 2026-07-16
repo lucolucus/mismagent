@@ -12,6 +12,10 @@ output_dir: .mismagent
 ubiquitous_language:
   lang: en          # the language the domain speaks — keep the domain's own terms, never translate them
 validation_mode: normal   # a rebuild-from-requirements validation run would say greenfield_from_requirements
+materials:
+  sample: sample/   # supplier PDFs + maintenance-sheet screenshots live here
+  ui: none          # no pre-existing mockups — the ux-designer starts from the brief
+capacity: "2 devs, ~10h/week total"   # architect + build-manifest size stack and waves on this
 ```
 
 ## Sides (independent deploy units)

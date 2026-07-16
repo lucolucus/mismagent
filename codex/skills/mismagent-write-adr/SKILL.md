@@ -23,6 +23,7 @@ Orientation: `methodology/mismagent.md`.
 scope: global | be | fe | sync | infra
 status: proposed | accepted | superseded
 supersedes: <NNNN-slug | null>
+closes_spike: <spike-slug | null>   # the context-map "Open spikes" entry this ADR answers, if any
 enforced_by: "<executable grep/lint rule, ONLY if the constraint is mechanical>"
 ---
 # NNNN — <title of the decision>
@@ -64,6 +65,17 @@ enforced_by: "<executable grep/lint rule, ONLY if the constraint is mechanical>"
   already does this spontaneously; make it part of the protocol.)*
 - **Numbering** progressive with 4 digits; check the last number in `decisions/`.
 - **`supersedes`**: if you replace an ADR, set `status: superseded` on the old one and link it.
+- **An ADR that ANSWERS an open spike closes it — in BOTH directions** (friction-log-4 #13). If the
+  decision satisfies a spike's closure criterion (context-map "Open spikes", or a `type: spike`
+  node), set **`closes_spike: <spike-slug>`** in the frontmatter AND mark the spike **`[x]`** in the
+  context-map (and close its materialized node, if one exists) in the same pass. A spike whose
+  criterion an ADR satisfies but that stays `[ ]` open is a stale artifact: the human reader — and
+  every future feature that cites the map — will re-open a settled question.
+- **Reconcile with the context-map BEFORE finalizing** (friction-log-4 #9). Grep the context-map for
+  the decision's subject: a line that contradicts the ADR (e.g. a tactical note still deferring, or
+  asserting, what this ADR just decided otherwise) must be **updated** — or the supersede recorded
+  there — in the same pass. An ADR and a context-map that disagree in silence are two sources of
+  truth; no downstream step re-aligns them for you.
 - Breaking change of the contract → the ADR fixes the **versioning protocol** BEFORE
   applying it, **and generates** (via `write-task`) a `type: cleanup` task to remove the
   old `operationId`, with `ready_when: "no-consumer-uses:<operationId>"`. So v1 does not stay

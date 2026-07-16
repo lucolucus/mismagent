@@ -18,7 +18,8 @@ The project's **active profile** is `<output_dir>/profile.md` — default **`.mi
 ## Input you receive in the prompt
 - the **idea** / problem and the notes of the user's dialogue (what is needed, for whom, why);
 - (opt.) the critique from `mismagent-challenger` already run — model what survived;
-- the existing `<output_dir>/<feature>/context-map.md`, `sample/` (domain PDFs/screenshots);
+- the existing `<output_dir>/<feature>/context-map.md`; the domain material the **profile
+  declares** (`materials.sample` — PDFs/screenshots; `none` → there is nothing to hunt for);
 - the **domain's bounded contexts (from the profile)** if relevant. If the profile sets
   `validation_mode: greenfield_from_requirements`, the stated requirements are the **only** domain
   source for the deliverable — never model from a prior implementation of it.

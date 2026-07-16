@@ -106,7 +106,8 @@ assistant to "dispatch `mismagent-X`" if you prefer the headless form.):*
    with its enforcement: mechanical → the **gate's dependency lint**, discursive → code-review
    criteria, structural → cited owner), profile pointed at both — never a
    silent ADR. After the stack ADR it **finalizes the `gate` in the profile** (build + test + the
-   dependency lint).
+   dependency lint) **and the UI sides' `run` binding** (pinned a priori — a contract the wave-0
+   scaffold must satisfy).
 4. **`/mismagent:build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
    blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
    in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
@@ -167,12 +168,14 @@ the checkpoints (you decide; it types). Or step-by-step, equivalently:
    the code-writing rules with pros/cons and YOU choose** (never a silent ADR) → ADRs + boundaries
    with projection + **your project definition files in `<output_dir>`** — `architecture.md`
    (style + module map) and `code-rules.md` (each rule with its enforcement channel), yours to
-   open and read — → it finalizes the `gate` in the profile (incl. the dependency lint).
+   open and read — → it finalizes the `gate` in the profile (incl. the dependency lint) and the
+   UI sides' `run` binding (pinned a priori: the wave-0 scaffold must satisfy it).
 4. You type **`/mismagent:build-manifest`** → `building-blocks.yaml` (types PINNED at the
    boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
    seeds the **rich block files** in `blocks/<ctx>/todo/`. **Watch them live with `/mismagent:board`.**
-5. *(only if a boundary is cross-deploy)* you type
-   **`/mismagent-cross-deploy:create-contract`** → ONE OpenAPI.
+5. *(only if a boundary is cross-deploy with `contract_form: openapi`)* you type
+   **`/mismagent-cross-deploy:create-contract`** → ONE OpenAPI. *(An `event-schema` wire's
+   contract is its versioned schema files — ADR + manifest declare it; the scaffold creates it.)*
 *Gate:* the worker-composer's **Phase 1** (the single survival-test gate) — optionally previewed early
 with `/mismagent:readiness-gate`. → build.
 
@@ -201,8 +204,10 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
 ## The rules the flow ENFORCES (no human re-reads them: agents + CI apply them)
 1. **state = the folder** (`todo/ doing/ done/`); `git mv` and merges only by the worker-composer.
 2. **the boundary is executable**: every boundary has pinned types (Published Language) + contract
-   tests (invariant-test on the aggregate · consumer-driven on the port); the OpenAPI exists only
-   as the **cross-deploy** projection of the boundary.
+   tests (invariant-test on the aggregate · consumer-driven on the port); the cross-deploy contract
+   exists **in the form the boundary declares** (`contract_form`: OpenAPI for request/response ·
+   a versioned event-schema for replication/sync wires) — OpenAPI is one projection of the
+   boundary, not its definition.
 3. **no artifact that no machine downstream re-reads** — the one exception is a **derived view
    regenerated from a source** (e.g. the rich block files + the read-only `/mismagent:board`, derived
    from the manifest): allowed because it is regenerated, never hand-maintained, so it cannot drift;
@@ -213,3 +218,11 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    the explore skill's "Harness read-only mode").
 5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
 6. **never merge/push onto the base branch without an explicit user request.**
+7. **the core re-reads what it has already produced (re-entrance + reconciliation).** A command
+   whose artifact already exists and is finalized never re-deliberates it: it says what exists and
+   asks what to reopen (the conductor's resume-at-first-missing-artifact applies to every *single*
+   command too — `/mismagent:architect` on a finalized feature must not re-propose decisions an
+   adverse review already closed). And artifacts stay reconciled: an ADR that answers an open spike
+   **backlinks the slug and closes it** in the context-map; an ADR that contradicts a context-map
+   line **updates it or records the supersede** — two artifacts that disagree in silence are two
+   sources of truth (friction-log-4 #9/#13/#14).

@@ -187,6 +187,35 @@ codex/install.sh /path/to/your/project            # kernel
 codex/install.sh /path/to/your/project --with-cross-deploy   # + cross-deploy module
 ```
 
+## pi packaging (generated)
+
+`pi/` is the same method packaged for **[pi](https://pi.dev)**: skills in `.agents/skills/`
+(`/skill:mismagent-<name>` — pi implements the same Agent Skills standard), the thin `[agent]`
+commands as **prompt templates** in `.pi/prompts/` (`/mismagent-<name>`, `$ARGUMENTS` substituted
+natively), subagent definitions in `.pi/agents/` for pi's official `subagent` example extension
+(called with `agentScope: "both"`; `mismagent-reviewer` is generated glue hosting `code-review`
+in fresh context), the methodology map as `AGENTS.md`. Also a **generated view** —
+`tools/generate-pi.py` regenerates it; never edit `pi/` by hand. Install into a project with:
+
+```
+pi/install.sh /path/to/your/project            # kernel
+pi/install.sh /path/to/your/project --with-cross-deploy   # + cross-deploy module
+```
+
+(`pi/` is also a pi package — `pi install <repo>/pi` covers skills+prompts globally; agents and
+`AGENTS.md` still come from `install.sh`.)
+
+## Keeping the derived views aligned
+
+`codex/` and `pi/` are regenerated, never edited. Two guards keep them aligned with `plugins/`:
+
+- **pre-commit hook** (versioned in `.githooks/`): a commit touching `plugins/` or a generator
+  regenerates both trees and includes them in the same commit. Enable once per clone:
+  `git config core.hooksPath .githooks`.
+- **CI** (`.github/workflows/derived-views.yml`): PRs to master fail if a derived tree is stale;
+  a push to master **self-heals** — the workflow regenerates and commits the difference (which
+  also reverts any hand edit to `codex/` or `pi/`).
+
 ## Install (local marketplace)
 
 The repo root is the marketplace. Register it with an **absolute path** (a relative one is read as a

@@ -28,6 +28,17 @@ copy them. Rationale: `redesign/composer-spec.md` §1·§9·§14.
 - **Translate the user's `tests_nl`** (§16) into these invariant-tests: the sentence *"I cannot sell a
   deactivated product"* → a test that encodes INV-…; the test is the **encoding** of their intent, not
   an invention of yours.
+- **A CONCURRENCY claim requires a REAL contention test** (friction-log-4 #39): an invariant/AC
+  whose text says "under any concurrency" / "simultaneous" is **not** encoded by two sequential
+  calls — write the test **genuinely multi-threaded**: N threads/coroutines released by a start
+  barrier/latch against the SAME instance, proven **fail-before/pass-after** the synchronization
+  lands. And guard the implementation against **check-then-act** (TOCTOU): the root exposes an
+  atomic all-or-nothing operation, never a read-then-write the caller composes (and never a
+  `require` that crashes where the outcome is a value). A sequential test satisfies the verifier's
+  structural coverage and merges an oversell bug — the semantic code-review hunts exactly this.
+- **Test names carry the invariant tag, JVM-safe** (friction-log-4 #24): prefix the test **name**
+  with `INV-n ` (no brackets — `[ ] . ; : / < >` don't compile in JVM method names, backticks
+  included), so the per-block coverage grep is mechanical.
 
 ## The §14 gate (you bring it respected, the verifier checks it)
 Invariant-bearing state is **captive of the root**:

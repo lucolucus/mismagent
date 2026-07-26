@@ -57,9 +57,22 @@ monolith): the `projection` of every boundary will be `in-process` and no OpenAP
 sides:
   <side>:                       # e.g. be | fe | sync — or just `app` if single-side
     repo: <path-or-repo-name>   # where this side's code lives
-    dev_architecture: <skill>   # the repo's "architecture memory" skill (or: none)
+    dev_architecture: <skill | path.md>  # the CODEBASE's architecture memory: a harvested SKILL
+                                # (harvest-dev-architecture, from real code) or an AUTHORED doc
+                                # (the architect writes it BEFORE the first domain wave — its path
+                                # here; the worker-composer injects it into every dispatch). It
+                                # attaches to the CODEBASE, not the deploy role: sides sharing one
+                                # domain codebase point at ONE shared memory — three per-side
+                                # copies would describe the same files (friction-log-4 #21/#23/#27).
+                                # none = not yet authored/harvested
     gate: "<commands>"          # build + test that must turn green
                                 # bootstrap: "manual — TBD after the stack ADR" (the architect finalizes it)
+                                # The gate must EXECUTE the tests of the side's whole module graph,
+                                # not merely build it (Gradle trap: `:app-X:build` runs app-X's own
+                                # check ALONE — dependency modules compile, their tests never run →
+                                # every block vacuously green). Discriminating power is proven
+                                # red-green once by the wave-0 scaffold; the composer's Phase 1
+                                # refuses a gate without the proof (friction-log-4 #17)
     toolchain: "<prerequisite>" # what the gate needs to even START (e.g. "JDK 21 — set JAVA_HOME if
                                 # the shell default differs"): the same gate string must not flip
                                 # red on a differently-configured shell. Workers and the verifier
@@ -116,5 +129,5 @@ What an agent must NEVER do, and who commits where. Pick the form:
 
 ---
 *How the agents use it:* wherever an instruction says "the side's repo", "the side's gate
-commands", "the side's dev-architecture skill", "the boundary rules", "the branching tool",
+commands", "the codebase's dev-architecture memory", "the boundary rules", "the branching tool",
 "the boundary's projection" → the value comes from HERE. Nothing is hard-coded in the core.

@@ -23,7 +23,8 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
   `projection`; **cross-deploy** → its **declared contract** exists in the form the boundary
   declares (`contract_form`: `openapi` → every cited `operationId` resolves · `event-schema` → the
   versioned schema files exist), **deferred** when the contract is an output of the wave-0 scaffold;
-- the profile's **gate is executable**, and the side's repo is **under git** (the worker-composer
+- the profile's **gate is executable and DISCRIMINATING** (Phase 1's red-green proof — a gate that
+  cannot go red is not a gate), and the side's repo is **under git** (the worker-composer
   init's it with confirmation if not); a UI side with manual `ui_render_check` carries its
   **`run` binding** (pinned a priori — a gap here bounces to **the profile**, a targeted field edit).
 

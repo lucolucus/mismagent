@@ -48,7 +48,31 @@ that runs this same lens before you launch). Verify, on the manifest:
   a contract whose files are an **output of the wave-0 scaffold** (e.g. `contracts/proto/` that the
   scaffold creates) is checked **when the first block consuming that boundary becomes ready**, not
   at this gate — the D2 contract test on the weld stays the real welder;
-- the profile's **gate is executable**; a side that renders UI with a **manual `ui_render_check`**
+- the manifest passes **build-manifest's pinning-completeness lints** (its rules 10–19: an owner
+  block for every shared artifact ≥2 same-wave blocks consume; recursive pins; every
+  id/correlation key with its `keys:` minting rule; every `view_shape` field sourced and supplier
+  view_shapes ≡ the boundary's pinned_type; `delivery:` pinned on a wire where >1 writer stream
+  feeds one key) — a gap here surfaces at build as N divergent inventions or a latent seam
+  mismatch (friction-log-4 #25/#34/#41/#48/#50): **not ready**, BOUNCE to build-manifest with the
+  gap named;
+- the profile's **gate is executable AND DISCRIMINATING** (friction-log-4 #17): executable is not
+  enough — the gate must **execute the tests it guards**, and *a gate that cannot go red is not a
+  gate*. The known trap: a per-app build task (Gradle `:app-X:build`) compiles its dependency
+  modules but **never runs their tests** — wave-1 invariant tests would compile and never execute,
+  every D1 vacuously green with the verifier reporting green. Demand the **red-green proof**: the
+  gate has been seen RED at least once on a failing probe test in the module graph it claims to
+  guard — the wave-0 scaffold produces it and records it in
+  **`<output_dir>/<feature>/gate-proof/<side>.md`** (the file you read here; a greenfield side
+  whose scaffold block is still `todo` owes it at wave 0, not at this gate). No proof on a
+  built side, or a gate blind to its modules' tests → **not ready**, bounce target = **the
+  profile** (fix the gate string with the user);
+- **greenfield, next wave ≥2 parallel domain blocks, `dev_architecture: none`** → the codebase's
+  style memory is MISSING (friction-log-4 #21): report it and route a **targeted architect style
+  dispatch** (its §3½ — the authored dev-architecture, deliberated with the user; never a pass-1
+  re-run on a finalized feature) before dispatching that wave. N parallel workers without a shared
+  memory are N divergent inventions the harvest would later canonize. (A single-block wave may
+  proceed: one worker is an anecdote, not a divergence.);
+- a side that renders UI with a **manual `ui_render_check`**
   also carries its **`run` binding** (`sides.<side>.run` — §3's render proof launches with it).
   Demanding `run` here is **deliberate, not premature**: the binding is **pinned a priori** — the
   architect finalizes it with the gate, *before* any scaffold — so the wave-0 scaffold receives
@@ -104,7 +128,11 @@ from the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
 - dispatch **`mismagent-worker`** (spawn it as a Codex subagent) with: the block's **rich `<id>.md` spec** (its
   `## What to do`/`## Tasks` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
-  projection)` + the side's `dev-architecture` (profile), and the **interfaces
+  projection)` + the **dev-architecture memory the profile points at** — a harvested SKILL loads
+  by name; an **authored DOC** (`dev_architecture: <path>` — the architect's before-the-first-wave
+  style memory) **you inject into the dispatch yourself** (read the file, put its content in the
+  worker's prompt): an authored memory no step loads is a binding left to chance, and N parallel
+  workers without it are N divergent inventions (friction-log-4 #21/#27/#32) — and the **interfaces
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);
 - worker → `READY-FOR-REVIEW` → §3 · `BOUNCED` (ambiguous AC) → **park it**: `git mv` `doing→todo` +

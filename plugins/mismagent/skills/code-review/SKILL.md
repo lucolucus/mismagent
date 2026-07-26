@@ -40,6 +40,12 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
    (e.g. the error the contract declares)? And do the profile's **discursive code rules**
    (`code-rules.md`: error-handling policy, immutability stance, …) hold on this diff — citing the
    violated rule in the finding?
+   **A concurrency-claim AC gets a dedicated audit** (friction-log-4 #39): does its test really
+   create **contention** (N threads/coroutines + a start barrier on the same instance), or is it
+   sequential theater? Is the guarded operation **atomic on the root**, or check-then-act (TOCTOU)
+   that races between the read and the write? A sequential test "covering" a concurrency AC is
+   AC-not-satisfied → `HIGH` (the structural verifier alone would merge an oversell bug — you are
+   the lens that reads the logic).
 
 ## Triage of every finding
 - **Severity:** `HIGH` (blocks the merge: correctness/security/AC-not-satisfied) · `MED`

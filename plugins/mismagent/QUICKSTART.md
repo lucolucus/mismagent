@@ -48,10 +48,14 @@ you confirm → flag).
 ---
 
 ## Greenfield traps (read BEFORE starting)
-- **`dev_architecture: none` at the start.** On a new project you don't have golden
-  files/conventions yet: put `none`. After the first green slice, run
-  **`/mismagent:harvest-dev-architecture`**: it harvests the real conventions from the done blocks'
-  code, generates the `<side>-dev-architecture` skill and points the profile at it.
+- **`dev_architecture: none` at the start — then TWO routes fill it.** On a new project you don't
+  have golden files/conventions yet: put `none`. Before the **first domain wave** the architect
+  **AUTHORS** the codebase's style memory (aggregate shape, test conventions — deliberated with
+  you; the worker-composer injects it into every worker dispatch — without it, N parallel workers
+  invent N divergent conventions). After the first green slice,
+  **`/mismagent:harvest-dev-architecture`** harvests the real conventions from the done blocks'
+  code and **grounds/reconciles** that memory (one per CODEBASE — sides sharing the code share
+  it), pointing the profile at it.
 - **The stack is decided in model, WITH you.** Don't fill in `gate`/stack in the profile by
   guessing: the architect presents the alternatives, you choose, the stack ADR gets written
   afterwards — and the architect finalizes the `gate` in the profile (and, for UI sides, the

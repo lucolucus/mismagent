@@ -50,11 +50,25 @@ compiles and the test phase executes (even with zero/placeholder tests). No ACs,
 no `enforced_by` (those arrive with the owner blocks). The worker-composer gates exactly this — the
 **gate alone** — before starting the owner waves; it does not send a scaffold through the verifier.
 
+**…and you PROVE the gate discriminating, red-green** (friction-log-4 #17): before finishing,
+plant a trivially failing probe test in **each module the gate claims to guard** (at minimum the
+deepest domain module, not just the app module), run the gate → see it **RED**, remove/flip the
+probe → see it **GREEN**; record the proof as a **FILE** —
+`<output_dir>/<feature>/gate-proof/<side>.md`: modules probed, the red excerpt, the green rerun —
+never only in your return (a return message evaporates across sessions; handoffs are files, rule
+#4). The worker-composer's Phase 1 reads exactly this file. A gate that stays green over a failing
+test (the Gradle trap: `:app-X:build` never runs dependency modules' tests — `NO-SOURCE` today,
+compiled-but-never-executed tomorrow) is a **finding to report against the profile's gate string**,
+not something to shrug at: without this proof every future block's D1 is vacuously green, and
+Phase 1 refuses the gate.
+
 ## TDD note
 There is no behavior to TDD here. The loop is: run the **side's gate** → fix the toolchain/config →
 green. Climb the frugality ladder (smallest skeleton that makes the gate pass), never adding scope.
 
 ## Return (to the worker)
-`SCAFFOLD_READY`: gate green on the empty skeleton? module structure = the architecture's? `run`
+`SCAFFOLD_READY`: gate green on the empty skeleton? **gate seen RED on the probe, then green
+(discriminating-power proof — which modules probed; `gate-proof/<side>.md` written)?** module
+structure = the architecture's? `run`
 binding honored (UI side)? declared contract locations created (event-schema)? no domain
 code introduced? no unrequested deps? yes/no.

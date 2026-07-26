@@ -1,5 +1,5 @@
 ---
-description: "Invoke mismAgent's architect (model movement) \u2014 dispatches the mismagent-architect subagent: two-pass headless DISCOVERY (stack + architecture style + code-writing rules + infra deliberated WITH you) then writes architecture + ADRs + the project definition files (<output_dir>/architecture.md and code-rules.md) and finalizes the profile gate (incl. the dependency lint) and the UI sides' run binding. RE-ENTRANT \u2014 on a feature whose architecture is already finalized it says so and asks what to reopen, never re-deliberates. Use in model after the tactical model."
+description: "Invoke mismAgent's architect (model movement) \u2014 dispatches the mismagent-architect subagent: two-pass headless DISCOVERY (stack + architecture style + code-writing rules + infra deliberated WITH you) then writes architecture + ADRs + the project definition files (<output_dir>/architecture.md and code-rules.md) and finalizes the profile gate (incl. the dependency lint) and the UI sides' run binding. In greenfield it also AUTHORS the codebase's dev-architecture (style memory) before the first domain wave \u2014 on a finalized feature that style pass is a targeted dispatch, never a pass-1 re-run. RE-ENTRANT \u2014 on a feature whose architecture is already finalized it says so and asks what to reopen, never re-deliberates. Use in model after the tactical model."
 argument-hint: "[feature]"
 ---
 
@@ -14,7 +14,9 @@ argument-hint: "[feature]"
 DISCOVERY would re-propose choices already deliberated — ignorant that some ADRs are the
 *conclusions of an adverse review* (supersedes), not open questions — and make the user re-decide
 decided things. Say what exists and ask: a **targeted re-opening** (name the decision/ADR to
-revisit → dispatch with that scope + the existing ADRs as context) or a different feature. Same
+revisit → dispatch with that scope + the existing ADRs as context), the **style pass** (§3½ of the
+agent: authoring the codebase's dev-architecture before the first domain wave — a legitimate
+targeted dispatch on a finalized feature, never a pass-1 re-run), or a different feature. Same
 resume rule as `/skill:mismagent-model` — the single command is not exempt (friction-log-4 #14).
 
 Otherwise dispatch the **`mismagent-architect`** subagent (the `subagent` tool) for `$ARGUMENTS` (or the current feature),

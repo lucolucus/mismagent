@@ -21,6 +21,20 @@ subagents as tools — they do not replace your presence, they sharpen it:
 Keep **only** what has a **downstream consumer** (survival test). If an output has no
 consumer, **do not write it**.
 
+**What a "feature" is — and is NOT** (friction-log-4, open notes): a feature is a unit of
+**delivery** (one manifest, one build) — not a unit of analysis, not a code module. Depth of
+analysis never lives in "more features": per-context depth lives in the **tactical model**
+(context-map), technology/global depth in `research/` + the ADRs + the architecture overview,
+per-block depth in the manifest's **rich block files**. When the user asks for "one feature per
+bounded context", they are usually asking for **depth**, not for portfolio slices — probe which
+depth they want before cutting anything.
+
+**Variability without the zombie engine:** "the system must adapt to different <instances>"
+(fairs, tenants, seasons…) is legitimate **strategic** modeling — name what varies per instance
+and which context owns that configuration language. The zombie enters when the *generic engine*
+gets built before a **second concrete instance** exists as a consumer: model the variability's
+LANGUAGE here; let the challenger attack any meta-motor whose only consumer today is hypothetical.
+
 ## Output (each with its consumer)
 1. `product-brief.md` — problem, user, expected value, scope, outcome.
    → consumed by the **gate towards model**; without it, model does not start.

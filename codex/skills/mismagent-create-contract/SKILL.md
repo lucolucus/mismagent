@@ -17,7 +17,9 @@ in-process (`contract: none`), the port stays a code interface
 with its contract test and **this skill has no object**. A boundary with **`contract_form:
 event-schema`** (a replication/sync wire) is reconciled with the **same disciplines** — single
 source at the declared `schema_paths`, canonical names from the ubiquitous language,
-additive-vs-breaking with the versioning protocol in an ADR — on its **schema files** (proto/event
+additive-vs-breaking with the versioning protocol in an ADR, **plus the pinned `delivery:`
+guarantee** consumers design their folds against and the descriptor-reflection CDC
+(seam-cross-deploy; friction-log-4 #36/#50) — on its **schema files** (proto/event
 catalogue), not here: this skill's OpenAPI mechanics don't apply, and those files may be a wave-0
 scaffold output (the worker-composer's Phase 1 defers their check accordingly).
 

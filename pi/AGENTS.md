@@ -131,7 +131,7 @@ at the first missing artifact. The step-by-step form stays equivalent:
   side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
   (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
   **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
-  projection + the side's dev-architecture) → **D1** green on its own (fresh `mismagent-verifier` +
+  projection + the codebase's dev-architecture memory) → **D1** green on its own (fresh `mismagent-verifier` +
   `code-review`) → merge = composition → **D2** contract test on the welded boundary →
   **you confirm** → green release-tag = turn on the flag.
 - output: code composed at the boundaries, deployed behind a flag.
@@ -166,7 +166,10 @@ the checkpoints (you decide; it types). Or step-by-step, equivalently:
    with projection + **your project definition files in `<output_dir>`** — `architecture.md`
    (style + module map) and `code-rules.md` (each rule with its enforcement channel), yours to
    open and read — → it finalizes the `gate` in the profile (incl. the dependency lint) and the
-   UI sides' `run` binding (pinned a priori: the wave-0 scaffold must satisfy it).
+   UI sides' `run` binding (pinned a priori: the wave-0 scaffold must satisfy it). In greenfield,
+   **before the first domain wave**, it also **authors the codebase's dev-architecture** (the
+   style memory — aggregate shape, test conventions — deliberated with you, pointed at by the
+   profile, injected into every worker dispatch; the harvest later grounds it on real code).
 4. You type **`/skill:mismagent-build-manifest`** → `building-blocks.yaml` (types PINNED at the
    boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
    seeds the **rich block files** in `blocks/<ctx>/todo/`. **Watch them live with `/skill:mismagent-board`.**
@@ -192,8 +195,8 @@ blocks (launches the app via the profile's `run`, evidence in `render-proof/`). 
 manual-`ui_render_check` side: the worker-composer runs it itself at D1** when the proof is missing;
 typing it yourself is the *slice-wide* re-proof before you confirm the release.
 **`/skill:mismagent-harvest-dev-architecture`** `[skill]` *(optional)* — after the first green slice,
-turns the done blocks' real conventions into the side's dev-architecture skill (the profile's
-`dev_architecture` stops being `none`).
+turns the done blocks' real conventions into the codebase's dev-architecture memory — grounding
+the architect's authored doc, if one exists (the profile's `dev_architecture` stops being `none`).
 
 **When it jams:** write the entry in the project's `MISMAGENT-LOG.md` *immediately* (which
 skill/agent, what it was attempting, what broke, `core` vs `profile`) — that is how the method matures.
@@ -222,4 +225,17 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    adverse review already closed). And artifacts stay reconciled: an ADR that answers an open spike
    **backlinks the slug and closes it** in the context-map; an ADR that contradicts a context-map
    line **updates it or records the supersede** — two artifacts that disagree in silence are two
-   sources of truth (friction-log-4 #9/#13/#14).
+   sources of truth (friction-log-4 #9/#13/#14); build-manifest reconciles its pins with
+   profile · architecture · ADRs before emitting (friction-log-4 #22).
+8. **a gate that cannot go red is not a gate.** The profile's gate must **execute the tests it
+   guards** — not merely build their modules — proven red-green once at wave 0 (the scaffold's
+   failing probe) and re-run **cache-bypassed** by the verifier at every D1: a cached green proves
+   *nothing changed*, not *the tests pass on this diff* (friction-log-4 #17/#31). Same doctrine
+   for `enforced_by` rules: prohibition vs presence (wave-gated), comment-stripped, shell-portable,
+   validated red AND green (friction-log-4 #19/#26/#35/#37/#49).
+9. **what crosses a seam is PINNED, never invented in parallel.** The manifest pins the minting
+   rule of every correlation key, the unit-vs-quantity granularity of what flows, the delivery
+   guarantee folds design against, the source of every view field — and derives an **owner block**
+   for every shared artifact ≥2 same-wave blocks consume (friction-log-4
+   #25/#34/#38/#40/#41/#47/#48/#50): N parallel workers left to invent a shared convention produce
+   N divergent ones, and the divergence detonates at the weld, not at the build.

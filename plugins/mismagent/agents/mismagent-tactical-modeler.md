@@ -25,6 +25,13 @@ Write **only** in the parent `<output_dir>/<feature>/context-map.md` ("Tactical 
 - **Invariants** — the cross-field rules (`[INV-n]`).
 - **Domain events** — what happens, in the past tense.
 - **Commands + actor** — what triggers them and who expects it. **Policies** if reactive.
+- **The granularity of what CROSSES a seam is a modeled DECISION** (friction-log-4 #40): when an
+  entity flows to another context and (a) it is ubiquitous language ("one dish in flight"), (b)
+  its identity will be a correlation key, or (c) a **quantity enters a conserved invariant**
+  (portions), decide **explicitly** unit-vs-aggregate-with-quantity and write it (the UL line +
+  the invariant's phrasing + the key's shape). Left implicit, parallel workers assume it
+  divergently and the mismatch detonates only at the weld — rework of merged blocks. If the user
+  must choose, it is `NEEDS-INPUT`, never a default.
 
 ## Anti-zombie — every line names its consumer, or it isn't written
 The consumers are the **building blocks of the manifest** (`build-manifest` → the worker-composer); the

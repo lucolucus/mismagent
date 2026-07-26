@@ -16,6 +16,17 @@ UI). It is the **read side** of CQRS. Rationale: `redesign/composer-spec.md` §1
   are the **Published Language** towards the consumer, not an internal detail.
 - It may aggregate from multiple aggregates/tables when reading, but it remains a projection: no
   writes.
+- **A sync-fed fold respects the wire's PINNED guarantees** (friction-log-4 #50): folding events
+  that arrive over an `event-schema` wire, read the boundary's **`delivery:`** and design against
+  it — cross-stream order does NOT exist unless pinned. More than one writer stream for the same
+  key ⇒ the manifest pinned either **single-writer** (fold only the owning authority's absolute
+  stream) or a **commutative fold** (tombstones for a late "entry" event, an orphan buffer for an
+  effect that precedes its cause): implement the pinned design. A fold that converges only when
+  events arrive in order is a bug even when every shape matches.
+- **Order only by fields pinned ORDERABLE** (friction-log-4 #46): "sorted by X" is a contract on
+  X's **format** (fixed-width zero-pad, a dedicated Comparable, the cross-namespace rule) that the
+  producer pins upstream; a lexicographic sort over an unpinned string is wrong at every digit
+  boundary — format not pinned → **BOUNCED**, don't sort-and-hope.
 
 ## The check (you carry it with you)
 - **Contract test of the view, consumer-driven:** the **consumer is the UI** → the view is pinned

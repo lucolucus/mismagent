@@ -39,7 +39,10 @@ Concept dialogued **with the user** → `UI/ux-proposal.md`. No UI → skip, say
   infra-notes + the **user-visible project definition files** `<output_dir>/architecture.md` and
   `<output_dir>/code-rules.md` (via `write-code-rules`; profile pointed at both); it **finalizes
   the profile's `gate`** (incl. the dependency lint) **and the UI sides' `run` binding** (pinned
-  a priori: the wave-0 scaffold must satisfy it).
+  a priori: the wave-0 scaffold must satisfy it). **Greenfield:** before the first domain wave it
+  also **authors the codebase's dev-architecture** (its §3½ — the style memory the worker-composer
+  injects into every dispatch), deliberated at the same checkpoint discipline; on a finalized
+  feature this is a **targeted style dispatch**, never a pass-1 re-run.
 
 ## 4 · MANIFEST — `build-manifest` skill
 Tactical model → `building-blocks.yaml` (the normative shape in its § "The manifest's shape") +

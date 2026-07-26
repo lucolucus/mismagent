@@ -70,16 +70,94 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    side's tree, the scaffold **creates that contract location** (the files are its output — Phase 1
    defers their check, friction-log-4 #16). Without the scaffold, in greenfield the
    owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
-8. **Re-entrant by regeneration** (the single-command rule, friction-log-4 #14): re-running
-   refreshes the YAML + the derived block files **in place** from the current model — it is never a
-   re-deliberation. `tests_nl` already elicited **stay**; ask the user only for **new or changed**
-   blocks/boundaries, and report the delta (added/changed/unchanged) so a re-run is reviewable.
+8. **Re-entrant by regeneration — INCREMENTAL once the build is running** (friction-log-4 #14/#28):
+   re-running refreshes the YAML + the derived block files **in place** from the current model — it
+   is never a re-deliberation. `tests_nl` already elicited **stay**; ask the user only for **new or
+   changed** blocks/boundaries, and report the delta (added/changed/unchanged) so a re-run is
+   reviewable. **With blocks already in `doing/`/`done/` the delta mode is the ONLY legal one:**
+   apply the change (a re-pinned boundary, a new owner block) to the YAML and re-seed **only the
+   impacted derived files** — never move a file between state folders (state is the
+   worker-composer's), never rewrite the files of unimpacted blocks, and list which files the delta
+   touched. A full regeneration that resets state or others' refinements is a bug; doing the delta
+   by hand outside this skill is exactly the manifest↔blocks divergence it exists to prevent.
 9. **Every ux-prescribed surface lands or is declared cut** (friction-log-4 #11): for each `ui`
    block, check the ux-proposal's prescriptions against the manifest — every screen
    surface/interaction it assigns to the block has a matching `triggers`/`consumes_rm` entry, **or**
    an explicit cut (a `notes`/deferred line naming where it went — e.g. "writes node config, not
    the versioned aggregate"). Never leave a surface implicit: ambiguity discovered at seeding time
    is a model bug, not a worker's judgment call.
+10. **Every prescribed capability names its OWNER module** (friction-log-4 #20): if a spec
+    prescribes a concern (a local store, a sync engine, a ui-kit), the module that owns it must be
+    in the block's module list — or the spec says explicitly where it lives. A capability with no
+    named owner forces the worker to invent architecture; at wave 0 (`dev_architecture` inevitably
+    absent) that invention becomes the precedent the harvest later canonizes.
+11. **Shared artifact ⇒ DERIVED owner block** (friction-log-4 #25/#32): whenever an artifact is
+    consumed by **≥2 blocks of the same wave** — the shared-kernel types the `pinned_types` name,
+    the build/structure files of a module several blocks touch, a ui-kit (the design system's code
+    incarnation) — emit ONE owner block for it, built before the wave (an intermediate "wave 0.5"
+    is fine; no domain rules in it). Without an owner, N parallel workers write N divergent bodies
+    of the same file and the wave's parallelism is illusory. This is a **derivation** you compute
+    from the manifest (which types/files ≥2 same-wave blocks share), never a bespoke hand-fix.
+12. **Pin RECURSIVELY** (friction-log-4 #29/#36): a composite type cited inside a `pinned_types`
+    row (`biglietti:[BigliettoEmesso]`) must have its **own** `pinned_types` row — or be a
+    primitive / an already-pinned shared-kernel VO. On an `event-schema` wire, pin **all** the
+    events that cross it, not only those whose consumer is already modeled. A Published-Language
+    type cited-but-undefined forces the worker to invent the Published Language — the one thing
+    pinned boundaries exist to prevent.
+13. **A key pins its MINTING RULE, its owner — and it is the CONSUMER'S key** (friction-log-4
+    #34/#38/#41/#47): for every id/correlation key in a boundary's `pinned_types` or a
+    producer-driven event payload, pin in the boundary's `keys:` **who mints it and by what rule**,
+    including its **stability** (across catalogue versions / hot-changes / republications) — a bare
+    `:string` makes N workers mint N incompatible rules, and a divergent correlation key breaks the
+    domain downstream (the oversell class). The pinned type must carry **the key the consumer
+    operates with**: if the consumer keys its state by X and the type carries only a
+    transport/compact Y (a QR index) with no pinned Y→X map, the boundary is under-specified — fix
+    it here, don't let the consumer invent a port. A string key minted/decoded by **≥2 contexts**
+    is a candidate for a **typed shared-kernel VO** (one parse/format home) or for carrying the
+    correlating fields explicitly instead of an opaque string.
+14. **Seam granularity is a DECISION, never a worker default** (friction-log-4 #40): when an
+    entity crossing a seam carries a quantity (`righe:[{qta}]`) that downstream becomes a count of
+    units, and its identity is a correlation key or the quantity enters a **conserved invariant**
+    (Porzioni), the unit-vs-quantity granularity is ubiquitous language: it must arrive here
+    already decided (tactical model / user). FLAG any pinned type where it is implicit — two
+    workers assuming different granularities merge blocks that are mutually incoherent, a latent
+    seam mismatch that detonates only at the weld.
+15. **Read boundaries derive from the model's PRECONDITIONS too** (friction-log-4 #42): a command
+    whose precondition reads another context's state ("…and no item of the order is already
+    delivered — reads the Monitor") IS a boundary: project it into `consumes` (a pinned read
+    boundary, or an extension of an existing one). A cross-context read the context-map names but
+    the manifest doesn't pin leaves the worker to invent a consumer-owned port on the spot.
+16. **Every `view_shape` field has a SOURCE; a supplier's view_shape IS the pinned_type**
+    (friction-log-4 #44/#45/#48): lint each `view_shape` field against a declared source — a field
+    of an event the block `consumes`, a boundary's `pinned_types`, or the write-path input. No
+    source → **refuse at generation** (the same gap surfaces later and dearer as a readiness or
+    build bounce). A read-model that is the **supplier** of a boundary must have `view_shape` ≡
+    the boundary's `pinned_type` (they are ONE Published Language written twice; two copies
+    diverge). On a sync wire the events' fields are **consumer-driven** like any read: derive them
+    from the folds the consuming read-models declare, and materialize the JVM event types in the
+    shared kernel **together with** the schema forms (one PL, not two that diverge).
+17. **Consumption-shaped guarantees: ordering and commutativity** (friction-log-4 #46/#50): a
+    field a read-model/UI **orders by** requires the producer to pin an **orderable format**
+    (fixed-width zero-pad, or a dedicated Comparable + the cross-namespace rule) — a lexicographic
+    sort on an unpinned string is wrong at every digit boundary. A read-model folding events of
+    **>1 writer stream for the same key**, over a wire that guarantees order only per-stream, is
+    mechanically at risk under cross-node reordering: require **single-writer-per-key** (absolute
+    values from the owning authority) OR a **declaredly commutative fold** (tombstones / orphan
+    buffer) — and pin the wire's **`delivery:` guarantee** on the boundary (e.g. per-node in-order
+    + dedup(nodeId, seq) BEFORE the fold) so consumers design against it and the sync adapter
+    owes it.
+18. **The invariant tag is PRESCRIBED, greppable and JVM-safe** (friction-log-4 #24): the
+    manifest's `[INV-n]` form does not compile as a JVM test name (`[ ] . ; : / < >` are illegal
+    even in Kotlin backticks). Prescribe the convention the workers use: the test **name starts
+    with the tag `INV-n `** (no brackets). The verifier greps it per-block — never a global
+    presence `enforced_by` (it would be red for the whole wave; friction-log-4 #19).
+19. **Reconcile the manifest with profile · architecture · ADRs BEFORE emitting** (friction-log-4
+    #22): grep your own pins against the other authoritative artifacts — a pin that contradicts a
+    profile boundary rule ("VO at the seam" vs primitives pinned), an architecture-overview line,
+    or an ADR (a boundary pinned as a COMMAND where the model says FACT, implying a dependency
+    arrow the map forbids) is resolved **with the user** and the losing artifact amended in the
+    same pass. Two authoritative artifacts that disagree in silence are two sources of truth;
+    nothing downstream re-aligns them (methodology rule 7 applied to yourself).
 
 ## Output
 1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
@@ -117,12 +195,20 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
                                                    # replication/sync wire → event-schema (versioned,
                                                    # additive evolution)
        pinned_types: { <Name>: <primitive or shared-kernel VO>… }   # rule 1, Published Language
+                                           # composite types cited here have their OWN row (rule 12)
+       keys: { <field>: "minted by <block-id> — <rule + stability>" }  # rule 13 — every id/
+                                           # correlation key: who mints it, how, across what it
+                                           # stays stable (versions/hot-change/republication)
        contract_test: invariant-test | consumer-driven              # rule 3
        operation_ids: [<operationId>…]     # contract_form: openapi ONLY — each must resolve in the OpenAPI
        schema_paths: [<path>…]             # contract_form: event-schema ONLY — the versioned schema
                                            # files (proto/event catalogue); may be a wave-0 scaffold
                                            # OUTPUT (Phase 1 defers their check until the first
                                            # consuming block is ready)
+       delivery: "<guarantee>"             # contract_form: event-schema ONLY — the wire's delivery
+                                           # guarantee consumers design their folds against
+                                           # (rule 17), e.g. "per-node in-order +
+                                           # dedup(nodeId,seq) before the fold"
    build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]          # derived, rule 6
    ```
    Anything a consumer needs that is not in this shape **does not exist**: extend THIS section
@@ -160,9 +246,11 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
      ≥ 1 `## Tasks` criterion (an invariant nobody tests is a wish, not an invariant);
    - **application-service:** every `commands` item has ≥ 1 happy-path criterion AND ≥ 1
      rejection/failure criterion;
-   - **port / adapter:** every boundary the block touches appears in `## Dependencies` with the
-     **pinned signature inlined** (the Published-Language types + the `contract_test` name) — the
-     reader must not open another file to know the seam;
+   - **port / adapter — and ANY block at a boundary:** every boundary the block touches appears in
+     `## Dependencies` with the **pinned signature inlined** (the Published-Language types + the
+     `contract_test` name, **plus the boundary's `keys:` minting rules and — on a sync wire — its
+     `delivery:` guarantee**: the worker who mints a key or designs a fold must not open the YAML
+     to learn them) — the reader must not open another file to know the seam;
    - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
    - **ui:** the screen's states (empty/error/loading) are covered (rule 5).
    The lint is structural and mechanical: it governs the **floor** of detail a human can rely on

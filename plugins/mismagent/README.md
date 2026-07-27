@@ -15,7 +15,7 @@ requires them:
 project. Each project provides its own profile — **the active profile lives in
 `<output_dir>/profile.md`, default `.mismagent/profile.md`** (template: `PROFILE.md`; filled-in
 example: `profiles/example.md`): from there agents read sides, repos, gates, dev-architecture
-skills, boundary rules, boundary projections and the commit format.
+memories, boundary rules, boundary projections and the commit format.
 
 ## Contents (kernel)
 - `methodology/mismagent.md` — the map of the flow (what to invoke, in what order).
@@ -80,6 +80,6 @@ in `/agents` under their bare `mismagent-*` name and can be dispatched directly.
 
 ## Note
 The flow hard-codes no project specifics: the side repos' paths, the build/test commands (gate),
-the boundary projections and the dev-architecture skills come from the active profile
+the boundary projections and the dev-architecture memories come from the active profile
 (`.mismagent/profile.md`). To reuse it elsewhere, just write a new profile — and enable the
 modules that the project actually requires.

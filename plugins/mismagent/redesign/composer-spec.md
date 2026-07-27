@@ -566,9 +566,12 @@ Phase 0 · INGEST
 
 Phase 1 · READINESS (model→build gate, evolved)
   ∀ block: complete spec · ∀ boundary: PINNED TYPES + contract_test defined + projection chosen · executable gate
+  cross-deploy boundary: its DECLARED contract exists (contract_form: openapi | event-schema) —
+    deferred when the contract files are a wave-0 scaffold OUTPUT            (friction-log-4 #16)
   git present? (worktrees+merges) → else git init WITH user confirmation     (greenfield bootstrap, #7)
   greenfield with no wave-0 scaffold block + non-runnable gate → BOUNCE       (missing scaffold owner, #6)
-  ✗ → BOUNCE to IDEA-2 (incomplete manifest), don't start          ← Wave-1 lesson (see §16-proto)
+  ✗ → BOUNCE to IDEA-2 (incomplete manifest) or to the PROFILE (a missing binding: a targeted
+    field edit, never a full re-deliberation), don't start          ← Wave-1 lesson (see §16-proto)
 
 Phase 2 · WAVE LOOP (until all done)
   wave 0 (greenfield): build the `scaffold` block ALONE → gate green on the empty skeleton, then go on

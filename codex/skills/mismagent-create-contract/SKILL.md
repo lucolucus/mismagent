@@ -1,6 +1,6 @@
 ---
 name: mismagent-create-contract
-description: "Model movement of mismAgent \u2014 ONLY for boundaries with CROSS-DEPLOY projection (the OpenAPI is the cross-deploy projection of a Bounded Context boundary; in-process/single-side the port stays a code interface and this skill is NOT used). RECONCILES the API CONTRACT (executable OpenAPI YAML, single source) as a CONSEQUENCE of the manifest's blocks + boundaries: they declare the operations, here the shapes are filled in and the names are fixed from the ubiquitous language of explore. Stable operationIds, components/schemas with the canonical domain name, + the ADRs. Consumer-driven authorship on reads, producer-driven on writes; the architect arbitrates feasibility. Use after build-manifest when at least one boundary is cross-deploy."
+description: "Model movement of mismAgent \u2014 ONLY for boundaries with CROSS-DEPLOY projection and contract_form: openapi (the OpenAPI is the REQUEST/RESPONSE cross-deploy projection of a Bounded Context boundary; an event-schema wire is reconciled on its schema files, not here; in-process/single-side the port stays a code interface and this skill is NOT used). RECONCILES the API CONTRACT (executable OpenAPI YAML, single source) as a CONSEQUENCE of the manifest's blocks + boundaries: they declare the operations, here the shapes are filled in and the names are fixed from the ubiquitous language of explore. Stable operationIds, components/schemas with the canonical domain name, + the ADRs. Re-entrant: an existing YAML is extended (additive-vs-breaking), never regenerated. Consumer-driven authorship on reads, producer-driven on writes; the architect arbitrates feasibility. Use after build-manifest when at least one boundary is cross-deploy openapi."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -10,10 +10,23 @@ description: "Model movement of mismAgent \u2014 ONLY for boundaries with CROSS-
 
 # MismAgent — Create Contract (model movement, cross-deploy projection only)
 
-**When it is used:** only if at least one **boundary** has `projection: cross-deploy` (consumer and
-supplier on different sides). The OpenAPI **is** the cross-deploy projection of a Bounded Context
-boundary — if all boundaries are in-process (`contract: none`), the port stays a code interface
-with its contract test and **this skill has no object**.
+**When it is used:** only if at least one **boundary** has `projection: cross-deploy` **with
+`contract_form: openapi`** (request/response between different sides). The OpenAPI **is** the
+request/response cross-deploy projection of a Bounded Context boundary — if all boundaries are
+in-process (`contract: none`), the port stays a code interface
+with its contract test and **this skill has no object**. A boundary with **`contract_form:
+event-schema`** (a replication/sync wire) is reconciled with the **same disciplines** — single
+source at the declared `schema_paths`, canonical names from the ubiquitous language,
+additive-vs-breaking with the versioning protocol in an ADR, **plus the pinned `delivery:`
+guarantee** consumers design their folds against and the descriptor-reflection CDC
+(seam-cross-deploy; friction-log-4 #36/#50) — on its **schema files** (proto/event
+catalogue), not here: this skill's OpenAPI mechanics don't apply, and those files may be a wave-0
+scaffold output (the worker-composer's Phase 1 defers their check accordingly).
+
+**Re-entrance (friction-log-4 #14):** if the feature's OpenAPI **already exists**, you are
+**extending/reconciling it**, never regenerating from scratch — the additive-vs-breaking
+discipline below governs every touch, and the outcome reports the **delta** (operations
+added/changed/unchanged), not a fresh contract.
 
 The contract is a **consequence of the manifest**, not its source: the `boundaries:` section of
 `building-blocks.yaml` (the rows with `projection: cross-deploy`) and the blocks at each such

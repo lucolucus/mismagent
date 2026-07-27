@@ -27,6 +27,31 @@ The producer-before-consumer rule **survives as the CDC publish/verify** on the 
 no longer as a universal dogma of the orchestrator. At merge/deploy: additive-vs-breaking on the
 contract, the producer must turn the pact green before the consumer depends on the new shape.
 
+## The `event-schema` form (replication/sync wires)
+When the boundary declares **`contract_form: event-schema`** (event-replication, local-first sync,
+warm-standby coordination — decided by an ADR), the projection is **not** OpenAPI: the contract is
+the **versioned event-schema** at the declared `schema_paths` (e.g. proto + event catalogue),
+**additive evolution** only, versioning protocol fixed in the ADR before the first breaking touch.
+Same discipline, different artifact: per-side **generated types from the schema**, canonical names
+from the ubiquitous language on events/messages, and the **CDC runs on the events** (the consumer
+publishes what it expects to replicate/receive; the producer verifies real-on-real at D2). OpenAPI
+is the *request/response* form of cross-deploy, not its definition (friction-log-4 #5/#16).
+
+**The CDC of a schema contract is DESCRIPTOR-REFLECTION** (friction-log-4 #36): here the schema
+**is** the contract (single source of the types) and there is no remote supplier to fake — adapt
+`realize-port`'s abstract+factory+fake pattern accordingly: the contract test loads the compiled
+schema **descriptors** (e.g. proto `FileDescriptorProto`) and the "fake" is a descriptor **mutated
+in memory** (a field/event removed or renamed) that must turn the test **RED** —
+red-on-removal/red-on-rename is the mechanical proof that additive evolution holds. Proven
+realizable in a real run; reuse the pattern, don't reinvent it per project.
+
+**The wire also PINS its DELIVERY guarantee** (friction-log-4 #50): the contract is not just the
+event shapes — it includes the **`delivery:`** the manifest pins on the boundary (e.g. per-node
+in-order + dedup(nodeId, seq) **before** the fold, owed by the sync adapter/engine). Consumers'
+folds are designed against it — single-writer-per-key, or a declaredly commutative fold
+(build-manifest rule 17) — and the D2 weld exercises it: a fold that converges only under a
+stronger guarantee than the pinned one is a defect even when every shape matches.
+
 ## When NOT this skill
 If `boundary.projection = in-process` (consumer and supplier on the same side) → `seam-in-process`
 (light).

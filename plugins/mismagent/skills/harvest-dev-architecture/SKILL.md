@@ -1,14 +1,22 @@
 ---
 name: harvest-dev-architecture
-description: mismAgent build movement (optional, after the first green wave/slice). HARVESTS the side's real conventions from the code of the DONE blocks — module layout, naming, test patterns, presenter/persistence shapes, golden exemplar files — and GENERATES the side's dev-architecture skill, the "architecture memory" the profile points at and every future mismagent-worker loads. Derived from real code only (never aspirations), regenerable by re-running. Closes the QUICKSTART promise "when the patterns stabilize, write a <side>-dev-architecture skill". Use after a slice is green, or when workers start reinventing conventions.
+description: mismAgent build movement (optional, after the first green wave/slice). HARVESTS the codebase's real conventions from the code of the DONE blocks — module layout, naming, test patterns, presenter/persistence shapes, golden exemplar files — and GENERATES the dev-architecture skill, the "architecture memory" the profile points at and every future mismagent-worker loads. The DESCRIPTIVE route: derived from real code only (never aspirations), regenerable by re-running; the PRESCRIPTIVE route is the architect's authored doc BEFORE the first domain wave, which this harvest later grounds/reconciles against the real code. One memory per CODEBASE (not per deploy role). Use after a slice is green, or when workers start reinventing conventions.
 ---
 
 # harvest-dev-architecture — from real code to architecture memory
 
-You turn the **stabilized conventions of a side's real code** into its `<side>-dev-architecture`
-skill: the per-side memory every future `mismagent-worker` loads (matrix **D**, composer-spec §13),
+You turn the **stabilized conventions of a codebase's real code** into its dev-architecture
+skill: the memory every future `mismagent-worker` loads (matrix **D**, composer-spec §13),
 so patterns stop being reinvented per worker. Until now this step was a **promise nobody owned**
 (QUICKSTART: *"when the patterns stabilize, write a `<side>-dev-architecture` skill"*) — you own it.
+
+**You are the DESCRIPTIVE route — an AUTHORED memory may already exist** (friction-log-4 #21/#27):
+in greenfield the **architect authors** the dev-architecture *before* the first domain wave
+(deliberated with the user; the profile's `dev_architecture` points at the doc, the
+worker-composer injects it into every dispatch). You are the harvest that **grounds/refreshes**
+the memory once real code exists: the code confirms, refines or contradicts the authored rules —
+contradictions are **decisions for the user** (rule 3 below), and the outcome updates the SAME
+memory the profile points at, never a second fork of it.
 
 ## Preconditions (don't harvest noise)
 - At least **one wave/slice of the side is green** (`done` blocks exist and the gate passes).
@@ -21,7 +29,10 @@ so patterns stop being reinvented per worker. Until now this step was a **promis
 2. **Extract, one section per dimension, each with 1–2 GOLDEN exemplar files cited by path:**
    - **layout** — module/package structure as actually built (contexts → packages);
    - **naming** — the real conventions (suffixes like `...SqlDelight`, test names, port vs adapter);
-   - **tests** — the test shape in use (structure, fixtures, how invariant/contract tests are written);
+   - **tests** — the test shape in use (structure, fixtures, how invariant/contract tests are
+     written); if test names use backticks, state the **full** JVM-illegal char list
+     `[ ] . ; : / < >` — an incomplete "forbidden chars" list *induces* the compile error it
+     should prevent (friction-log-4 #33);
    - **patterns per block-type** — the presenter/thin-view split as implemented, the adapter's
      persistence shape, error handling at the seams;
    - **toolchain quirks** — anything a worker must know to keep the gate green (from the profile's
@@ -35,8 +46,13 @@ so patterns stop being reinvented per worker. Until now this step was a **promis
    (Claude Code: `.claude/skills/`; Codex: `.agents/skills/`), with a GENERATED-BY banner naming this
    skill and the harvest date. Keep it **small** (the worker pays its context every dispatch): rules +
    golden-file paths, not prose essays — the exemplar files carry the detail.
-6. **Point the profile at it:** set `sides.<side>.dev_architecture: <side>-dev-architecture`
-   (was `none`). Tell the user the next worker dispatch will load it.
+   **The memory attaches to the CODEBASE, not the deploy role** (friction-log-4 #23): sides that
+   share one domain codebase get ONE shared memory (per-side copies would describe the same
+   files; what varies per role is only the `app-<role>` wiring, already guarded by its
+   prohibition `enforced_by`s). Harvest per-side only when the sides really are separate codebases.
+6. **Point the profile at it:** set `sides.<side>.dev_architecture` — for **every** side sharing
+   the codebase, to the **same** value (was `none`, or the authored doc you just reconciled).
+   Tell the user the next worker dispatch will load it.
 
 ## Rules
 - **Derived, regenerable:** re-running the harvest refreshes the skill from the code as it is now —

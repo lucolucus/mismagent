@@ -30,16 +30,27 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
    If `FILE_LIST` is provided: every file in the real diff **must** be in `FILE_LIST`; if the
    diff contains UNdeclared files → **FAIL** (the worker under-reported).
 
-2. **Build + test + contract-test** (dry-run, in the right repo): run the **side's gate
-   commands** (profile: `sides.<side>.gate`) — build + test + contract-test. The per-side
-   distinction stands (BE/FE/sync have different gates); read the concrete commands from the profile.
-   Any red → **FAIL** (report the command and the error excerpt).
+2. **Build + test + contract-test — REALLY EXECUTED, never a cached green** (friction-log-4 #31):
+   run the **side's gate commands** (profile: `sides.<side>.gate`) — build + test + contract-test.
+   The per-side distinction stands (BE/FE/sync have different gates); read the concrete commands
+   from the profile. For THIS verdict, **bypass the build cache on the test phase** (Gradle:
+   `--rerun-tasks`; or the stack's equivalent invalidation): a cached/`UP-TO-DATE` green proves
+   *nothing changed*, not *the tests pass on this diff* — a gate run that executed zero tests
+   verified nothing. Any red → **FAIL** (report the command and the error excerpt).
 
 3. **AC coverage (YOU are the owner of this check):** for **every** acceptance criterion of the
    block (its block file's `## Tasks` = the `tests_nl`), find in the diff the test that covers it.
    AC without a test → **FAIL** (list which ones). For a block exposing a **cross-deploy**
-   operation: the **response-shape test** on the real JSON body of its `operationId` must exist →
-   if missing, **FAIL**.
+   operation, the shape test matches the boundary's `contract_form`: `openapi` → the
+   **response-shape test** on the real JSON body of its `operationId` · `event-schema` → the
+   **shape test on the schema-generated event/message types** it publishes or consumes. Missing →
+   **FAIL**.
+   - **An AC claiming CONCURRENCY is never covered by a sequential test** (friction-log-4 #39): if
+     the AC's text carries a concurrency claim ("under any concurrency", "simultaneous",
+     "in contemporanea"), the covering test must **visibly create contention** (N threads/
+     coroutines + a start barrier/latch) — two calls in a row satisfy "a test exists" and prove
+     nothing about races. No contention → count the AC uncovered (`ac-coverage` red) and flag it;
+     whether the contention is *meaningful* stays the code-review's audit.
 
 4. **Contract referenced, not duplicated — per the boundary's projection:** the seam is *imported*,
    never re-declared. **Cross-deploy:** domain types come from the side's **contract-generated
@@ -57,14 +68,31 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
 6. **ADRs' mechanical constraints:** for every ADR in `related_adrs` that has `enforced_by`,
    run that grep/lint rule in the `REPO_PATH`; if it fails → **FAIL** (cite the ADR). Do NOT
    judge discursive ADRs (without `enforced_by`): those are for the code review.
+   - **Execute the EXACT string via `bash -c '<string>'`** (friction-log-4 #30/#49): never retype
+     or adapt the rule in your own shell — aliases (`ugrep` wrappers), zsh glob/history expansion
+     on unquoted `--include=*.kt` or `:$m:` give **false verdicts** in both directions. And
+     distinguish the two reds: a **violation** (the rule ran and matched/failed as designed) →
+     FAIL citing the ADR; a **BROKEN RULE** (the rule itself errors: unquoted glob, missing tool,
+     non-portable construct) → still `adr-enforced` red, NOTE "rule broken, not violated — re-scope
+     it at write-adr". Never read an erroring rule as green.
+   - **Presence rules are WAVE-GATED (#19):** a structured `kind: presence` rule is exigible only
+     once its `exigible_from` block is **merged on the integration line**; before that, report it
+     `not-yet-exigible` in NOTES (not a FAIL — red about an unbuilt block teaches everyone to
+     ignore you). A presence rule with **no** `exigible_from` on a not-yet-built symbol → flag the
+     ADR (write-adr owes the gating), don't guess.
+   - **A presence match in comments/fixtures only is a FALSE GREEN (#37):** the construct must
+     exist as **code** (declaration/import/type-use). If every match is a comment line or a test
+     fixture's string, the required thing does not exist → **FAIL**, NOTE "presence satisfied by
+     prose — the block is not built".
    - **Target must exist — false-green guard (#12):** before running, check the rule's target
      path/dir/symbol **exists** in the repo. A grep over a **non-existent** path matches nothing and
      *looks* green — treat a missing target as **FAIL** (`adr-enforced` red, NOTE: "target <path> not
      found — gate pinned to a guessed filename?"), never a silent pass.
-   - **Code-scoped, not prose (#11):** an **absence** rule (`! grep …`) must not FAIL on a match that
-     is **only inside comments** — a doc-comment naming the forbidden tech is clean code. If every
-     match is a comment line, that is a false positive: re-run comment-stripped / anchored to imports
-     before deciding, and flag the ADR so its grep gets re-scoped at the source.
+   - **Code-scoped, not prose (#11, extended by #35):** an **absence** rule (`! grep …`) must not
+     FAIL on a match that is **only inside comments** — a doc-comment naming the forbidden tech is
+     clean code. If every match is a comment line, that is a false positive: re-run
+     comment-stripped / anchored to imports before deciding, and flag the ADR so its grep gets
+     re-scoped at the source (write-adr now demands uniform comment-stripping on BOTH kinds).
    - **Portable grep (#3):** the rule must run on **this** machine's `grep` (BSD/macOS *or* GNU). If a
      rule uses a GNU-only extension (`grep -z`, `-P`, PCRE `\d`/`\b`) it may error or silently mismatch
      here → do not read that as a pass: report `adr-enforced` red with NOTE "non-portable grep — rewrite

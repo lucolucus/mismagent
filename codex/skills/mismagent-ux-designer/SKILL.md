@@ -31,7 +31,8 @@ it is noise: do not write it.
 
 ## Input
 - feature descriptions (`product-brief.md`, `context-map.md`);
-- `UI/` (existing mockups/spikes), `sample/` (domain screenshots).
+- the visual material the **profile declares** (`materials.ui` — existing mockups/spikes ·
+  `materials.sample` — domain screenshots; `none` → start from the brief, don't hunt for folders).
 
 ## Procedure (you orchestrate; you imagine with the user)
 1. **Read** descriptions + screens: what exists, what the user expects.

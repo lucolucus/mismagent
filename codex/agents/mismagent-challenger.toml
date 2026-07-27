@@ -17,7 +17,7 @@ repo/domain to check whether the thing **already exists**. Your output is a **ve
 
 ## Input you receive in the prompt
 - the **idea** / problem (and, if provided, the **draft model** from `mismagent-analyst`);
-- (opt.) paths to `context-map.md`, `sample/`, and the sub-repo to grep for prior-art;
+- (opt.) paths to `context-map.md`, the profile's `materials.sample` (if not `none`), and the sub-repo to grep for prior-art;
 - the **active profile**'s `validation_mode`, if set (it gates front 7 below).
 
 ## Procedure — attack on these fronts

@@ -33,6 +33,10 @@ Rationale: `redesign/composer-spec.md` §2·§3·§9.
 ## The projection (the worker-composer chooses it, §13.B)
 - `seam-in-process` (single-side) → the port stays a code interface + in-process contract test.
 - `seam-cross-deploy` (multi-side) → the port is projected into OpenAPI + per-side types + CDC (Pact).
+- `seam-cross-deploy` with **`contract_form: event-schema`** (friction-log-4 #36): the schema IS
+  the contract and there is **no remote supplier to fake** — abstract class + factory survive, but
+  the consumer-driven test becomes the **descriptor-reflection CDC** (see seam-cross-deploy): the
+  "fake" is the in-memory **mutated descriptor** proving red-on-removal/red-on-rename.
 You **do not distinguish**: you realize the interface + the contract test; skill B does the
 projection.
 

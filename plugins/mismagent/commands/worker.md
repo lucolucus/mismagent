@@ -6,5 +6,5 @@ argument-hint: "[block id / what to realize]"
 Dispatch the **`mismagent-worker`** subagent (Agent tool). It is **normally driven by the
 worker-composer** (one worktree per block); to run it standalone give it the **block-spec** from the
 manifest, the **working dir** + the side's **gate**, the **boundary interfaces** it touches, and the
-**skills** (`realize-<type>` × projection + the side's dev-architecture). It returns
+**skills** (`realize-<type>` × projection + the codebase's dev-architecture memory). It returns
 `READY-FOR-REVIEW | BLOCKED | BOUNCED`. See `agents/mismagent-worker.md`.

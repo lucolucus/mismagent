@@ -1,0 +1,46 @@
+name: derived-views
+
+# codex/ and pi/ are GENERATED views of plugins/ (the single source of truth).
+# PRs: fail if they are stale. Pushes to master: self-heal — regenerate and
+# commit the difference (this also reverts hand edits to the derived trees).
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: regenerate derived views
+        run: |
+          python3 tools/generate-codex.py
+          python3 tools/generate-pi.py
+      - name: check alignment
+        id: diff
+        run: |
+          git add -A codex pi
+          if git diff --cached --quiet; then
+            echo "aligned=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "aligned=false" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat
+          fi
+      - name: fail PR if stale
+        if: github.event_name == 'pull_request' && steps.diff.outputs.aligned == 'false'
+        run: |
+          echo "codex/ or pi/ is stale — regenerate (tools/generate-*.py) and commit," >&2
+          echo "or enable the repo hook: git config core.hooksPath .githooks" >&2
+          exit 1
+      - name: self-heal master
+        if: github.event_name == 'push' && steps.diff.outputs.aligned == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Regenerate derived views (codex/, pi/) [skip ci]"
+          git push

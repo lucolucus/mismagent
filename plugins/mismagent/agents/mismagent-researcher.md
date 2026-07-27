@@ -22,7 +22,7 @@ side repos: you gather and synthesize, you don't model and you don't implement. 
 
 ## Input you receive in the prompt
 - the **topic/question** to investigate and the **feature**;
-- (opt.) `sample/` (domain PDFs/screenshots), the side's repo to grep for prior-art
+- (opt.) the profile's `materials.sample` (domain PDFs/screenshots; `none` → skip), the side's repo to grep for prior-art
   (from the profile), the existing `context-map.md`.
 
 ## Research angles (choose based on the topic)

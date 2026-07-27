@@ -1,0 +1,16 @@
+{
+  "name": "mismagent-pi",
+  "version": "0.12.0",
+  "description": "mismAgent method \u2014 pi packaging (GENERATED from the Claude Code plugin by tools/generate-pi.py; do not edit)",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  }
+}

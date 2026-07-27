@@ -18,6 +18,20 @@ subagents as tools — they do not replace your presence, they sharpen it:
 Keep **only** what has a **downstream consumer** (survival test). If an output has no
 consumer, **do not write it**.
 
+**What a "feature" is — and is NOT** (friction-log-4, open notes): a feature is a unit of
+**delivery** (one manifest, one build) — not a unit of analysis, not a code module. Depth of
+analysis never lives in "more features": per-context depth lives in the **tactical model**
+(context-map), technology/global depth in `research/` + the ADRs + the architecture overview,
+per-block depth in the manifest's **rich block files**. When the user asks for "one feature per
+bounded context", they are usually asking for **depth**, not for portfolio slices — probe which
+depth they want before cutting anything.
+
+**Variability without the zombie engine:** "the system must adapt to different <instances>"
+(fairs, tenants, seasons…) is legitimate **strategic** modeling — name what varies per instance
+and which context owns that configuration language. The zombie enters when the *generic engine*
+gets built before a **second concrete instance** exists as a consumer: model the variability's
+LANGUAGE here; let the challenger attack any meta-motor whose only consumer today is hypothetical.
+
 ## Output (each with its consumer)
 1. `product-brief.md` — problem, user, expected value, scope, outcome.
    → consumed by the **gate towards model**; without it, model does not start.
@@ -40,11 +54,17 @@ consumer, **do not write it**.
 0. **Profile bootstrap (if missing):** explore writes into `<output_dir>` and fixes canonical names,
    so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
    NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
-   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides, and
-   **`validation_mode`**. The mode should surface from the dialogue itself (normal feature work, or
+   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides,
+   **`validation_mode`**, **`materials`** and **`capacity`**. The mode should surface from the dialogue itself (normal feature work, or
    a *rebuild-from-the-stated-requirements* validation run?); **if it does not surface, ask the user
    explicitly** — it decides whether challenger/analyst may treat a prior implementation of the
-   deliverable as ground truth (`greenfield_from_requirements` forbids it). The rest (`gate`,
+   deliverable as ground truth (`greenfield_from_requirements` forbids it).
+   **`materials`** declares ONCE what source material exists — `sample:` (domain PDFs/screenshots)
+   and `ui:` (pre-existing mockups), path or `none`: every downstream skill that names those inputs
+   (analyst, researcher, challenger, ux-designer, architect) reads THIS field instead of hunting
+   for folders that don't exist (friction-log-4 #3/#8). **`capacity`** declares who builds and with
+   how many hours — the architect and build-manifest size stack and waves on it (friction-log-4
+   #10); like the mode, **ask explicitly if they don't surface**. The rest (`gate`,
    `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
    invent it. The bounded contexts here are the **provisional** ones (those you already know); the
    **authoritative** map is the `context-map.md` that `mismagent-analyst` produces at step 3 — the

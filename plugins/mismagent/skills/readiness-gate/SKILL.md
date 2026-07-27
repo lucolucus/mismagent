@@ -20,9 +20,13 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
 - ∀ block: complete spec + **concrete acceptance** (`tests_nl`/ACs; a high-value block with no
   `tests_nl` → BLOCK, ask the user);
 - ∀ boundary: **PINNED types** (Published Language, never the supplier's domain) + `contract_test` +
-  `projection`; **cross-deploy** → its OpenAPI exists and every cited `operationId` resolves;
-- the profile's **gate is executable**, and the side's repo is **under git** (the worker-composer
-  init's it with confirmation if not).
+  `projection`; **cross-deploy** → its **declared contract** exists in the form the boundary
+  declares (`contract_form`: `openapi` → every cited `operationId` resolves · `event-schema` → the
+  versioned schema files exist), **deferred** when the contract is an output of the wave-0 scaffold;
+- the profile's **gate is executable and DISCRIMINATING** (Phase 1's red-green proof — a gate that
+  cannot go red is not a gate), and the side's repo is **under git** (the worker-composer
+  init's it with confirmation if not); a UI side with manual `ui_render_check` carries its
+  **`run` binding** (pinned a priori — a gap here bounces to **the profile**, a targeted field edit).
 
 ## Useful verification commands (read-only)
 ```bash
@@ -42,4 +46,7 @@ grep -nE 'operationId:' <output_dir>/<feature>/architetture/api/<feature>.openap
 - **EXPLICIT PENDING** → a `type: cleanup` node whose `ready_when` is not yet satisfied (waiting for
   consumers to migrate), a **parked bounce** (`open-questions/<block-id>.md` awaiting the user), or
   an **open `type: spike` node** (its `Unblocks` blocks are not dispatched while it is open):
-  list them separately — neither actionable nor an error.
+  list them separately — neither actionable nor an error. **Stale spikes** too: an `[ ]` entry in
+  the context-map's "Open spikes" that an ADR already answers (close via `write-adr`'s
+  `closes_spike` + `[x]`) or that was never materialized as a node — name them, never pass them in
+  silence (friction-log-4 #13).

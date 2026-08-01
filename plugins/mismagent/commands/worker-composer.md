@@ -1,6 +1,6 @@
 ---
 description: mismAgent's worker-composer (build movement — REPLACES dev-orchestrator-v2). Reads the building-block manifest, builds the pieces in WAVES (boundary owners first, consumers in parallel) by dispatching specialized mismagent-worker workers via skills, keeps every piece green (D1) and every SEAM green (D2 = contract test on the merge). The ONLY one that merges and moves state; writes no code. Thin coordinator. This command is the authority on the build; redesign/composer-spec.md is its design rationale.
-argument-hint: "[feature | <output_dir>/<feature>/]"
+argument-hint: "[feature | <output_dir>/features/<feature>/]"
 ---
 
 # Worker-Composer — executor of mismAgent's *architecture-driven* build
@@ -12,7 +12,7 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 `redesign/composer-spec.md`.
 
 ## 0 · INGEST
-`$ARGUMENTS` = feature or path → resolve `<output_dir>/<feature>/`. Read **`building-blocks.yaml`**
+`$ARGUMENTS` = feature or path → resolve `<output_dir>/features/<feature>/`. Read **`building-blocks.yaml`**
 (the **authoritative** input: blocks + boundaries + projection + PINNED TYPES; produced by the model
 movement; its normative shape: build-manifest § "The manifest's shape") and
 the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
@@ -59,7 +59,7 @@ that runs this same lens before you launch). Verify, on the manifest:
   every D1 vacuously green with the verifier reporting green. Demand the **red-green proof**: the
   gate has been seen RED at least once on a failing probe test in the module graph it claims to
   guard — the wave-0 scaffold produces it and records it in
-  **`<output_dir>/<feature>/gate-proof/<side>.md`** (the file you read here; a greenfield side
+  **`<output_dir>/features/<feature>/gate-proof/<side>.md`** (the file you read here; a greenfield side
   whose scaffold block is still `todo` owes it at wave 0, not at this gate). No proof on a
   built side, or a gate blind to its modules' tests → **not ready**, bounce target = **the
   profile** (fix the gate string with the user);
@@ -116,7 +116,7 @@ informational on this branch — acceptance is the gate, not a §3 review.)*
 `ready` = the blocks whose consumed boundaries' **owners are MERGED on the integration line**
 (D1 green + §4 — *not* "in `done`": `done` = welded (§5) requires the consumer merged, so keying
 ready on `done` would deadlock owner↔consumer) **and** with no open question parked
-(`<output_dir>/<feature>/open-questions/<id>.md` exists → not ready: report the question, don't
+(`<output_dir>/features/<feature>/open-questions/<id>.md` exists → not ready: report the question, don't
 dispatch). Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, cut **from the integration line** — a consumer must
@@ -133,14 +133,14 @@ from the base branch). For each ready block:
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);
 - worker → `READY-FOR-REVIEW` → §3 · `BOUNCED` (ambiguous AC) → **park it**: `git mv` `doing→todo` +
-  write the question to **`<output_dir>/<feature>/open-questions/<block-id>.md`** (rule #4: a
+  write the question to **`<output_dir>/features/<feature>/open-questions/<block-id>.md`** (rule #4: a
   cross-firing handoff is a FILE — the block stays visible on the board and is never re-dispatched
   while the file exists; the user answers, `build-manifest` folds the answer into the spec and
   clears the file) · `BLOCKED` → stays.
 
 ## 3 · D1 — GREEN ON ITS OWN
 **`ui` block on a manual-`ui_render_check` side — the render proof comes FIRST, and you own it:**
-if `<output_dir>/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
+if `<output_dir>/features/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
 on the block's worktree (the worker can't manufacture evidence, and the verifier's step 8 demands
 it). `RENDER-FAIL` → a D1 FAIL (worker rework, findings named); `RENDER-OK` → proceed.
 For each `READY-FOR-REVIEW`, **with fresh context**: `mismagent-verifier` (the profile's build + tests +

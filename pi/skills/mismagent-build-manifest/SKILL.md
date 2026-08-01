@@ -8,12 +8,14 @@ description: "mismAgent model movement (successor of mism-build-dag for the arch
 
 # build-manifest — the model → build bridge
 
-Emits `<output_dir>/<feature>/building-blocks.yaml`: the **worker-composer's only input**. The manifest is
+Emits `<output_dir>/features/<feature>/building-blocks.yaml`: the **worker-composer's only input**. The manifest is
 a **consequence of the model** (anti-zombie: every row has a consumer = the worker-composer), not
 hand-written. Rationale: `redesign/composer-spec.md` §8.
 
 ## Input
-- `context-map.md` — tactical model (aggregates/invariants/commands/events) + Customer/Supplier relationships;
+- `<output_dir>/features/<feature>/tactical-model.md` — the tactical model
+  (aggregates/invariants/commands/events); `<output_dir>/context-map.md` — the canonical names +
+  Customer/Supplier relationships;
 - `UI/ux-proposal.md` (if the feature has UI) — the screens/surfaces its `ui` blocks must land (rule 9);
 - `<output_dir>/architecture.md` (the project module map) + `architetture/` + ADRs (including the
   §14 `enforced_by`);
@@ -234,7 +236,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
    refreshes content **in place**, it never moves files). Re-running is also how a **parked bounce
    un-parks**: fold the user's answer into the spec (`tests_nl`/criteria) and **delete that block's
-   `<output_dir>/<feature>/open-questions/<block-id>.md`** — the worker-composer wrote it when the
+   `<output_dir>/features/<feature>/open-questions/<block-id>.md`** — the worker-composer wrote it when the
    worker bounced, and regeneration is what clears it. The YAML stays the source of truth; these
    files are its **per-block projection** (the way OpenAPI is the cross-deploy projection of a boundary).
    No static `TASKS.md` — the rich block files + the board (below) replace it.
@@ -244,7 +246,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
    You enforce it at generation; the **worker-composer's Phase 1 re-checks it** (a gap ⇒ the block
    is **not ready**, gap named, BOUNCE back here — regenerate, never hand-patch the file):
    - **every block:** `## What to do` non-empty; `## Tasks` ≥ 1 criterion; a closing `Sources:`
-     line pointing at the `related_adrs` + the context-map section it derives from;
+     line pointing at the `related_adrs` + the tactical-model section it derives from;
    - **aggregate:** every frontmatter `invariants` item is spelled out in the body AND covered by
      ≥ 1 `## Tasks` criterion (an invariant nobody tests is a wish, not an invariant);
    - **application-service:** every `commands` item has ≥ 1 happy-path criterion AND ≥ 1

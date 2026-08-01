@@ -34,14 +34,15 @@ boundary declare *which* operations exist — a write per `application-service` 
 view that crosses the boundary. Here you **reconcile them into ONE executable OpenAPI**, filling in
 the shapes from the domain model and taking the **names** from the ubiquitous language of explore.
 Orientation: `methodology/mismagent.md`. Write **only** in the parent
-`<output_dir>/<feature>/architetture/` — never code in the sub-repos.
+`<output_dir>/architetture/` — never code in the sub-repos.
 
 ## Input
 - **`building-blocks.yaml`** — the **`boundaries:`** rows with `projection: cross-deploy` (pinned
   types + `contract_test`) and the blocks at each such boundary: the supplier's
   `application-service` (`commands` → the writes), the consumer's `read-model`/`ui`
   (`view_shape`/`consumes_rm` → the reads);
-- `context-map.md` — the **ubiquitous language** (= the canonical schema names) + the **tactical
+- `<output_dir>/context-map.md` — the **ubiquitous language** (= the canonical schema names);
+  `<output_dir>/features/<feature>/tactical-model.md` — the **tactical
   model**: commands → write endpoints, domain events → read-model, aggregates/invariants → write-schema + AC;
 - `UI/` (visual source of the views for the reads), the per-side guides (from the profile), any contract to extend.
 
@@ -78,7 +79,7 @@ A write has **two** pieces of contract beyond the success response:
   consumer side consumes it to render the field errors. ALWAYS model it in the YAML (named
   `ValidationError` schema), not only the 200/201s.
 - **Domain invariants** (cross-field rules, e.g. "subtype X valid only for category Y"):
-  **take them from the "Tactical model" section of the `context-map.md`** (captured by
+  **take them from the "Tactical model" sections of `features/<feature>/tactical-model.md`** (captured by
   `mismagent-tactical-modeler`), **do not reinvent them**. They are NOT expressible in OpenAPI (the shape does
   not capture them) → they remain in the **producer side's domain**. To make them executable truth,
   the supplier's `application-service` block must have an **AC on the invariant** (a `tests_nl` item
@@ -112,7 +113,7 @@ consumer side can keep building in parallel):
 3. **Fill in the writes** (the commands the supplier side's `application-service` blocks expose):
    schema from the domain (invariants, validation — producer-driven), including the errors (see below).
 4. **Names from the ubiquitous language:** every schema carries the canonical name from the
-   `context-map` (one concept = one name). No synonyms.
+   project `context-map` (one concept = one name). No synonyms.
 5. For every feasibility/cost conflict: decide, write an ADR (via `write-adr`),
    possibly with a counter-proposal.
 6. **Close the loop:** every operation the manifest's boundaries imply exists in the YAML and vice

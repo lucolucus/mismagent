@@ -51,7 +51,11 @@ LANGUAGE here; let the challenger attack any meta-motor whose only consumer toda
 5. (optional) `research/<topic>.md` → cited by an ADR in `model`.
 
 ## Procedure (you orchestrate the dialogue; the subagents do the autonomous work)
-0. **Profile bootstrap (if missing):** explore writes into `<output_dir>` and fixes canonical names,
+0. **Profile bootstrap (ONLY if missing — it is the project's junction point, not a per-feature
+   artifact):** on any feature after the first, the profile already exists: **read it, never
+   re-bootstrap it**. The same holds for the whole project trunk (`context-map.md`,
+   `architecture.md`, `code-rules.md`, `decisions/`) — a new feature adds a folder under
+   `<output_dir>/features/`, it does not restart the project. explore writes into `<output_dir>` and fixes canonical names,
    so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
    NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
    `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides,
@@ -66,16 +70,21 @@ LANGUAGE here; let the challenger attack any meta-motor whose only consumer toda
    how many hours — the architect and build-manifest size stack and waves on it (friction-log-4
    #10); like the mode, **ask explicitly if they don't surface**. The rest (`gate`,
    `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
-   invent it. The bounded contexts here are the **provisional** ones (those you already know); the
-   **authoritative** map is the `context-map.md` that `mismagent-analyst` produces at step 3 — the
-   profile's list is superseded by it, no chicken-and-egg.
+   invent it. The bounded contexts here are the **seed** ones (those you already know); the
+   maintained map is the project's `<output_dir>/context-map.md` that `mismagent-analyst` writes at
+   step 3 and **amends** at every later feature. The profile stays the project's **junction point**
+   (output_dir, sides, gate, projections); the context-map is where the domain's names live.
 1. **Diverge:** brainstorm the idea with the user — goals, users, constraints, alternatives.
 2. **Attack the idea BEFORE modeling it:** invoke **`mismagent-challenger`** (fresh context).
    `KILL` → stop and report back to the user; `RESHAPE` → redesign with them; `PROCEED` → close the
    `MUST_ANSWER_BEFORE_MODELING` items before moving on.
 3. **Model the domain:** invoke **`mismagent-analyst`** on what survived. Fix with them the
    **ubiquitous language** (one concept = one canonical name). `NEEDS-INPUT` → bring the
-   `AMBIGUITIES` to the user and re-invoke.
+   `AMBIGUITIES` to the user and re-invoke. **If `<output_dir>/context-map.md` already exists**
+   (any feature after the first), pass it to the analyst as authoritative: it **amends** the map —
+   adds the contexts and terms this feature introduces, reuses the rest verbatim. A second context
+   map, or a renamed term, forks the canonical names that everything downstream inherits; a rename
+   that is genuinely needed goes to the user and becomes an ADR.
 4. **Converge on the brief:** write `product-brief.md` (problem/user/value/scope/outcome).
 5. **Infra, if needed:** invoke `write-infra-notes` for the `infra-notes.md` draft.
 6. **Research on-demand:** if a decision requires investigation → `research/<topic>.md`.
@@ -94,8 +103,9 @@ before acting):
 - when writes reopen, **materializing the files is the FIRST action** (profile → brief), then
   dispatch the analyst for the context-map. The explore→model gate stays on the **files**: an
   approved plan's text is not a handoff.
-`model` starts **only** if `product-brief.md` (problem/user/value) **and**
-`context-map.md` (at least the bounded contexts with the ubiquitous language) exist. Otherwise stay
+`model` starts **only** if the feature's `product-brief.md` (problem/user/value) **and** the
+project's `<output_dir>/context-map.md` (at least the bounded contexts this feature touches, with
+their ubiquitous language) exist. Otherwise stay
 in explore.
 
 ## Boundaries

@@ -1,11 +1,11 @@
 ---
 name: write-infra-notes
-description: 'mismAgent''s specialized writer of infrastructure considerations (explore/model). Produces <output_dir>/<feature>/infra-notes.md in the FORM the profile dictates: cloud/cross-side (independent deploy units, secrets & identity, CI/CD) or desktop/single-side (desktop stack, local DB+migrations, backup/restore, per-OS packaging, updates). Seeds infra tasks/blocks and enforced_by ADRs. Invoked by explore (draft) and mismagent-architect (consolidation).'
+description: 'mismAgent''s specialized writer of infrastructure considerations (explore/model). Produces <output_dir>/infra-notes.md in the FORM the profile dictates: cloud/cross-side (independent deploy units, secrets & identity, CI/CD) or desktop/single-side (desktop stack, local DB+migrations, backup/restore, per-OS packaging, updates). Seeds infra tasks/blocks and enforced_by ADRs. Invoked by explore (draft) and mismagent-architect (consolidation).'
 ---
 
 # MismAgent — Write Infra Notes (writer, explore/model)
 
-Write/update `<output_dir>/<feature>/infra-notes.md`: the infrastructure considerations
+Write/update `<output_dir>/infra-notes.md`: the infrastructure considerations
 that neither the PRD nor the contract cover, but that generate real work in the `infra` side's repo
 (from the profile). Orientation: `methodology/mismagent.md`.
 

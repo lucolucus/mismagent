@@ -15,20 +15,40 @@ The step-by-step form (`/mismagent-tactical-modeler`, …) remains equivalent: t
 same flow with the typing removed, not a new paradigm.
 
 ## 0 · INGEST
-`<the argument this skill was invoked with>` = feature or path → resolve `<output_dir>/<feature>/` + the **active profile**
-(default `.mismagent/profile.md`). Require the **explore gate**: `product-brief.md`
-(problem/user/value/scope) **and** `context-map.md` (bounded contexts + ubiquitous language).
+`<the argument this skill was invoked with>` = feature or path → resolve `<output_dir>/features/<feature>/` + the **active profile**
+(default `.mismagent/profile.md`). Require the **explore gate**: the feature's `product-brief.md`
+(problem/user/value/scope) **and** the project's `<output_dir>/context-map.md` (bounded contexts +
+ubiquitous language) covering the contexts this feature touches.
 Missing → stop and say so: finish `/skill:mismagent-explore` first (that gate is explore's, not yours).
 
 ## 1 · TACTICAL — dispatch `mismagent-tactical-modeler`
-It absorbs the context-map's "Seeds for the tactical" → writes the "Tactical model" section and
-materializes the spikes (`write-task`). `NEEDS-INPUT` → **CHECKPOINT: bring the `AMBIGUITIES` to
+It absorbs the "Seeds for the tactical" from `features/<feature>/tactical-model.md` → writes the
+"Tactical model" sections there and materializes the spikes (`write-task`). `NEEDS-INPUT` → **CHECKPOINT: bring the `AMBIGUITIES` to
 the user**, re-dispatch with the answers. `MODEL-READY` → go on.
 
 ## 2 · UX (only if the feature has UI) — `ux-designer` skill
 Concept dialogued **with the user** → `UI/ux-proposal.md`. No UI → skip, say so.
 
-## 3 · ARCHITECT — dispatch `mismagent-architect`, two-pass; the deliberation is the USER'S
+## 3 · ARCHITECT — dispatch `mismagent-architect`
+**FIRST, decide which of the two dispatches this is** — the foundational deliberation happens
+**once per PROJECT**, not once per feature. Read the **project trunk**:
+
+- **Trunk absent** (`<output_dir>/architecture.md` or `code-rules.md` missing, **or** the profile's
+  `gate` still reads `manual — TBD after the stack ADR`) → **FOUNDATIONAL dispatch**: the two-pass
+  below.
+- **Trunk present** → **FEATURE dispatch**: skip pass-1 entirely. Dispatch the architect with the
+  trunk as given (`architecture.md`, `code-rules.md`, `<output_dir>/decisions/`, the profile) and
+  let it write **only** what this feature adds: its boundary decisions and any feature-scoped ADR.
+  **State the trunk to the user** ("stack, style and code rules are already fixed by
+  `decisions/NNNN-…`; I'm not reopening them") and reopen a foundational decision **only if they
+  ask** — then it is an explicit **amendment**: a superseding ADR in `<output_dir>/decisions/`,
+  deliberated at the same checkpoint discipline, never a silent rewrite of `architecture.md`.
+
+Never infer "the trunk is missing" from the feature folder: a new feature's `decisions/` is empty
+**by construction**, and reading that as "no ADRs yet" is what makes the profile get rewritten on
+every feature.
+
+### The FOUNDATIONAL dispatch — two-pass; the deliberation is the USER'S
 - **Pass 1 — DISCOVERY** (it writes nothing): returns `STACK_PROPOSAL` + `ARCH_PROPOSAL` (style +
   quality drivers **+ the code-writing rules that follow**: the dependency-lint per candidate
   stack, the contested knobs) + `INFRA_QUESTIONS`.
@@ -65,10 +85,15 @@ with the user**, open spikes/ambiguities, and the next command:
 **`/skill:mismagent-worker-composer <feature>`**.
 
 ## RE-ENTRANT by design
-Every invocation re-reads the **files** and resumes at the **first missing artifact**: no
-"Tactical model" section → §1 · UI feature with no `UI/ux-proposal.md` → §2 · no ADRs / `gate`
-still TBD → §3 · no `building-blocks.yaml` → §4 · cross-deploy boundary whose declared contract
-is missing → §5. The **single commands share the guard** (friction-log-4 #14): an artifact that
+Every invocation re-reads the **files** and resumes at the **first missing artifact**. Each signal
+is read at the **scope of the artifact it guards** — feature signals in
+`<output_dir>/features/<feature>/`, project signals in the `<output_dir>` root:
+- no `tactical-model.md` / seeds not yet absorbed → **§1** *(feature)*
+- UI feature with no `UI/ux-proposal.md` → **§2** *(feature)*
+- `<output_dir>/architecture.md` or `code-rules.md` missing, or the profile's `gate` still TBD →
+  **§3 foundational** *(project)*; trunk present → **§3 feature dispatch**
+- no `building-blocks.yaml` → **§4** *(feature)*
+- cross-deploy boundary whose declared contract is missing → **§5** *(project: `architetture/`)* The **single commands share the guard** (friction-log-4 #14): an artifact that
 already exists is *stated* and reopened only on request — never re-deliberated from scratch.
 Handoffs are FILES (rule #4), so the movement can span sessions. In a **read-only/plan-mode
 harness**: only the dialogue-and-propose parts run (pass-1, checkpoints); **materialize the
@@ -78,4 +103,9 @@ pending files as the FIRST action once writes reopen** — a plan's text is not 
 1. You write **no artifact yourself** — the movement's agents/skills do (you conduct).
 2. You **never skip a checkpoint**, and you add no extra gate (model→build is judged by the
    worker-composer's Phase 1 alone).
-3. Every handoff you rely on is a **FILE** in `<output_dir>/<feature>/`, never a return message.
+3. Every handoff you rely on is a **FILE**, never a return message — in
+   `<output_dir>/features/<feature>/` for what belongs to the feature, in the `<output_dir>` root
+   for the project trunk.
+4. You **never re-deliberate the trunk** because a feature folder looks empty. Stack, architecture
+   style, code rules and the profile's `gate` are decided **once per project** and changed only by
+   an explicit, user-asked amendment.

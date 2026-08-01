@@ -35,13 +35,13 @@ it is noise: do not write it.
 1. **Read** descriptions + screens: what exists, what the user expects.
 2. **Diverge:** propose **1-3 UI concepts** (layout, flow, component breakdown).
 3. **Converge** with the user on one.
-4. **Write** `<output_dir>/<feature>/UI/ux-proposal.md`: screens, components, **states**
+4. **Write** `<output_dir>/features/<feature>/UI/ux-proposal.md`: screens, components, **states**
    (empty / error / loading), and for each screen the **data views** it needs
    (→ they will seed the **read-models' `view_shape`**, consumer-driven).
 5. **Unknowns → spikes** (materialized by `write-task`).
 
 ## Output (with its consumer)
-- `<output_dir>/<feature>/UI/ux-proposal.md` → consumed by `build-manifest`
+- `<output_dir>/features/<feature>/UI/ux-proposal.md` → consumed by `build-manifest`
   (`ui` blocks + read-models' `view_shape` = the consumer-driven views).
 
 ## Boundaries

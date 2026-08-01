@@ -9,7 +9,21 @@
 > That is where every agent/skill looks for it; the plugin's `profiles/*.md` are just
 > **examples** (see **`.agents/skills/mismagent-explore/references/profile-example.md`**, a filled-in fictional instance).
 >
-> **It is filled in at TWO moments** (a greenfield doesn't know everything yet):
+> **ONE profile per PROJECT — it is the junction point, not a per-feature artifact.** Features are
+> folders under `<output_dir>/features/<feature>/`; they read the profile and never rewrite it. A
+> second feature does **not** re-run the bootstrap and does **not** re-deliberate `gate`, `run`,
+> `architecture` or `code_rules` — those are amended only when the user asks, through a superseding
+> ADR. Layout:
+>
+> ```
+> .mismagent/
+>   profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
+>   decisions/ · architetture/          # the PROJECT trunk (the architect writes it)
+>   features/<feature>/                 # brief · tactical-model · manifest · blocks · proofs
+> ```
+>
+> **It is filled in at TWO moments** (a greenfield doesn't know everything yet) — both of them
+> happen on the **first** feature; later features only read it:
 > - **Bootstrap** (prerequisite of *explore*): `output_dir`, language of the ubiquitous
 >   language, known bounded contexts, list of sides. These are enough to start.
 > - **Post-architect** (inside *model*): `gate`, `dev_architecture`, stack-specifics — they

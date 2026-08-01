@@ -23,8 +23,11 @@ they dispatch the `mismagent-<name>` subagent; the agents also still show up in 
 installing/changing, a `/reload-plugins` may be needed for the new ones to enter the registry.)*
 
 ## 2. Profile: the BOOTSTRAP is enough to start
-You don't need the full profile before explore — you need the **bootstrap** (`explore`
-also creates it at step 0 if it's missing): in `.mismagent/profile.md` put
+The profile is the **project's junction point**: you write it **once**, on the first feature, and
+every later feature reads it (features are folders under `.mismagent/features/<feature>/` — they
+never rewrite the profile or re-deliberate the stack). You don't need the full profile before
+explore — you need the **bootstrap** (`explore` also creates it at step 0 if it's missing): in
+`.mismagent/profile.md` put
 - **output_dir** (recommended default: `.mismagent`),
 - **ubiquitous_language.lang** (the language the domain speaks),
 - the known **bounded contexts** and the **list of sides** (a single one is perfectly fine),
@@ -74,7 +77,7 @@ you confirm → flag).
   non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
 - **"Where are the tasks?"** Run **`/mismagent:board`** — a read-only live view of the blocks and
   their state. The work-item *is* the block: `build-manifest` seeds one **rich `<id>.md` file per
-  block** in `.mismagent/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## What to do`/
+  block** in `.mismagent/features/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## What to do`/
   `## Tasks`/`## Dependencies`, **status-less, no checkboxes**) — its **folder is its status**, moved only
   by the worker-composer. The board renders those files + their folder position; it never writes them.
   The block files are a derived projection of the authoritative `building-blocks.yaml` (re-run

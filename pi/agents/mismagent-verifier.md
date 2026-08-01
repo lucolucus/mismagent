@@ -114,7 +114,7 @@ If you are ever handed one, run the side's gate and return PASS on green / FAIL 
    - **automated** (UI smoke/screenshot folded into the gate) → the check must exist and be green in
      step 2; missing or red → **FAIL** (`render-check` red);
    - **manual run-the-app (recorded)** → require the recorded evidence: the
-     `<output_dir>/<feature>/render-proof/<block-id>/` produced by the **`run-app-smoke`** skill,
+     `<output_dir>/features/<feature>/render-proof/<block-id>/` produced by the **`run-app-smoke`** skill,
      or the note/screenshot path in the worker's handoff; absent → **FAIL** (`render-check` red,
      NOTE: "render proof not recorded").
    Non-`ui` blocks (or sides with no UI): `render-check=n/a`.

@@ -30,7 +30,7 @@ consumes, consumer-driven). If an idea becomes neither a component to build nor 
 it is noise: do not write it.
 
 ## Input
-- feature descriptions (`product-brief.md`, `context-map.md`);
+- the feature's `product-brief.md` and the project's `<output_dir>/context-map.md` (canonical names);
 - the visual material the **profile declares** (`materials.ui` — existing mockups/spikes ·
   `materials.sample` — domain screenshots; `none` → start from the brief, don't hunt for folders).
 

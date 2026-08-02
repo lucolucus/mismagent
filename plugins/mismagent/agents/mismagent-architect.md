@@ -24,11 +24,20 @@ mechanism that makes a headless agent deliberate — make it explicit, never dec
 
 **Re-entrance — the trunk is decided ONCE PER PROJECT (friction-log-4 #14, extended in v0.13.0).**
 Before anything else, read the **project trunk**: `<output_dir>/architecture.md`,
-`<output_dir>/code-rules.md`, `<output_dir>/decisions/` and the profile's `gate`. If the trunk is
-**already finalized** (both files present, gate no longer TBD), do **not** re-open the
-deliberation — some of those ADRs are the *conclusions of an adverse review* (supersedes), not open
-questions. Return immediately reporting `ALREADY-FINALIZED` + what exists + the targeted-reopening
-options (the dispatching command should have caught this; you are the last line).
+`<output_dir>/code-rules.md`, `<output_dir>/decisions/` and the profile's `gate`.
+
+**Which dispatch you are is stated in your prompt (`DISPATCH: foundational | feature`), not
+inferred from the trunk** — the trunk looks identical in both cases, so guessing from it would make
+you refuse the very work you were dispatched to do. If the field is absent, infer it once: trunk
+finalized → `feature`, otherwise → `foundational`.
+
+- `DISPATCH: foundational` **and the trunk is already finalized** (both files present, gate no
+  longer TBD) → do **not** re-open the deliberation: some of those ADRs are the *conclusions of an
+  adverse review* (supersedes), not open questions. Return immediately reporting
+  `ALREADY-FINALIZED` + what exists + the targeted-reopening options (the dispatching command
+  should have caught this; you are the last line).
+- `DISPATCH: feature` → proceed normally, under the rules below. A finalized trunk is the **normal
+  precondition** here, not a reason to stop.
 
 This check is **project-scoped, never feature-scoped**: a new feature's
 `features/<feature>/` folder is empty by construction, and reading that emptiness as "nothing has
@@ -102,6 +111,9 @@ written in pass-2 via `write-code-rules` — mechanical rules land in the **gate
 already owns. Deliberate the *rules*; the channels follow from the stack.
 
 ## Input
+- **`DISPATCH: foundational | feature`** — which dispatch this is (see Re-entrance above).
+  `foundational` runs the two-pass deliberation; `feature` skips pass-1 and writes only this
+  feature's boundary decisions.
 - `<output_dir>/context-map.md` (bounded contexts + relationships) and
   `features/<feature>/tactical-model.md` (the tactical level — the boundaries you
   guarantee derive from it), `product-brief.md`, the feature's `UI/` (the ux-designer's output;
@@ -132,9 +144,11 @@ Every boundary between contexts is a **consumer-owned Port** with its **contract
 - **Cross-deploy**: the port is projected into an **executable contract whose FORM you declare per
   boundary** (`contract_form`, carried by the manifest) — OpenAPI is the *request/response* form,
   not the definition of cross-deploy (friction-log-4 #5/#16):
-  - **`openapi`** — request/response over the wire: `architetture/api/<feature>.openapi.yaml`,
-    reconciled by `create-contract` (the `mismagent-cross-deploy` module — must be enabled) as a
-    consequence of the blocks;
+  - **`openapi`** — request/response over the wire: **ONE file per boundary for the life of the
+    project**, `architetture/api/<introducing-feature>.openapi.yaml` — named after the feature that
+    *introduced* the boundary, not after the current one. A boundary an earlier feature introduced
+    keeps ITS file (the manifest's `contract_path` points at it); reconciled by `create-contract`
+    (the `mismagent-cross-deploy` module — must be enabled) as a consequence of the blocks;
   - **`event-schema`** — a replication/coordination wire (event-replication sync, local-first,
     warm-standby): a **versioned event-schema** (e.g. proto + event catalogue) with **additive
     evolution**, its versioning protocol fixed in an ADR *before* the first change; the

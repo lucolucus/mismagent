@@ -125,7 +125,11 @@ The rule that decides the shape of every inter-context boundary (`build-manifest
   the **`mismagent-cross-deploy`** module (enable it in the marketplace: it is
   the profile that decides the weight of the method).
 - **contract form/location per boundary** (only if cross-deploy boundaries exist):
-  `<e.g. openapi in architetture/api/<feature>.openapi.yaml · event-schema in contracts/proto/>`
+  `<e.g. openapi in architetture/api/<introducing-feature>.openapi.yaml · event-schema in contracts/proto/>`
+  <!-- openapi: ONE file per boundary for the life of the project, named after the feature that
+       introduced it — a later feature reusing the boundary extends that file (manifest:
+       `contract_path`), it does not open a second one -->
+
 - **authorship:** reads consumer-driven; writes producer-driven; the architect arbitrates.
 
 ## Branching

@@ -18,8 +18,14 @@ guarantee** consumers design their folds against and the descriptor-reflection C
 catalogue), not here: this skill's OpenAPI mechanics don't apply, and those files may be a wave-0
 scaffold output (the worker-composer's Phase 1 defers their check accordingly).
 
-**Re-entrance (friction-log-4 #14):** if the feature's OpenAPI **already exists**, you are
-**extending/reconciling it**, never regenerating from scratch — the additive-vs-breaking
+**Re-entrance — the contract belongs to the BOUNDARY, not to the feature (friction-log-4 #14,
+extended in v0.13.0).** Before generating anything, scan **`<output_dir>/architetture/api/*.openapi.yaml`**
+— all of them, not just this feature's — for a contract that already covers this boundary
+(same consumer/supplier side pair). `api/<feature>.openapi.yaml` is absent **by construction** on a
+new feature: taking that absence as "no contract yet" would emit a *second* "SINGLE source" for a
+boundary that already has one, forking its `components/schemas` names and its `operationId`
+namespace — the exact drift the canonical-name discipline exists to prevent. If a contract for this
+boundary exists **under any name**, you **extend that file** — the additive-vs-breaking
 discipline below governs every touch, and the outcome reports the **delta** (operations
 added/changed/unchanged), not a fresh contract.
 
@@ -29,7 +35,9 @@ boundary declare *which* operations exist — a write per `application-service` 
 view that crosses the boundary. Here you **reconcile them into ONE executable OpenAPI**, filling in
 the shapes from the domain model and taking the **names** from the ubiquitous language of explore.
 Orientation: `methodology/mismagent.md`. Write **only** in the parent
-`<output_dir>/architetture/` — never code in the sub-repos.
+`<output_dir>/architetture/` and — via `write-adr` — `<output_dir>/decisions/` (the two are siblings
+in the project trunk, not nested): you are the trunk's second ADR writer alongside the architect.
+Never code in the sub-repos.
 
 ## Input
 - **`building-blocks.yaml`** — the **`boundaries:`** rows with `projection: cross-deploy` (pinned
@@ -42,8 +50,11 @@ Orientation: `methodology/mismagent.md`. Write **only** in the parent
 - `UI/` (visual source of the views for the reads), the per-side guides (from the profile), any contract to extend.
 
 ## Output
-1. `architetture/api/<feature>.openapi.yaml` — **SINGLE source** of the contract.
-2. `decisions/NNNN-<slug>.md` — the ADRs for the non-obvious choices.
+1. The boundary's OpenAPI — **SINGLE source** of that contract, ONE file per boundary for the life
+   of the project. Extend the existing one if the boundary already has it; only a boundary with no
+   contract yet gets a new `<output_dir>/architetture/api/<feature>.openapi.yaml`, named after the
+   feature that introduced it. Report its path so the manifest's `contract_path` can point at it.
+2. `<output_dir>/decisions/NNNN-<slug>.md` — the ADRs for the non-obvious choices (via `write-adr`).
 3. (optional) `api-backend-spec.md` narrative **generated** from the YAML or reduced to pointers.
 
 ## Non-negotiable rules of the contract

@@ -24,7 +24,9 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
   declares (`contract_form`: `openapi` → every cited `operationId` resolves · `event-schema` → the
   versioned schema files exist), **deferred** when the contract is an output of the wave-0 scaffold;
 - the profile's **gate is executable and DISCRIMINATING** (Phase 1's red-green proof — a gate that
-  cannot go red is not a gate), and the side's repo is **under git** (the worker-composer
+  cannot go red is not a gate). The proof is a **project** fact: accept **any**
+  `<output_dir>/features/*/gate-proof/<side>.md`, not only the current feature's — feature 2 emits no
+  wave-0 scaffold, so looking only under this feature would report a false BLOCKED, and the side's repo is **under git** (the worker-composer
   init's it with confirmation if not); a UI side with manual `ui_render_check` carries its
   **`run` binding** (pinned a priori — a gap here bounces to **the profile**, a targeted field edit).
 
@@ -34,8 +36,10 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
 grep -rlE '^status:' <output_dir>/features/<feature>/blocks/ && echo "VIOLATION: status field in a block file"
 grep -rlE '^\s*- \[[ x]\]' <output_dir>/features/<feature>/blocks/ \
   && echo "VIOLATION: checkbox (progress-as-state) in a block file — the ## Tasks list is read-only criteria"
-# cross-deploy only: operationIds declared in the YAML
-grep -nE 'operationId:' <output_dir>/architetture/api/<feature>.openapi.yaml 2>/dev/null
+# cross-deploy only: operationIds declared in the YAML the BOUNDARY points at
+# (boundary.contract_path from the manifest — a boundary an earlier feature introduced keeps its
+#  own file; grepping api/<this-feature>.openapi.yaml would false-BLOCK on an inherited boundary)
+grep -nE 'operationId:' <output_dir>/architetture/api/<contract_path>.yaml 2>/dev/null
 ```
 
 ## Outcome
@@ -47,6 +51,8 @@ grep -nE 'operationId:' <output_dir>/architetture/api/<feature>.openapi.yaml 2>/
   consumers to migrate), a **parked bounce** (`open-questions/<block-id>.md` awaiting the user), or
   an **open `type: spike` node** (its `Unblocks` blocks are not dispatched while it is open):
   list them separately — neither actionable nor an error. **Stale spikes** too: an `[ ]` entry in
-  the context-map's "Open spikes" that an ADR already answers (close via `write-adr`'s
+  the context-map's "Open spikes" **whose `owner:` is this feature** (the map is the project trunk;
+  filtering by context would sweep in another feature's spikes, since features share contexts) that an ADR already answers
+  (close via `write-adr`'s
   `closes_spike` + `[x]`) or that was never materialized as a node — name them, never pass them in
   silence (friction-log-4 #13).

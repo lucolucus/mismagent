@@ -1,11 +1,12 @@
 ---
 name: write-infra-notes
-description: 'mismAgent''s specialized writer of infrastructure considerations (explore/model). Produces <output_dir>/infra-notes.md in the FORM the profile dictates: cloud/cross-side (independent deploy units, secrets & identity, CI/CD) or desktop/single-side (desktop stack, local DB+migrations, backup/restore, per-OS packaging, updates). Seeds infra tasks/blocks and enforced_by ADRs. Invoked by explore (draft) and mismagent-architect (consolidation).'
+description: 'mismAgent''s specialized writer of infrastructure considerations (explore/model). Produces the PROJECT-level <output_dir>/infra-notes.md (trunk: one per project, AMENDED across features, never redrafted) in the FORM the profile dictates: cloud/cross-side (independent deploy units, secrets & identity, CI/CD) or desktop/single-side (desktop stack, local DB+migrations, backup/restore, per-OS packaging, updates). Seeds infra tasks/blocks and enforced_by ADRs. Invoked by explore ONLY to draft it when it does not exist yet, and by mismagent-architect (consolidation/amendment) — the architect owns the trunk.'
 ---
 
 # MismAgent — Write Infra Notes (writer, explore/model)
 
-Write/update `<output_dir>/infra-notes.md`: the infrastructure considerations
+Write/update `<output_dir>/infra-notes.md` — the **project's** infra notes, not the feature's:
+the infrastructure considerations
 that neither the PRD nor the contract cover, but that generate real work in the `infra` side's repo
 (from the profile). Orientation: `methodology/mismagent.md`.
 
@@ -25,7 +26,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 
 ## Template A — cross-side / cloud (multiple sides, cross-deploy boundaries)
 ```markdown
-# Infra notes — <feature>
+# Infra notes — <project>
 
 ## Environments & deploy units
 - INDEPENDENT deploys: one unit per side (BE, FE, sync), repo from the profile.
@@ -49,7 +50,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 
 ## Template B — single-side / desktop / on-prem (a single side, in-process boundaries)
 ```markdown
-# Infra notes — <feature>
+# Infra notes — <project>
 
 ## Stack & runtime
 - <chosen desktop stack (architect's ADR — deliberated with the user) and its runtime constraints>.
@@ -71,6 +72,12 @@ that matches the profile's sides. Sections that do not apply **are not written**
 ```
 
 ## Rules
+- **Project scope — amend, never redraft.** One infra-notes per project, in the `<output_dir>` root.
+  The templates below are the shape of the **first draft**; on any later feature you **read the
+  existing file first** and emit a **delta** — add what this feature's infra needs, leave everything
+  another feature established untouched. Only the **architect** amends it (explore drafts it once,
+  when it does not exist). Rewriting it per feature silently drops the packaging, backup, retention
+  and update decisions the architect consolidated earlier.
 - Every item in the final section **must** map to a task/ADR/gate, otherwise it is a zombie.
 - **Mechanical** constraints (path, identity, naming) → flag them as `enforced_by` candidates
   to be formalized with `write-adr`.

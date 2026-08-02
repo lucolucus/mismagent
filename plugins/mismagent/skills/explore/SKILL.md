@@ -21,7 +21,7 @@ consumer, **do not write it**.
 **What a "feature" is — and is NOT** (friction-log-4, open notes): a feature is a unit of
 **delivery** (one manifest, one build) — not a unit of analysis, not a code module. Depth of
 analysis never lives in "more features": per-context depth lives in the **tactical model**
-(context-map), technology/global depth in `research/` + the ADRs + the architecture overview,
+(`features/<feature>/tactical-model.md`), technology/global depth in `research/` + the ADRs + the architecture overview,
 per-block depth in the manifest's **rich block files**. When the user asks for "one feature per
 bounded context", they are usually asking for **depth**, not for portfolio slices — probe which
 depth they want before cutting anything.
@@ -35,12 +35,14 @@ LANGUAGE here; let the challenger attack any meta-motor whose only consumer toda
 ## Output (each with its consumer)
 1. `product-brief.md` — problem, user, expected value, scope, outcome.
    → consumed by the **gate towards model**; without it, model does not start.
-2. `context-map.md` — bounded contexts + relationships + **ubiquitous language** + **Seeds for the
-   tactical** (persisted handoff towards `mismagent-tactical-modeler`) + open spikes.
-   Written by **`mismagent-analyst`** (via `write-context-map`).
-   → consumed by `mismagent-tactical-modeler` (the seeds → tactical model) and by
-   **`build-manifest`** (bounded contexts → boundaries; aggregates/invariants →
-   blocks; **canonical names** → types and, on cross-deploy boundaries, OpenAPI schemas via
+2. `<output_dir>/context-map.md` (**project trunk**) — bounded contexts + relationships +
+   **ubiquitous language** + open spikes. Written by **`mismagent-analyst`** (via
+   `write-context-map`), and **amended** on every later feature, never re-forked.
+2b. `<output_dir>/features/<feature>/tactical-model.md` — the **Seeds for the tactical** (persisted
+   handoff towards `mismagent-tactical-modeler`), written by the analyst via `write-tactical-model`.
+   → consumed by `mismagent-tactical-modeler` (the seeds → the tactical model in the same feature
+   file) and by **`build-manifest`** (bounded contexts → boundaries; aggregates/invariants, from
+   `tactical-model.md` → blocks; **canonical names** → types and, on cross-deploy boundaries, OpenAPI schemas via
    `create-contract`); the `mismagent-verifier`'s anti-shadow check holds the diff's domain types
    to those canonical names (cross-deploy: via the contract-generated types; in-process: a
    synonym/rename of a canonical term → **FAIL**), and it demands a test for every invariant.
@@ -54,7 +56,7 @@ LANGUAGE here; let the challenger attack any meta-motor whose only consumer toda
 0. **Profile bootstrap (ONLY if missing — it is the project's junction point, not a per-feature
    artifact):** on any feature after the first, the profile already exists: **read it, never
    re-bootstrap it**. The same holds for the whole project trunk (`context-map.md`,
-   `architecture.md`, `code-rules.md`, `decisions/`) — a new feature adds a folder under
+   `architecture.md`, `code-rules.md`, `infra-notes.md`, `decisions/`, `architetture/`) — a new feature adds a folder under
    `<output_dir>/features/`, it does not restart the project. explore writes into `<output_dir>` and fixes canonical names,
    so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
    NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
@@ -86,7 +88,9 @@ LANGUAGE here; let the challenger attack any meta-motor whose only consumer toda
    map, or a renamed term, forks the canonical names that everything downstream inherits; a rename
    that is genuinely needed goes to the user and becomes an ADR.
 4. **Converge on the brief:** write `product-brief.md` (problem/user/value/scope/outcome).
-5. **Infra, if needed:** invoke `write-infra-notes` for the `infra-notes.md` draft.
+5. **Infra — only if `<output_dir>/infra-notes.md` does NOT exist yet:** invoke `write-infra-notes`
+   for the first draft. It is a **trunk** file: on any later feature it already exists and only the
+   **architect** amends it (at the infra checkpoint). Never redraft it per feature.
 6. **Research on-demand:** if a decision requires investigation → `research/<topic>.md`.
 
 ## Harness read-only mode (e.g. plan mode)

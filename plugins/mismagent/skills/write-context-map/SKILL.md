@@ -32,6 +32,8 @@ If an element has no consumer, **do not write it**.
 
 ## Open spikes (unknowns/risks → future spike nodes)
 - [ ] <spike-slug>: <question to answer> — <closure criterion> — expected side: <from the profile>
+      — owner: <the feature that raised it>   <!-- REQUIRED: the map is project-wide, so a build
+           run must be able to tell its own spikes from another feature's -->
 ```
 
 ## Rules

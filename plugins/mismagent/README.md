@@ -16,8 +16,9 @@ project. Each project provides its own profile — **the active profile lives in
 `<output_dir>/profile.md`, default `.mismagent/profile.md`**, and it is the project's **junction
 point**: written once, read by every feature. Features are folders under
 `<output_dir>/features/<feature>/`; the project trunk (`context-map.md`, `architecture.md`,
-`code-rules.md`, `decisions/`, `architetture/`) sits in the `<output_dir>` root and only the
-architect writes it (see `methodology/mismagent.md` § "Where things live") (template: `PROFILE.md`; filled-in
+`code-rules.md`, `infra-notes.md`, `decisions/`, `architetture/`) sits in the `<output_dir>` root and
+only the architect writes it — the one exception being `context-map.md`, which the **analyst**
+amends (see `methodology/mismagent.md` § "Where things live") (template: `PROFILE.md`; filled-in
 example: `profiles/example.md`): from there agents read sides, repos, gates, dev-architecture
 memories, boundary rules, boundary projections and the commit format.
 

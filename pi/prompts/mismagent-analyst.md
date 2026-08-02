@@ -15,6 +15,8 @@ extend or reopen (a new context? a name to re-fix?), then dispatch with that nam
 (friction-log-4 #14).
 
 Otherwise dispatch the **`mismagent-analyst`** subagent (the `subagent` tool) on `$ARGUMENTS` (or what survived the
-challenger). Fix with me the **ubiquitous language** (one concept = one canonical name). On
+challenger), **passing it the existing `<output_dir>/context-map.md` as authoritative** when one
+exists: it **amends** that map — adds the contexts and terms this feature introduces, reuses the
+rest verbatim — and never starts a second one. Fix with me the **ubiquitous language** (one concept = one canonical name). On
 `NEEDS-INPUT` bring the `AMBIGUITIES` to me and re-dispatch. Output: the project `context-map.md` (strategic) + the feature's `tactical-model.md` (seeds) (
 ubiquitous language + Seeds for the tactical). See `agents/mismagent-analyst.md`.

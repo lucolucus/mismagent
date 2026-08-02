@@ -206,6 +206,9 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
                                            # stays stable (versions/hot-change/republication)
        contract_test: invariant-test | consumer-driven              # rule 3
        operation_ids: [<operationId>…]     # contract_form: openapi ONLY — each must resolve in the OpenAPI
+       contract_path: <path>               # contract_form: openapi ONLY — WHICH OpenAPI holds them.
+                                           # A boundary introduced by an earlier feature keeps ITS
+                                           # file: never assume api/<this-feature>.openapi.yaml
        schema_paths: [<path>…]             # contract_form: event-schema ONLY — the versioned schema
                                            # files (proto/event catalogue); may be a wave-0 scaffold
                                            # OUTPUT (Phase 1 defers their check until the first

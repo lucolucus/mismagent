@@ -31,11 +31,11 @@ Concept dialogued **with the user** → `UI/ux-proposal.md`. No UI → skip, say
 **once per PROJECT**, not once per feature. Read the **project trunk**:
 
 - **Trunk absent** (`<output_dir>/architecture.md` or `code-rules.md` missing, **or** the profile's
-  `gate` still reads `manual — TBD after the stack ADR`) → **FOUNDATIONAL dispatch**: the two-pass
-  below.
-- **Trunk present** → **FEATURE dispatch**: skip pass-1 entirely. Dispatch the architect with the
-  trunk as given (`architecture.md`, `code-rules.md`, `<output_dir>/decisions/`, the profile) and
-  let it write **only** what this feature adds: its boundary decisions and any feature-scoped ADR.
+  `gate` still reads `manual — TBD after the stack ADR`) → **FOUNDATIONAL dispatch**: dispatch with
+  `DISPATCH: foundational` and run the two-pass below.
+- **Trunk present** → **FEATURE dispatch**: skip pass-1 entirely. Dispatch the architect with
+  `DISPATCH: feature` and the trunk as given (`architecture.md`, `code-rules.md`,
+  `<output_dir>/decisions/`, the profile), and let it write **only** what this feature adds: its boundary decisions and any feature-scoped ADR.
   **State the trunk to the user** ("stack, style and code rules are already fixed by
   `decisions/NNNN-…`; I'm not reopening them") and reopen a foundational decision **only if they
   ask** — then it is an explicit **amendment**: a superseding ADR in `<output_dir>/decisions/`,

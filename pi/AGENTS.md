@@ -122,7 +122,7 @@ flowchart LR
   (explores the domain → `research/<topic>.md`, when the domain is new) · subagent
   **`mismagent-challenger`** (with fresh context tries to *demolish* the idea) · subagent
   **`mismagent-analyst`** (models the **strategic**: bounded contexts + **ubiquitous language** in the
-  domain language + **seeds for the tactical** persisted in the context-map).
+  domain language + **seeds for the tactical** persisted in `features/<feature>/tactical-model.md`).
 - explore→model gate: **PM-rigor** checklist: does the brief cover problem/user/value/scope?
 - output: the strategic model + the canonical names + research material + the spikes.
 
@@ -135,7 +135,8 @@ at the first missing artifact. The step-by-step form stays equivalent:
 
 *How to invoke it (in order). `[skill]`/`[command]` are pi **skills** — invoke with `/skill:mismagent-<name>`; `[agent]` is a **prompt template** — type `/mismagent-<name>` and it dispatches the subagent of the same name via the `subagent` tool. You can still ask pi to *"spawn `mismagent-X` via the subagent tool"* if you prefer the headless form.):*
 1. **`/mismagent-tactical-modeler`** `[agent]` — completes the model: aggregates/invariants/events/
-   commands per context (it starts from the context-map's "Seeds for the tactical").
+   commands per context, into `features/<feature>/tactical-model.md` (it starts from the "Seeds for
+   the tactical" of that same file; the project context-map is read-only for it).
 2. **`/skill:mismagent-ux-designer`** `[skill]` — imagines the UI → views (only if there is UI).
 3. **`/mismagent-architect`** `[agent]` — architecture + ADRs + boundaries with projection.
    **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
@@ -191,14 +192,16 @@ typed out of flow it has no block/context to work on.
 You type **`/skill:mismagent-explore <the idea in one sentence>`**. The skill: (step 0) if missing,
 creates the bootstrap `.mismagent/profile.md` (output_dir, language of the names, sides); dialogues
 with you; dispatches **`mismagent-challenger`** (KILL → stop · RESHAPE → redesign with you ·
-PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-analyst`** (context-map +
-"Seeds for the tactical"). It converges on the `product-brief.md`.
+PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-analyst`** (amends the
+project `context-map.md`; writes the "Seeds for the tactical" into
+`features/<feature>/tactical-model.md`). It converges on the `product-brief.md`.
 *Gate:* brief with problem/user/value/scope + context-map with the bounded contexts. → model.
 
 **2 · model — you confirm the boundaries.**
 You type **`/skill:mismagent-model <feature>`** — the conductor drives the five steps below and stops at
 the checkpoints (you decide; it types). Or step-by-step, equivalently:
-1. You type **`/mismagent-tactical-modeler`** → Tactical model in the context-map (it absorbs
+1. You type **`/mismagent-tactical-modeler`** → the "Tactical model" sections of
+   `features/<feature>/tactical-model.md` (it absorbs
    the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
 2. *(if there is UI)* you type **`/skill:mismagent-ux-designer`** → concept with you → `UI/ux-proposal.md`.
 3. You type **`/mismagent-architect`** → it presents the **stack/architecture/infra alternatives AND

@@ -18,60 +18,100 @@
 > example: `.agents/skills/mismagent-explore/references/profile-example.md`) — from which the agents read the sides, the repos, the gates, the
 > dev-architecture skills, the boundary rules, the boundary projections and the commit format.
 >
-> **Handoff rule:** every handoff that crosses a movement is a **FILE** in
-> `<output_dir>/<feature>/` (e.g. the "Seeds for the tactical" in the context-map), never just
-> a return message — movements may run in different sessions.
+> **Handoff rule:** every handoff that crosses a movement is a **FILE** (e.g. the "Seeds for the
+> tactical" in `features/<feature>/tactical-model.md`), never just a return message — movements may
+> run in different sessions.
+
+## Where things live — the trunk and the features (v0.13.0)
+
+`<output_dir>` (default `.mismagent`) has **two levels**, and the split is the method's own
+project/feature boundary. The **profile is the project's junction point**; a feature is a folder
+that is added and thrown away without touching anything above it.
+
+```
+.mismagent/
+  profile.md            # THE JUNCTION POINT — sides, repos, gate, projections, commit format
+  context-map.md        # strategic: bounded contexts + ubiquitous language + relationships
+  architecture.md       # the chosen style + module map + allowed dependency directions
+  code-rules.md         # the deliberated code-writing rules, each with its enforcement channel
+  infra-notes.md        # the deploy/infra context
+  decisions/            # ADRs — scope: global | <side> | infra (never per-feature)
+  architetture/         # architecture overview, dev-architecture per CODEBASE, api/ contracts
+  features/
+    <feature>/          # everything that is born and dies with this feature
+      product-brief.md · tactical-model.md · building-blocks.yaml
+      blocks/<ctx>/{todo,doing,done}/ · open-questions/ · tasks/
+      UI/ · research/ · render-proof/ · gate-proof/
+```
+
+**The rule that follows from it, and the reason the split exists:** a signal is read at the scope
+of the artifact it guards. A new feature's folder is empty *by construction*, so emptiness there
+says nothing about whether the project has decided its stack. Reading a feature-local signal to
+decide a project-level artifact is what made the architect re-deliberate the stack — and rewrite
+the profile — on every new feature. Concretely:
+
+- the **ubiquitous language** is amended in the one project map, never re-forked per feature
+  (two maps = two sets of canonical names = the drift the verifier's greps exist to catch);
+- the **foundational deliberation** (stack, style, code rules, `gate`, `run`) happens **once per
+  project**; a later feature gets a *feature dispatch* that reuses the trunk, and changing a
+  foundational decision is an explicit **amendment** (a superseding ADR), never a silent rewrite;
+- **only the architect writes the trunk.** Analyst amends `context-map.md`; everyone else writes
+  inside `features/<feature>/`.
+
+*(Before v0.13.0 everything lived in `<output_dir>/<feature>/`, context-map included. Existing
+projects: move the trunk files up, the rest under `features/<feature>/` — see the v0.13.0 note in
+the repo README. There is no compatibility shim.)*
 
 ## The flow at a glance
 
 ```mermaid
-flowchart TD
-    idea([raw idea]) --> EX
-
+flowchart LR
     subgraph EX["explore — you in dialogue"]
         direction TB
-        dlg["in-session dialogue with the user<br/>(+ profile bootstrap if missing)"]
-        chal["mismagent-challenger — subagent, fresh context<br/>KILL · RESHAPE · PROCEED"]
-        res["mismagent-researcher — subagent<br/>explores the domain, gathers material (if new)"]
-        ana["mismagent-analyst — subagent<br/>models the strategic + ubiquitous language"]
-        cmap[("context-map.md<br/>strategic + seeds for the tactical + spikes")]
+        dlg["in-session dialogue<br/>(+ profile bootstrap<br/>if missing)"]
+        chal["mismagent-challenger<br/>fresh context<br/>KILL · RESHAPE · PROCEED"]
+        res["mismagent-researcher<br/>gathers material<br/>(only if new)"]
+        ana["mismagent-analyst<br/>strategic +<br/>ubiquitous language"]
         dlg --> chal
-        chal -- "KILL / RESHAPE" --> dlg
-        chal -- PROCEED --> res
-        res --> ana
-        ana --> cmap
+        chal -- "KILL /<br/>RESHAPE" --> dlg
+        chal -- PROCEED --> res --> ana
     end
-
-    cmap --> MO
 
     subgraph MO["model — you confirm the boundaries"]
         direction TB
-        tact["mismagent-tactical-modeler — subagent<br/>aggregates/invariants/events/commands → context-map"]
-        ux["ux-designer — skill<br/>imagines the UI → views (if there is UI)"]
-        arch["mismagent-architect — subagent<br/>two-pass DISCOVERY → stack + ARCH-STYLE + INFRA + CODE-RULES<br/>DELIBERATED with the user, then finalizes the gate"]
-        bman["build-manifest — skill<br/>tactical → building-block manifest<br/>types PINNED + tests_nl + scaffold + rich block files"]
-        manifest[("building-blocks.yaml<br/>blocks + boundaries + projection")]
-        ccon["create-contract — skill, cross-deploy MODULE<br/>ONLY cross-deploy boundaries → OpenAPI"]
-        tact --> arch --> bman --> manifest
+        tact["mismagent-tactical-modeler<br/>aggregates · invariants<br/>events · commands"]
+        ux["ux-designer<br/>UI → views<br/>(if there is UI)"]
+        arch["mismagent-architect, two-pass<br/>stack · style · infra · rules<br/>DELIBERATED with you<br/>ONCE PER PROJECT"]
+        bman["build-manifest<br/>types PINNED · tests_nl<br/>scaffold · block files"]
+        ccon["create-contract<br/>cross-deploy MODULE<br/>→ OpenAPI"]
+        tact --> arch --> bman
         ux --> bman
-        manifest -. "if cross-deploy" .-> ccon
+        bman -. "if cross-deploy" .-> ccon
     end
 
-    manifest --> BU
-
-    subgraph BU["build — you delegate; confirm only at the end"]
+    subgraph BU["build — you delegate; confirm at the end"]
         direction TB
-        comp["$mismagent-worker-composer — command<br/>owner-first waves · D1 green on its own ·<br/>merge=composition · D2 boundary welded"]
-        wrk["mismagent-worker ×N — subagent<br/>skill = block-type × projection + side memory"]
-        ver["mismagent-verifier (structural) + code-review (semantic)"]
-        conf{{"the user confirms"}}
-        rel["green release-tag → turn on the feature-flag"]
+        comp["$mismagent-worker-composer<br/>owner-first waves · merge<br/>= composition · D2 weld"]
+        wrk["mismagent-worker ×N<br/>block-type × projection<br/>+ side memory"]
+        ver["mismagent-verifier (structural)<br/>+ code-review (semantic)"]
         comp --> wrk --> ver
         ver -- FAIL --> wrk
-        ver -- PASS --> conf --> rel
     end
 
-    rel --> done([published])
+    idea([raw idea]) --> dlg
+    ana == "PROJECT context-map.md (amended)<br/>+ feature tactical-model.md" ==> tact
+    bman == "building-blocks.yaml<br/>blocks · boundaries · projection" ==> comp
+    ver -- PASS --> conf{{"you<br/>confirm"}}
+    conf --> rel([green tag →<br/>feature flag])
+
+    classDef human fill:#fff8c5,stroke:#d4a72c,stroke-width:2px,color:#24292f
+    classDef step fill:#f6f8fa,stroke:#d0d7de,color:#24292f
+    classDef term fill:#dafbe1,stroke:#2da44e,color:#24292f
+    classDef movement fill:#ffffff,stroke:#afb8c1,stroke-dasharray:4 3,color:#57606a
+    class arch,conf human
+    class dlg,chal,res,ana,tact,ux,bman,ccon,comp,wrk,ver step
+    class idea,rel term
+    class EX,MO,BU movement
 ```
 
 ## explore → model → build
@@ -82,7 +122,7 @@ flowchart TD
   (explores the domain → `research/<topic>.md`, when the domain is new) · subagent
   **`mismagent-challenger`** (with fresh context tries to *demolish* the idea) · subagent
   **`mismagent-analyst`** (models the **strategic**: bounded contexts + **ubiquitous language** in the
-  domain language + **seeds for the tactical** persisted in the context-map).
+  domain language + **seeds for the tactical** persisted in `features/<feature>/tactical-model.md`).
 - explore→model gate: **PM-rigor** checklist: does the brief cover problem/user/value/scope?
 - output: the strategic model + the canonical names + research material + the spikes.
 
@@ -95,7 +135,8 @@ at the first missing artifact. The step-by-step form stays equivalent:
 
 *How to invoke it (in order). `[skill]`/`[command]` are Codex **skills** — invoke with `$mismagent-<name>`; `[agent]` is a Codex **subagent** — ask Codex to *"spawn `mismagent-<name>` on <input>"* (it spawns subagents only on explicit request).:*
 1. **`$mismagent-tactical-modeler`** `[agent]` — completes the model: aggregates/invariants/events/
-   commands per context (it starts from the context-map's "Seeds for the tactical").
+   commands per context, into `features/<feature>/tactical-model.md` (it starts from the "Seeds for
+   the tactical" of that same file; the project context-map is read-only for it).
 2. **`$mismagent-ux-designer`** `[skill]` — imagines the UI → views (only if there is UI).
 3. **`$mismagent-architect`** `[agent]` — architecture + ADRs + boundaries with projection.
    **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
@@ -151,14 +192,16 @@ typed out of flow it has no block/context to work on.
 You type **`$mismagent-explore <the idea in one sentence>`**. The skill: (step 0) if missing,
 creates the bootstrap `.mismagent/profile.md` (output_dir, language of the names, sides); dialogues
 with you; dispatches **`mismagent-challenger`** (KILL → stop · RESHAPE → redesign with you ·
-PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-analyst`** (context-map +
-"Seeds for the tactical"). It converges on the `product-brief.md`.
+PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-analyst`** (amends the
+project `context-map.md`; writes the "Seeds for the tactical" into
+`features/<feature>/tactical-model.md`). It converges on the `product-brief.md`.
 *Gate:* brief with problem/user/value/scope + context-map with the bounded contexts. → model.
 
 **2 · model — you confirm the boundaries.**
 You type **`$mismagent-model <feature>`** — the conductor drives the five steps below and stops at
 the checkpoints (you decide; it types). Or step-by-step, equivalently:
-1. You type **`$mismagent-tactical-modeler`** → Tactical model in the context-map (it absorbs
+1. You type **`$mismagent-tactical-modeler`** → the "Tactical model" sections of
+   `features/<feature>/tactical-model.md` (it absorbs
    the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
 2. *(if there is UI)* you type **`$mismagent-ux-designer`** → concept with you → `UI/ux-proposal.md`.
 3. You type **`$mismagent-architect`** → it presents the **stack/architecture/infra alternatives AND

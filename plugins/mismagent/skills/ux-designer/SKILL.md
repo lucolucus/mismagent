@@ -27,7 +27,7 @@ consumes, consumer-driven). If an idea becomes neither a component to build nor 
 it is noise: do not write it.
 
 ## Input
-- feature descriptions (`product-brief.md`, `context-map.md`);
+- the feature's `product-brief.md` and the project's `<output_dir>/context-map.md` (canonical names);
 - the visual material the **profile declares** (`materials.ui` — existing mockups/spikes ·
   `materials.sample` — domain screenshots; `none` → start from the brief, don't hunt for folders).
 
@@ -35,13 +35,13 @@ it is noise: do not write it.
 1. **Read** descriptions + screens: what exists, what the user expects.
 2. **Diverge:** propose **1-3 UI concepts** (layout, flow, component breakdown).
 3. **Converge** with the user on one.
-4. **Write** `<output_dir>/<feature>/UI/ux-proposal.md`: screens, components, **states**
+4. **Write** `<output_dir>/features/<feature>/UI/ux-proposal.md`: screens, components, **states**
    (empty / error / loading), and for each screen the **data views** it needs
    (→ they will seed the **read-models' `view_shape`**, consumer-driven).
 5. **Unknowns → spikes** (materialized by `write-task`).
 
 ## Output (with its consumer)
-- `<output_dir>/<feature>/UI/ux-proposal.md` → consumed by `build-manifest`
+- `<output_dir>/features/<feature>/UI/ux-proposal.md` → consumed by `build-manifest`
   (`ui` blocks + read-models' `view_shape` = the consumer-driven views).
 
 ## Boundaries

@@ -15,7 +15,7 @@ already drawn — *every piece green on its own* + *every seam keeps the green*.
 `redesign/composer-spec.md`.
 
 ## 0 · INGEST
-`<the argument this skill was invoked with>` = feature or path → resolve `<output_dir>/<feature>/`. Read **`building-blocks.yaml`**
+`<the argument this skill was invoked with>` = feature or path → resolve `<output_dir>/features/<feature>/`. Read **`building-blocks.yaml`**
 (the **authoritative** input: blocks + boundaries + projection + PINNED TYPES; produced by the model
 movement; its normative shape: build-manifest § "The manifest's shape") and
 the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`: sides, gate,
@@ -40,8 +40,11 @@ that runs this same lens before you launch). Verify, on the manifest:
   A gap → **not ready**: BOUNCE to build-manifest **with the gap named** (regenerate, never hand-patch);
 - ∀ boundary: **PINNED types** (Published Language: primitive or shared-kernel, **never** the
   supplier's domain) + `contract_test` + `projection`; **cross-deploy** boundary → its **declared
-  contract exists, in the FORM the boundary declares** (`contract_form`): `openapi` → the YAML
-  exists and every cited `operationId` resolves · `event-schema` → the versioned schema files
+  contract exists, in the FORM the boundary declares** (`contract_form`): `openapi` → the YAML the
+  boundary's **`contract_path`** names exists and every cited `operationId` resolves **in that
+  file** (a boundary an earlier feature introduced keeps ITS contract — never assume
+  `api/<this-feature>.openapi.yaml`; a missing `contract_path` on an openapi boundary is itself a
+  gap → BOUNCE to build-manifest) · `event-schema` → the versioned schema files
   (proto/event catalogue) exist at the declared `schema_paths`. You verify the contract the model
   **declared**, never assume OpenAPI — an ADR may have decided the wire is event-replication, not
   request/response (friction-log-4 #16). **Greenfield exemption, symmetric with the scaffold's:**
@@ -62,10 +65,19 @@ that runs this same lens before you launch). Verify, on the manifest:
   every D1 vacuously green with the verifier reporting green. Demand the **red-green proof**: the
   gate has been seen RED at least once on a failing probe test in the module graph it claims to
   guard — the wave-0 scaffold produces it and records it in
-  **`<output_dir>/<feature>/gate-proof/<side>.md`** (the file you read here; a greenfield side
-  whose scaffold block is still `todo` owes it at wave 0, not at this gate). No proof on a
-  built side, or a gate blind to its modules' tests → **not ready**, bounce target = **the
-  profile** (fix the gate string with the user);
+  **`<output_dir>/features/<feature>/gate-proof/<side>.md`** (a greenfield side whose scaffold block
+  is still `todo` owes it at wave 0, not at this gate). **The proof is a PROJECT fact** — it proves
+  the profile's `gate` string, not this feature — so accept **any** `features/*/gate-proof/<side>.md`
+  and re-demand a fresh one only when the `gate` string or the side's module graph changed since the
+  proof was recorded — and when it fires, the route out is a **probe re-run on the side**, not the
+  profile: dispatch a worker to re-run the gate against a deliberately failing probe test in the
+  grown module graph and rewrite `gate-proof/<side>.md` under the CURRENT feature. Bounce to the
+  **profile** only when the `gate` string itself is wrong (blind to its modules' tests); a merely
+  stale proof is work the build can do, not a decision the user owes. (Feature 2 emits no scaffold — `build-manifest`: "if the project already
+  builds, emit no scaffold" — so demanding the proof inside the current feature folder would
+  hard-block every feature after the first.) No proof anywhere on a built side, or a gate blind to
+  its modules' tests → **not ready**, bounce target = **the profile** (fix the gate string with the
+  user);
 - **greenfield, next wave ≥2 parallel domain blocks, `dev_architecture: none`** → the codebase's
   style memory is MISSING (friction-log-4 #21): report it and route a **targeted architect style
   dispatch** (its §3½ — the authored dev-architecture, deliberated with the user; never a pass-1
@@ -91,7 +103,13 @@ is still false is **not** a block — report it as an **explicit pending**, don'
 question, don't re-dispatch its block — and for every **open `type: spike` node**
 (`tasks/<side>/{backlog,todo}/`): report its question; a block named in an open spike's `Unblocks`
 is **not ready** while the spike is open (the spike's closure protocol is the answer).
-- **stale spikes (context-map)?** With the model movement concluded, an **`[ ]` entry in the
+- **stale spikes (context-map)?** The context-map is the **project** trunk and carries spikes from
+  every feature, while the spike **nodes** are feature-local (`features/<feature>/tasks/`). Judge
+  **only** the spikes whose **`owner:`** is this feature (the field `write-context-map` requires on
+  every entry). Do **not** filter by context: feature 2 normally touches contexts feature 1 already
+  modeled, so a context filter would sweep in feature-1 spikes that have no node under yours and
+  report them as "never materialized". An entry with no `owner:` is a pre-v0.13.0 leftover — report
+  it, don't act on it. Within that scope, an **`[ ]` entry in the
   context-map's "Open spikes"** is either **already answered** (an ADR satisfies its closure
   criterion but nobody closed it → close via `write-adr`'s backlink discipline: `closes_spike:` +
   `[x]`) or **never materialized** (no `type: spike` node exists → materialize it or close it).
@@ -119,7 +137,7 @@ informational on this branch — acceptance is the gate, not a §3 review.)*
 `ready` = the blocks whose consumed boundaries' **owners are MERGED on the integration line**
 (D1 green + §4 — *not* "in `done`": `done` = welded (§5) requires the consumer merged, so keying
 ready on `done` would deadlock owner↔consumer) **and** with no open question parked
-(`<output_dir>/<feature>/open-questions/<id>.md` exists → not ready: report the question, don't
+(`<output_dir>/features/<feature>/open-questions/<id>.md` exists → not ready: report the question, don't
 dispatch). Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
 parallel** (cap N; **one worktree per block**, cut **from the integration line** — a consumer must
@@ -136,14 +154,14 @@ from the base branch). For each ready block:
   of the boundaries** the block touches (never the other side's source — only its public API /
   the port's signature);
 - worker → `READY-FOR-REVIEW` → §3 · `BOUNCED` (ambiguous AC) → **park it**: `git mv` `doing→todo` +
-  write the question to **`<output_dir>/<feature>/open-questions/<block-id>.md`** (rule #4: a
+  write the question to **`<output_dir>/features/<feature>/open-questions/<block-id>.md`** (rule #4: a
   cross-firing handoff is a FILE — the block stays visible on the board and is never re-dispatched
   while the file exists; the user answers, `build-manifest` folds the answer into the spec and
   clears the file) · `BLOCKED` → stays.
 
 ## 3 · D1 — GREEN ON ITS OWN
 **`ui` block on a manual-`ui_render_check` side — the render proof comes FIRST, and you own it:**
-if `<output_dir>/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
+if `<output_dir>/features/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
 on the block's worktree (the worker can't manufacture evidence, and the verifier's step 8 demands
 it). `RENDER-FAIL` → a D1 FAIL (worker rework, findings named); `RENDER-OK` → proceed.
 For each `READY-FOR-REVIEW`, **with fresh context**: `mismagent-verifier` (the profile's build + tests +

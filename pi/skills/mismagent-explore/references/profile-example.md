@@ -18,6 +18,13 @@ materials:
 capacity: "2 devs, ~10h/week total"   # architect + build-manifest size stack and waves on this
 ```
 
+## Project definition files (the architect wrote these in *model*)
+
+```yaml
+architecture: .mismagent/architecture.md   # chosen style + module map + allowed dependency directions
+code_rules: .mismagent/code-rules.md       # the deliberated rules, each with its enforcement channel
+```
+
 ## Sides (independent deploy units)
 
 ```yaml
@@ -48,7 +55,9 @@ sides:
 ## Boundaries & projection
 - BE and FE are different sides ⇒ the `Maintenance` read/write boundaries consumed by the FE are
   **`projection: cross-deploy`** → requires the **`mismagent-cross-deploy`** module.
-- **contract format/location:** a single OpenAPI YAML in `architetture/api/<feature>.openapi.yaml`;
+- **contract format/location:** a single OpenAPI YAML per boundary, in
+  `architetture/api/<introducing-feature>.openapi.yaml` (a later feature reusing the boundary
+  extends that file — the manifest's `contract_path` points at it);
   stable `operationId`s; `components/schemas` with the **canonical domain name** (e.g. `InterventionType`).
 - **authorship:** reads **consumer-driven** (the views are defined by the FE), writes
   **producer-driven** (the commands by the BE/domain); the architect arbitrates feasibility/coherence.

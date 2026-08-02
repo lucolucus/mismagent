@@ -11,7 +11,7 @@ coherent with mismAgent's invariant "only the worker-composer moves state". Zero
 (Python 3 stdlib only).
 
 Usage:
-    python3 board.py [<output_dir>/<feature> | <project-root> | .] [--port N]
+    python3 board.py [<output_dir>/features/<feature> | <project-root> | .] [--port N]
 """
 import argparse
 import json
@@ -211,20 +211,25 @@ def resolve_blocks(arg):
         return os.path.abspath(cand)
     if os.path.basename(arg.rstrip("/")) == "blocks" and os.path.isdir(arg):
         return os.path.abspath(arg)
-    mm = os.path.join(arg, ".mismagent")
-    if os.path.isdir(mm):
-        feats = [f for f in sorted(os.listdir(mm)) if os.path.isdir(os.path.join(mm, f, "blocks"))]
+    # project root (or <output_dir>): features live under <output_dir>/features/<feature>/
+    for base in (os.path.join(arg, ".mismagent", "features"), os.path.join(arg, "features")):
+        if not os.path.isdir(base):
+            continue
+        feats = [f for f in sorted(os.listdir(base))
+                 if os.path.isdir(os.path.join(base, f, "blocks"))]
         if len(feats) == 1:
-            return os.path.abspath(os.path.join(mm, feats[0], "blocks"))
+            return os.path.abspath(os.path.join(base, feats[0], "blocks"))
         if feats:
-            raise SystemExit("Several features found (%s). Pass one: board.py .mismagent/<feature>" % ", ".join(feats))
-    raise SystemExit("No blocks/ folder found under %r" % arg)
+            raise SystemExit("Several features found (%s). Pass one: board.py %s/<feature>"
+                             % (", ".join(feats), os.path.relpath(base, arg) or base))
+    raise SystemExit("No blocks/ folder found under %r "
+                     "(expected <output_dir>/features/<feature>/blocks/)" % arg)
 
 
 def main():
     ap = argparse.ArgumentParser(description="mismAgent read-only board")
     ap.add_argument("feature_dir", nargs="?", default=".",
-                    help="<output_dir>/<feature>, the project root, or a blocks/ dir")
+                    help="<output_dir>/features/<feature>, the project root, or a blocks/ dir")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
     blocks_dir = resolve_blocks(args.feature_dir)

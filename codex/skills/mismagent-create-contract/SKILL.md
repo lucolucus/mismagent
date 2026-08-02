@@ -23,8 +23,14 @@ guarantee** consumers design their folds against and the descriptor-reflection C
 catalogue), not here: this skill's OpenAPI mechanics don't apply, and those files may be a wave-0
 scaffold output (the worker-composer's Phase 1 defers their check accordingly).
 
-**Re-entrance (friction-log-4 #14):** if the feature's OpenAPI **already exists**, you are
-**extending/reconciling it**, never regenerating from scratch — the additive-vs-breaking
+**Re-entrance — the contract belongs to the BOUNDARY, not to the feature (friction-log-4 #14,
+extended in v0.13.0).** Before generating anything, scan **`<output_dir>/architetture/api/*.openapi.yaml`**
+— all of them, not just this feature's — for a contract that already covers this boundary
+(same consumer/supplier side pair). `api/<feature>.openapi.yaml` is absent **by construction** on a
+new feature: taking that absence as "no contract yet" would emit a *second* "SINGLE source" for a
+boundary that already has one, forking its `components/schemas` names and its `operationId`
+namespace — the exact drift the canonical-name discipline exists to prevent. If a contract for this
+boundary exists **under any name**, you **extend that file** — the additive-vs-breaking
 discipline below governs every touch, and the outcome reports the **delta** (operations
 added/changed/unchanged), not a fresh contract.
 
@@ -34,20 +40,26 @@ boundary declare *which* operations exist — a write per `application-service` 
 view that crosses the boundary. Here you **reconcile them into ONE executable OpenAPI**, filling in
 the shapes from the domain model and taking the **names** from the ubiquitous language of explore.
 Orientation: `methodology/mismagent.md`. Write **only** in the parent
-`<output_dir>/<feature>/architetture/` — never code in the sub-repos.
+`<output_dir>/architetture/` and — via `write-adr` — `<output_dir>/decisions/` (the two are siblings
+in the project trunk, not nested): you are the trunk's second ADR writer alongside the architect.
+Never code in the sub-repos.
 
 ## Input
 - **`building-blocks.yaml`** — the **`boundaries:`** rows with `projection: cross-deploy` (pinned
   types + `contract_test`) and the blocks at each such boundary: the supplier's
   `application-service` (`commands` → the writes), the consumer's `read-model`/`ui`
   (`view_shape`/`consumes_rm` → the reads);
-- `context-map.md` — the **ubiquitous language** (= the canonical schema names) + the **tactical
+- `<output_dir>/context-map.md` — the **ubiquitous language** (= the canonical schema names);
+  `<output_dir>/features/<feature>/tactical-model.md` — the **tactical
   model**: commands → write endpoints, domain events → read-model, aggregates/invariants → write-schema + AC;
 - `UI/` (visual source of the views for the reads), the per-side guides (from the profile), any contract to extend.
 
 ## Output
-1. `architetture/api/<feature>.openapi.yaml` — **SINGLE source** of the contract.
-2. `decisions/NNNN-<slug>.md` — the ADRs for the non-obvious choices.
+1. The boundary's OpenAPI — **SINGLE source** of that contract, ONE file per boundary for the life
+   of the project. Extend the existing one if the boundary already has it; only a boundary with no
+   contract yet gets a new `<output_dir>/architetture/api/<feature>.openapi.yaml`, named after the
+   feature that introduced it. Report its path so the manifest's `contract_path` can point at it.
+2. `<output_dir>/decisions/NNNN-<slug>.md` — the ADRs for the non-obvious choices (via `write-adr`).
 3. (optional) `api-backend-spec.md` narrative **generated** from the YAML or reduced to pointers.
 
 ## Non-negotiable rules of the contract
@@ -78,7 +90,7 @@ A write has **two** pieces of contract beyond the success response:
   consumer side consumes it to render the field errors. ALWAYS model it in the YAML (named
   `ValidationError` schema), not only the 200/201s.
 - **Domain invariants** (cross-field rules, e.g. "subtype X valid only for category Y"):
-  **take them from the "Tactical model" section of the `context-map.md`** (captured by
+  **take them from the "Tactical model" sections of `features/<feature>/tactical-model.md`** (captured by
   `mismagent-tactical-modeler`), **do not reinvent them**. They are NOT expressible in OpenAPI (the shape does
   not capture them) → they remain in the **producer side's domain**. To make them executable truth,
   the supplier's `application-service` block must have an **AC on the invariant** (a `tests_nl` item
@@ -112,7 +124,7 @@ consumer side can keep building in parallel):
 3. **Fill in the writes** (the commands the supplier side's `application-service` blocks expose):
    schema from the domain (invariants, validation — producer-driven), including the errors (see below).
 4. **Names from the ubiquitous language:** every schema carries the canonical name from the
-   `context-map` (one concept = one name). No synonyms.
+   project `context-map` (one concept = one name). No synonyms.
 5. For every feasibility/cost conflict: decide, write an ADR (via `write-adr`),
    possibly with a counter-proposal.
 6. **Close the loop:** every operation the manifest's boundaries imply exists in the YAML and vice

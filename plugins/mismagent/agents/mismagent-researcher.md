@@ -10,7 +10,7 @@ you gather the raw material on which the modeling is then done. Orientation: `me
 You work **autonomously** and return artifacts + a tight handoff.
 
 ## Boundary (the profile's boundary rules)
-Write **only** in the parent `<output_dir>/<feature>/research/`. **Never** code or files in the
+Write **only** in the parent `<output_dir>/features/<feature>/research/`. **Never** code or files in the
 side repos: you gather and synthesize, you don't model and you don't implement. Respect the
 **profile's boundary rules**.
 

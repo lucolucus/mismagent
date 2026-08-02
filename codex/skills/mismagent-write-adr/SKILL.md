@@ -1,6 +1,6 @@
 ---
 name: mismagent-write-adr
-description: "mismAgent''s specialized ADR writer (model movement). Produces <output_dir>/<feature>/decisions/NNNN-<slug>.md with scope/status/supersedes and \u2014 for MECHANICAL constraints \u2014 enforced_by (executable grep/lint rule that mismagent-verifier checks). Distinguishes mechanical ADRs (verified by the verifier) from discursive ones (verified by the code-review). Invoked by create-contract, mismagent-architect, write-infra-notes."
+description: "mismAgent''s specialized ADR writer (model movement). Produces <output_dir>/decisions/NNNN-<slug>.md with scope/status/supersedes and \u2014 for MECHANICAL constraints \u2014 enforced_by (executable grep/lint rule that mismagent-verifier checks). Distinguishes mechanical ADRs (verified by the verifier) from discursive ones (verified by the code-review). Invoked by create-contract, mismagent-architect, write-infra-notes."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -8,7 +8,7 @@ description: "mismAgent''s specialized ADR writer (model movement). Produces <ou
 
 # MismAgent — Write ADR (writer, model)
 
-Write an Architecture Decision Record in `<output_dir>/<feature>/decisions/NNNN-<slug>.md`.
+Write an Architecture Decision Record in `<output_dir>/decisions/NNNN-<slug>.md`.
 Orientation: `methodology/mismagent.md`.
 
 ## Why it exists (downstream consumers = survival test)

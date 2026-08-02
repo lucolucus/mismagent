@@ -9,7 +9,21 @@
 > That is where every agent/skill looks for it; the plugin's `profiles/*.md` are just
 > **examples** (see **`.agents/skills/mismagent-explore/references/profile-example.md`**, a filled-in fictional instance).
 >
-> **It is filled in at TWO moments** (a greenfield doesn't know everything yet):
+> **ONE profile per PROJECT — it is the junction point, not a per-feature artifact.** Features are
+> folders under `<output_dir>/features/<feature>/`; they read the profile and never rewrite it. A
+> second feature does **not** re-run the bootstrap and does **not** re-deliberate `gate`, `run`,
+> `architecture` or `code_rules` — those are amended only when the user asks, through a superseding
+> ADR. Layout:
+>
+> ```
+> .mismagent/
+>   profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
+>   decisions/ · architetture/          # the PROJECT trunk (the architect writes it)
+>   features/<feature>/                 # brief · tactical-model · manifest · blocks · proofs
+> ```
+>
+> **It is filled in at TWO moments** (a greenfield doesn't know everything yet) — both of them
+> happen on the **first** feature; later features only read it:
 > - **Bootstrap** (prerequisite of *explore*): `output_dir`, language of the ubiquitous
 >   language, known bounded contexts, list of sides. These are enough to start.
 > - **Post-architect** (inside *model*): `gate`, `dev_architecture`, stack-specifics — they
@@ -111,7 +125,11 @@ The rule that decides the shape of every inter-context boundary (`build-manifest
   the **`mismagent-cross-deploy`** module (install it with `install.sh --with-cross-deploy`: it is
   the profile that decides the weight of the method).
 - **contract form/location per boundary** (only if cross-deploy boundaries exist):
-  `<e.g. openapi in architetture/api/<feature>.openapi.yaml · event-schema in contracts/proto/>`
+  `<e.g. openapi in architetture/api/<introducing-feature>.openapi.yaml · event-schema in contracts/proto/>`
+  <!-- openapi: ONE file per boundary for the life of the project, named after the feature that
+       introduced it — a later feature reusing the boundary extends that file (manifest:
+       `contract_path`), it does not open a second one -->
+
 - **authorship:** reads consumer-driven; writes producer-driven; the architect arbitrates.
 
 ## Branching

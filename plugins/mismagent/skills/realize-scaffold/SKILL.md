@@ -54,7 +54,7 @@ no `enforced_by` (those arrive with the owner blocks). The worker-composer gates
 plant a trivially failing probe test in **each module the gate claims to guard** (at minimum the
 deepest domain module, not just the app module), run the gate → see it **RED**, remove/flip the
 probe → see it **GREEN**; record the proof as a **FILE** —
-`<output_dir>/<feature>/gate-proof/<side>.md`: modules probed, the red excerpt, the green rerun —
+`<output_dir>/features/<feature>/gate-proof/<side>.md`: modules probed, the red excerpt, the green rerun —
 never only in your return (a return message evaporates across sessions; handoffs are files, rule
 #4). The worker-composer's Phase 1 reads exactly this file. A gate that stays green over a failing
 test (the Gradle trap: `:app-X:build` never runs dependency modules' tests — `NO-SOURCE` today,

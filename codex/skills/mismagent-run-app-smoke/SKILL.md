@@ -1,6 +1,6 @@
 ---
 name: mismagent-run-app-smoke
-description: "mismAgent build movement \u2014 the RENDER PROOF for ui blocks (friction-log #13, the most-confirmed gap: 3 runtime layout bugs invisible to 100+ green presenter tests). LAUNCHES the side's app for real (profile sides.<side>.run), walks the ui blocks' screens with realize-ui's render checklist (sizing/overflow/contrast/state-rendering/recomposition) and RECORDS the evidence (screenshots/notes) in <output_dir>/<feature>/render-proof/<block-id>/ \u2014 the recorded proof mismagent-verifier step 8 demands when ui_render_check is manual. Writes evidence only, never app code. Use at D1 of a ui block (the worker-composer invokes it there itself when the side's ui_render_check is manual and the proof is missing), or on the whole slice before confirming the release."
+description: "mismAgent build movement \u2014 the RENDER PROOF for ui blocks (friction-log #13, the most-confirmed gap: 3 runtime layout bugs invisible to 100+ green presenter tests). LAUNCHES the side's app for real (profile sides.<side>.run), walks the ui blocks' screens with realize-ui's render checklist (sizing/overflow/contrast/state-rendering/recomposition) and RECORDS the evidence (screenshots/notes) in <output_dir>/features/<feature>/render-proof/<block-id>/ \u2014 the recorded proof mismagent-verifier step 8 demands when ui_render_check is manual. Writes evidence only, never app code. Use at D1 of a ui block (the worker-composer invokes it there itself when the side's ui_render_check is manual and the proof is missing), or on the whole slice before confirming the release."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -30,7 +30,7 @@ until now the "manual run-the-app (recorded)" proof was on the honor system. You
    - **state rendering** — empty / error / loading actually render (drive the app into each state
      where the seams allow it);
    - **recomposition** — interact and watch the re-render actually happen.
-3. **Record the evidence** in `<output_dir>/<feature>/render-proof/<block-id>/`: a screenshot per
+3. **Record the evidence** in `<output_dir>/features/<feature>/render-proof/<block-id>/`: a screenshot per
    checklist item where the platform allows capture (browser tooling, OS screenshot), otherwise a
    dated observation note per item — **what was checked, what was seen**. Evidence is written even
    when everything passes (the proof of green is the point, not just the bugs).
@@ -41,7 +41,7 @@ until now the "manual run-the-app (recorded)" proof was on the honor system. You
      D1 FAIL: the worker reworks the block (max 2 cycles), then re-prove.
 
 ## Boundaries
-- You write **evidence only**, under `<output_dir>/<feature>/render-proof/` — **never** app code,
+- You write **evidence only**, under `<output_dir>/features/<feature>/render-proof/` — **never** app code,
   never state (`git mv` is the worker-composer's), never the block files.
 - You prove **rendering**, not logic: presenter behavior is the worker's tests, AC coverage is the
   verifier's. Don't duplicate their checks.
@@ -50,7 +50,7 @@ until now the "manual run-the-app (recorded)" proof was on the honor system. You
 ```
 RUN-APP-SMOKE: RENDER-OK | RENDER-FAIL | NOT-RUNNABLE
 BLOCKS: [<block-id>: OK | FAIL(<checklist item> @ <screen>), ...]
-EVIDENCE: <output_dir>/<feature>/render-proof/
+EVIDENCE: <output_dir>/features/<feature>/render-proof/
 NOTES: <1-2 sentences — e.g. states not reachable and why>
 ```
 Consumers: **`mismagent-verifier` step 8** (the recorded proof), the worker (rework findings), and

@@ -13,7 +13,12 @@ requires them:
 
 **Core + profile.** The core (skills, agents, commands, flow) is **portable** and names no
 project. Each project provides its own profile — **the active profile lives in
-`<output_dir>/profile.md`, default `.mismagent/profile.md`** (template: `PROFILE.md`; filled-in
+`<output_dir>/profile.md`, default `.mismagent/profile.md`**, and it is the project's **junction
+point**: written once, read by every feature. Features are folders under
+`<output_dir>/features/<feature>/`; the project trunk (`context-map.md`, `architecture.md`,
+`code-rules.md`, `infra-notes.md`, `decisions/`, `architetture/`) sits in the `<output_dir>` root and
+only the architect writes it — the one exception being `context-map.md`, which the **analyst**
+amends (see `methodology/mismagent.md` § "Where things live") (template: `PROFILE.md`; filled-in
 example: `profiles/example.md`): from there agents read sides, repos, gates, dev-architecture
 memories, boundary rules, boundary projections and the commit format.
 
@@ -30,7 +35,8 @@ memories, boundary rules, boundary projections and the commit format.
     wave-0 buildable skeleton).
   - `ux-designer` (model) — imagines the UI → views (if the feature has a UI).
   - `code-review` (build) — adversarial semantic review with fresh context.
-  - writers: `write-context-map`, `write-infra-notes`, `write-adr`, `write-task`.
+  - writers: `write-context-map` (the PROJECT strategic map), `write-tactical-model` (the feature's
+    tactical level), `write-infra-notes`, `write-adr`, `write-task`.
 - `agents/`:
   - explore — `mismagent-challenger` (fresh-context adversary), `mismagent-researcher`, `mismagent-analyst`.
   - model — `mismagent-tactical-modeler` (DDD tactical), `mismagent-architect` (architecture + ADRs,

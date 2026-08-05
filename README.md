@@ -167,6 +167,7 @@ away without touching anything above it.
   context-map.md        # bounded contexts + ubiquitous language + relationships
   architecture.md       # style + module map + allowed dependency directions
   code-rules.md         # the deliberated rules, each with its enforcement channel
+  infra-notes.md        # the deploy/infra context
   decisions/            # ADRs — scope: global | <side> | infra
   architetture/         # architecture overview · dev-architecture per codebase · contracts
   features/
@@ -177,14 +178,20 @@ A signal is read at the **scope of the artifact it guards**. A new feature's fol
 construction, so emptiness there says nothing about whether the project has chosen its stack: the
 foundational deliberation happens **once per project**, the ubiquitous language is **amended** in
 the one context map rather than re-forked, and changing a foundational decision is an explicit
-amendment (a superseding ADR) rather than a silent rewrite.
+amendment (a superseding ADR) rather than a silent rewrite. The same rule fixes what the *second*
+feature inherits: the gate's red-green proof and the infra notes are project facts, an OpenAPI
+belongs to the **boundary** (the file the feature that introduced it opened, extended ever after),
+and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
+another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking).** Before, everything lived in `<output_dir>/<feature>/`
-> — the context map included — so a second feature forked the ubiquitous language and made the
-> architect re-deliberate the stack and rewrite the profile. There is no compatibility shim: in an
-> existing project, move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to
-> the `<output_dir>` root, move the rest under `features/<feature>/`, and reconcile by hand if two
-> features had diverging context maps.
+> **v0.13.0 changes this layout (breaking); v0.13.1 is the current version.** Before, everything
+> lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
+> ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
+> is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,
+> `architetture/` and `infra-notes.md` up to the `<output_dir>` root, move the rest under
+> `features/<feature>/`, and reconcile by hand if two features had diverging context maps. Add an
+> `owner:` to each open spike in the context map while you are there — v0.13.1 requires it, and an
+> entry without one is reported, never acted on.
 
 ## Going deeper
 

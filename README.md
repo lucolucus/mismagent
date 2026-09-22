@@ -201,3 +201,11 @@ another feature's work for a gap in yours.
   of the architecture-driven build.
 - [`docs/PACKAGING.md`](docs/PACKAGING.md) — kernel and modules, the supporting skills the flow
   invokes, the generated packagings for Codex and pi, and the guards that keep them aligned.
+
+## Working on this repo
+
+- `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
+  (`git config core.hooksPath .githooks` once per clone).
+- `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a
+  `README.md` update in the same commit — `[skip-readme]` in the message opts out when nothing a
+  reader sees has changed.

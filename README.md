@@ -40,7 +40,7 @@ Then, on a feature:
 |---|---|
 | `/mismagent:explore <idea in one sentence>` | You dialogue, the challenger attacks, the analyst fixes the names. |
 | `/mismagent:model <feature>` | Stops exactly three times — ambiguities, stack/style/infra, `tests_nl` — then emits the manifest with boundary types pinned. |
-| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. |
+| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. |
 | `/mismagent:board [feature]` | Live read-only kanban. State *is* the folder; parked blocks show as ⏳. |
 
 You step in when a block parks with an open question, and at the end: confirm the release → green
@@ -184,7 +184,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.13.1 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.14.0 is the current version.** Before, everything
 > lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
 > ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
 > is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,

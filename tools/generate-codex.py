@@ -35,6 +35,9 @@ GENERATED_NOTE = (
 )
 
 
+COMPOSER_DIR = ".agents/skills/mismagent-worker-composer"
+
+
 # ---- text adaptation (deterministic, reviewable rules) -----------------------
 def adapt(text):
     """Claude-Code idioms -> Codex idioms."""
@@ -45,6 +48,10 @@ def adapt(text):
                         ".agents/skills/mismagent-board/scripts/board.py")
     text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/board.py",
                         ".agents/skills/mismagent-board/scripts/board.py")
+    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"', COMPOSER_DIR + "/scripts/mismagent.py")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md")
     text = text.replace("(Agent tool)", "(spawn it as a Codex subagent)")
     text = text.replace("$ARGUMENTS", "<the argument this skill was invoked with>")
     # the profile templates ship inside the explore skill's references/
@@ -122,6 +129,10 @@ REASONING_EFFORT = {
 }
 
 
+# Bash for running checks, never for writing: the verifier stays read-only.
+READ_ONLY = ("mismagent-verifier",)
+
+
 def convert_agents():
     for fn in sorted(os.listdir(os.path.join(KERNEL, "agents"))):
         if not fn.endswith(".md"):
@@ -131,7 +142,7 @@ def convert_agents():
         name = fm["name"]
         tools = fm.get("tools", "")
         writes = any(t in tools for t in ("Bash", "Write", "Edit"))
-        sandbox = "workspace-write" if writes else "read-only"
+        sandbox = "workspace-write" if writes and name not in READ_ONLY else "read-only"
         toml = (
             "# GENERATED from plugins/mismagent/agents/%s by tools/generate-codex.py — do not edit.\n"
             "name = %s\n"
@@ -185,6 +196,20 @@ def convert_commands():
     shutil.copy(os.path.join(KERNEL, "tools", "board.py"),
                 _ensured(os.path.join(OUT, "skills", "mismagent-board", "scripts", "board.py")))
     print("  wrote codex/skills/mismagent-board/scripts/board.py")
+    # the build's deterministic tool + its interface, beside the skill that calls it
+    for src, sub in (("mismagent.py", "scripts"), ("board.py", "scripts"), ("CLI.md", "references"),
+                     ("LOOP.md", "references")):
+        path = os.path.join(KERNEL, "tools", src)
+        if not os.path.exists(path):
+            print("  WARNING: %s missing — not shipped" % path)
+            continue
+        dest = _ensured(os.path.join(OUT, "skills", "mismagent-worker-composer", sub, src))
+        if src.endswith(".md"):  # the interface doc names the plugin path: rewrite it
+            with open(path, encoding="utf-8") as f, open(dest, "w", encoding="utf-8") as g:
+                g.write(adapt(f.read()))
+        else:
+            shutil.copy(path, dest)
+        print("  wrote codex/skills/mismagent-worker-composer/%s/%s" % (sub, src))
 
 
 def _ensured(path):
@@ -218,7 +243,7 @@ CODEX_LEGEND = (
     "prefix because Codex has no namespaces. The board script lives at "
     "`.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned "
     "`model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching "
-    "their role (challenger: read-only). The worker-composer's parallel waves map onto "
+    "their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto "
     "`spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config "
     "(`max_threads`, default 6) is the concurrency cap.\n"
 )

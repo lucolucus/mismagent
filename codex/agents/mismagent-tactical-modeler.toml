@@ -22,7 +22,7 @@ triggers it. Orientation: `methodology/mismagent.md`.
 The **active profile** is `<output_dir>/profile.md` — default **`.mismagent/profile.md`**.
 Write **only** in `<output_dir>/features/<feature>/` (the tactical model + the spike nodes).
 The project trunk (`context-map.md`, `decisions/`, `architecture.md`) is **read-only** for you.
-**Never** code in the side repos. Respect the **profile's boundary rules**.
+**Never** code in the sides' paths. Respect the **profile's boundary rules**.
 
 ## Tactical EventStorming (internal technique; write in domain language)
 - **Aggregates / entities** — who guards the invariants, how they relate.

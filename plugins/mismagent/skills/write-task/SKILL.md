@@ -23,7 +23,6 @@ almost always `backlog/`). State **IS the folder** — no `status:` in the file.
 id: <slug>-spike
 type: spike
 side: be | fe | sync | infra
-repo: <repo of the side that will investigate>
 depends_on: []
 central: false          # true = an unproven capability the product stands on (build-manifest
                         # rule 22): the worker-composer dispatches it at wave 0, beside the scaffold
@@ -61,7 +60,6 @@ An open spike **blocks** its consumers; close it like this, never by "deleting i
 id: <slug>-remove-v1
 type: cleanup
 side: be
-repo: <repo that owns the deprecated endpoint>
 depends_on: []                          # NOT a task: readiness is a CONDITION, not an id
 ready_when: "no-consumer-uses:<deprecated-operationId>"
 ---
@@ -71,12 +69,12 @@ ready_when: "no-consumer-uses:<deprecated-operationId>"
 <the old endpoint/operationId + its tests, after ALL consumers have migrated>
 
 ## Readiness condition (ready_when)
-No consumer references `<deprecated-operationId>` anymore — verifiable: grep the consumer repos for the
+No consumer references `<deprecated-operationId>` anymore — verifiable: grep the consumers' paths for the
 old `operationId` (zero matches) and/or a contract test asserting "no calls to v1". While the condition
 is false the node stays in `backlog/` as an **explicit pending** (the worker-composer's Phase 1 reports
 it, never leaves it mute), NEVER a deadlock.
 ```
 
 ## Outcome
-Path of the node, id, kind (`spike`/`cleanup`), side/repo, and which blocks/tasks it unblocks (spike)
+Path of the node, id, kind (`spike`/`cleanup`), side, and which blocks/tasks it unblocks (spike)
 or which deprecated operationId it retires under what `ready_when` (cleanup).

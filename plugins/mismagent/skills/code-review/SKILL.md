@@ -1,12 +1,12 @@
 ---
 name: code-review
-description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied? do the profile''s discursive code rules hold?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). NATIVE mismAgent capability (no external dependencies). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix.'
+description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied? do the profile''s discursive code rules hold?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix.'
 ---
 
 # mismAgent — Code Review (semantic, adversarial, build movement)
 
 mismAgent's **semantic review**: it finds what tests and grep do not catch — logic bugs,
-missed edge cases, ACs satisfied only "on paper". Orientation: `methodology/mismagent.md`.
+missed edge cases, ACs satisfied only "on paper".
 You run in **fresh context** in a subagent: you did not see the development, so you don't trust — you hunt.
 
 ## Complementary to the verifier (you do not duplicate it)
@@ -20,9 +20,9 @@ You do **not** fix, do **not** commit, do **not** `git mv`. You find + triage. T
 worker (Patch) or is recorded as future work (Defer). Your output is a verdict + findings, not a patch.
 
 ## Input you receive in the prompt
-- the authoritative **diff**: `git -C <side-repo> diff <base>...<branch>`;
-- the **block-file** (its `## Tasks` criteria = the ACs/`tests_nl`, the pinned boundary signatures
-  in `## Dependencies`, the `related_adrs`);
+- the authoritative **diff**: `git -C <REPO_PATH> diff <RANGE>`, `RANGE` + `HEAD_SHA` from `MM diff-range`;
+- the block's **pack** (its `## Tasks` criteria = the ACs, the pinned boundary signatures, the
+  ADRs) and the worker's `DECISIONS`/`DEVIATIONS`;
 - the project's **`code-rules.md`** (via the profile's `code_rules` binding): its **discursive**
   rules are review criteria — cite the violated rule in the finding; the mechanical ones the
   **gate** already enforced (its dependency lint) — don't re-run them;
@@ -40,12 +40,11 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
    (e.g. the error the contract declares)? And do the profile's **discursive code rules**
    (`code-rules.md`: error-handling policy, immutability stance, …) hold on this diff — citing the
    violated rule in the finding?
-   **A concurrency-claim AC gets a dedicated audit** (friction-log-4 #39): does its test really
+   **A concurrency-claim AC gets a dedicated audit:** does its test really
    create **contention** (N threads/coroutines + a start barrier on the same instance), or is it
    sequential theater? Is the guarded operation **atomic on the root**, or check-then-act (TOCTOU)
    that races between the read and the write? A sequential test "covering" a concurrency AC is
-   AC-not-satisfied → `HIGH` (the structural verifier alone would merge an oversell bug — you are
-   the lens that reads the logic).
+   AC-not-satisfied → `HIGH`.
 
 ## Triage of every finding
 - **Severity:** `HIGH` (blocks the merge: correctness/security/AC-not-satisfied) · `MED`
@@ -55,20 +54,21 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
   release must empty; a research unknown becomes a `spike` node via `write-task`) · `Decision` (a
   human/product choice is needed: do not invent it).
 - **Only HIGH blocks.** A MED/LOW is never `Patch`, however cheap it looks: the rework carries HIGH
-  only, the rest waits in `pre-release.md` (worker-composer §3). Don't inflate a MED to HIGH to get
+  only, the rest waits in `pre-release.md`. Don't inflate a MED to HIGH to get
   it fixed now — the severity is about the harm, not about the convenience.
 
 ## Outcome — strict handoff
 ```
 CODE-REVIEW: APPROVE | CHANGES | BLOCKED
 BLOCK_ID: <id>
+HEAD_SHA: <the sha judged>
 FINDINGS: [{lens: blind|edge|acceptance, sev: HIGH|MED|LOW, at: <file:line>, issue: <1 sentence>, fix: Patch|Defer|Decision}, ...]
 HIGH_COUNT: <n>
 NOTES: <1-2 sentences>
 ```
 - `APPROVE` — no `HIGH` finding and every AC satisfied in spirit.
-- `CHANGES` — ≥1 `HIGH` (or an AC not truly satisfied): the worker-composer re-dispatches the worker
-  with the HIGH `Patch` findings only (max 2 cycles), then re-reviews. MED/LOW alone → `APPROVE`
+- `CHANGES` — ≥1 `HIGH` (or an AC not truly satisfied): the worker reworks the HIGH `Patch`
+  findings only (max 2 cycles), then a new review. MED/LOW alone → `APPROVE`
   (they travel to `pre-release.md`).
 - `BLOCKED` — a finding is `Decision`: a human is needed, do not force it.
 - At `standard` review depth the worker-composer does not dispatch you separately: the verifier

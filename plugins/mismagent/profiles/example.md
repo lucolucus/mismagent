@@ -1,4 +1,4 @@
-# Profile: example — "machinecare" (fictional multi-side meta-repo)
+# Profile: example — "machinecare" (fictional, multi-side, one repo)
 
 > **Filled-in example** of `../PROFILE.md`, for a fictional machine-maintenance SaaS with
 > independent BE/FE deploy units. Use it as a model of what a complete profile looks like;
@@ -30,15 +30,16 @@ code_rules: .mismagent/code-rules.md       # the deliberated rules, each with it
 ```yaml
 sides:
   be:
-    repo: machinecare-be                    # e.g. .NET, Clean Arch + DDD, PostgreSQL
-    dev_architecture: be-dev-architecture   # golden files in machinecare-be/docs/dev-architecture/
+    path: be                                # e.g. .NET, Clean Arch + DDD, PostgreSQL
+    dev_architecture: be-dev-architecture   # golden files in be/docs/dev-architecture/
     gate: "dotnet build && dotnet test && dotnet test --filter Contract"
+    gate_files: ["be/**/*.csproj", "be/*.sln", "be/global.json"]
     gate_after_release: "dotnet test --filter MigrationFromReleased"   # on at the first release
     toolchain: ".NET SDK 8 (pinned by global.json)"
     contract: "swagger.json compared against the YAML + response-shape tests on the real body"
   fe:
-    repo: machinecare-fe                    # e.g. Next.js + TypeScript
-    dev_architecture: fe-dev-architecture   # golden files in machinecare-fe/docs/dev-architecture/
+    path: fe                                # e.g. Next.js + TypeScript
+    dev_architecture: fe-dev-architecture   # golden files in fe/docs/dev-architecture/
     gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
     gate_after_release: none
     toolchain: "Node 20 (pinned by .nvmrc)"
@@ -46,7 +47,7 @@ sides:
     run: "npm run dev (http://localhost:3000)"
     contract: "openapi-typescript → src/types/api.generated.ts + contract.test.ts per operationId"
   infra:
-    repo: machinecare-infra
+    path: infra
     dev_architecture: none
     gate: "—"
 ```
@@ -68,9 +69,9 @@ sides:
 - **tool:** `.claude/skills/git-branching/gitflow.sh` (a `git-branching` skill) — or `manual`
 - **commit:** `"<SIDE>-<E>.<S>: <description>"` — SIDE ∈ {BE, FE}
 - **model:** branch per **story** `<feature>/<E>-<S>-<slug>`; **squash** merge onto the base
-  branch; the parent (docs) and `infra` commit **directly** to the base branch.
+  branch; `infra/` commits **directly** to the base branch; `.mismagent/` travels on the
+  integration line with the code.
 
 ## Boundary rules
-- Never **FE** code in the **BE** repo or vice versa.
-- Every sub-repo has its own `.git`: `cd` inside and commit **there**, not in the parent. Use `git -C`.
+- Never **FE** code under `be/` or vice versa.
 - Never commit `cert/`, `.env`, `appsettings.*`, secrets, local DB files or backups.

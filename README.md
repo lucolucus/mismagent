@@ -40,7 +40,7 @@ Then, on a feature:
 |---|---|
 | `/mismagent:explore <idea in one sentence>` | You dialogue, the challenger attacks, the analyst fixes the names. |
 | `/mismagent:model <feature>` | Stops exactly three times — ambiguities, stack/style/infra, `tests_nl` — then emits the manifest with boundary types pinned. |
-| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. Review depth follows the block type too: one standard verifier for `ui`/`adapter`/`read-model`, verifier + code-review on `deep` for aggregates, ports and services. Only HIGH findings go back to rework; MED/LOW land in `pre-release.md`, which a release must empty. A build step that is slow or hangs goes back to the architect as a strategy to replace, not a wait. |
+| `/mismagent:worker-composer <feature>` | The build: the **only** command that merges. Blocks **build in parallel** (each in its worktree) and **integrate one at a time**: review → candidate merge → gate + contract tests → promote, so the integration line is never red. The flow runs on a deterministic tool (`tools/mismagent.py`: lint, ready, pack, diff-range, proofs, compose); **in doubt the composer stops and asks** instead of guessing. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action; review depth follows the block type. Only HIGH findings go back to rework (max two cycles, counted from `rework/` files); MED/LOW land in `pre-release.md`, which a release must empty. |
 | `/mismagent:board [feature]` | Live read-only kanban. State *is* the folder; parked blocks show as ⏳. |
 
 You step in when a block parks with an open question, and at each release: confirm it → green tag
@@ -154,7 +154,7 @@ nothing, and a multi-side one pays for the boundary that genuinely crosses a dep
 ## Core + profile
 
 The core names **no project**. Each project supplies a `profile.md` (default `.mismagent/profile.md`)
-binding the abstractions to reality: the sides (independent deploy units), their repos and gate
+binding the abstractions to reality: the sides (independent deploy units), their paths and gate
 commands, the boundary projections, the commit format. Reuse the method elsewhere by writing a new
 profile — see [`PROFILE.md`](plugins/mismagent/PROFILE.md) (template) and
 [`profiles/example.md`](plugins/mismagent/profiles/example.md) (a filled-in fictional instance).
@@ -165,7 +165,7 @@ away without touching anything above it.
 
 ```
 .mismagent/
-  profile.md            # the junction point — sides, repos, gate, projections, commit format
+  profile.md            # the junction point — sides (paths), gate, projections, commit format
   context-map.md        # bounded contexts + ubiquitous language + relationships
   architecture.md       # style + module map + allowed dependency directions
   code-rules.md         # the deliberated rules, each with its enforcement channel
@@ -186,14 +186,17 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.15.0 is the current version.** Before, everything
-> lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
-> ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
-> is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,
-> `architetture/` and `infra-notes.md` up to the `<output_dir>` root, move the rest under
-> `features/<feature>/`, and reconcile by hand if two features had diverging context maps. Add an
-> `owner:` to each open spike in the context map while you are there — v0.13.1 requires it, and an
-> entry without one is reported, never acted on.
+> **v0.13.0 changes this layout (breaking); v0.16.0 is the current version.** Before, everything
+> (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
+> ubiquitous language and re-deliberated the stack. No compatibility shim: in an existing project,
+> move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
+> root, move the rest under `features/<feature>/`, and reconcile by hand if two features had
+> diverging context maps. Add an `owner:` to each open spike in the context map — v0.13.1 requires
+> it; an entry without one is reported, never acted on.
+>
+> **v0.16.0 (breaking for a build in progress):** one repository per project — a side is a path inside
+> it (`path:` replaces `repo:` in the profile, `gate_files:` added); `dispatch.log` is no longer read —
+> the build's state is the block folders plus `rework/`, `review-proof/`, `integrated/`.
 
 ## Going deeper
 
@@ -206,6 +209,8 @@ another feature's work for a gap in yours.
 
 ## Working on this repo
 
+- `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool's tests, including a check
+  that every `MM …` command in the prompts is runnable as written.
 - `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
   (`git config core.hooksPath .githooks` once per clone).
 - `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a

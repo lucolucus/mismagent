@@ -28,7 +28,7 @@ the last three rows are genuine decisions — the rest is doctrine the method al
 | **ISP** | consumer-owned port: only the methods the consumer needs | **structural** — `realize-port` |
 | **KISS / YAGNI / DRY-at-the-root** | less code, reuse the root's rule, no speculative abstraction | **structural** — the worker's frugality ladder |
 | **naming = ubiquitous language** | one concept, one canonical name | **structural** — the verifier's anti-shadow check |
-| **DIP / CA dependency rule** | domain + application import ONLY inward; framework/adapter imports live in the adapters | **gate lint** — a real dependency lint, config in the side's repo, wired at wave 0 |
+| **DIP / CA dependency rule** | domain + application import ONLY inward; framework/adapter imports live in the adapters | **gate lint** — a real dependency lint, config in the side's path, wired at wave 0 |
 | **error handling** | no swallowed failure; a failure crosses a boundary only as a declared shape | **gate lint** where the stack has the rule, else **review criterion** |
 | **immutability** | domain values immutable by default; mutation through the root | **gate lint** where lint-able, else **review criterion** |
 
@@ -38,7 +38,7 @@ files, aliases). Use the stack's **dependency lint**, named here and in the styl
 derived from `architecture.md`'s module map:
 - JVM/Kotlin → **Konsist** or **ArchUnit** · TypeScript → **dependency-cruiser** or
   eslint-plugin-boundaries · Python → **import-linter** · (per stack: the architect proposes).
-- The config **lives in the side's repo** (wired by the wave-0 `scaffold`, like the ui-test dep):
+- The config **lives in the side's path** (wired by the wave-0 `scaffold`, like the ui-test dep):
   it runs in the worker's own gate loop, in verifier step 2 and in CI — and on a module rename the
   worker maintains it like any build file (no ownerless rot).
 - Style rules (empty-catch, mutability) join the same linter's ruleset where it has them.

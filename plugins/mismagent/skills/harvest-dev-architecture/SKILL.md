@@ -21,11 +21,11 @@ memory the profile points at, never a second fork of it.
 ## Preconditions (don't harvest noise)
 - At least **one wave/slice of the side is green** (`done` blocks exist and the gate passes).
   One block is anecdote, a slice is a pattern. If it's too early, say so and stop.
-- The **active profile** (`<output_dir>/profile.md`) names the side and its repo.
+- The **active profile** (`<output_dir>/profile.md`) names the side and its path.
 
 ## Procedure
 1. **Read the DONE blocks' code** (only theirs — `blocks/<ctx>/done/` names them; the code is in the
-   side's repo). You harvest what **is**, never what *should be*: no aspiration enters the memory.
+   side's path). You harvest what **is**, never what *should be*: no aspiration enters the memory.
 2. **Extract, one section per dimension, each with 1–2 GOLDEN exemplar files cited by path:**
    - **layout** — module/package structure as actually built (contexts → packages);
    - **naming** — the real conventions (suffixes like `...SqlDelight`, test names, port vs adapter);
@@ -60,7 +60,7 @@ passes D1 or a rework fixed a defect the next block of that type could repeat �
 type failing review for the same reason is the case this exists for. The **Preconditions** above
 do not apply: a lesson comes from a review finding and its fix, not from a stabilized slice, so one
 block is enough. Input: the block id, its type,
-the review findings and the rework diff (the ledger + the reviewers' outputs the composer passes).
+the review findings and the rework diff (the `rework/<id>-<n>.md` files the composer passes).
 1. Keep only what **generalizes to the type**: a defect class + the pattern that fixed it + the
    golden file where the fix lives, phrased as a rule for the type (*"<type>: <what must always
    hold> — see `<golden file>`"*). A one-off bug of that block is not a lesson.

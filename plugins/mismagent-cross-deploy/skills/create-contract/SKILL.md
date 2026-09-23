@@ -34,10 +34,10 @@ The contract is a **consequence of the manifest**, not its source: the `boundari
 boundary declare *which* operations exist — a write per `application-service` command, a read per
 view that crosses the boundary. Here you **reconcile them into ONE executable OpenAPI**, filling in
 the shapes from the domain model and taking the **names** from the ubiquitous language of explore.
-Orientation: `methodology/mismagent.md`. Write **only** in the parent
+Orientation: `methodology/mismagent.md`. Write **only** in
 `<output_dir>/architetture/` and — via `write-adr` — `<output_dir>/decisions/` (the two are siblings
 in the project trunk, not nested): you are the trunk's second ADR writer alongside the architect.
-Never code in the sub-repos.
+Never code in the sides' paths.
 
 ## Input
 - **`building-blocks.yaml`** — the **`boundaries:`** rows with `projection: cross-deploy` (pinned

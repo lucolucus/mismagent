@@ -51,6 +51,9 @@ def wrapper_commands():
 WRAPPERS = None  # filled in main() — needed by adapt()
 
 
+COMPOSER_DIR = ".agents/skills/mismagent-worker-composer"
+
+
 # ---- text adaptation (deterministic, reviewable rules) -----------------------
 def adapt(text, keep_args=False):
     """Claude-Code idioms -> pi idioms."""
@@ -65,6 +68,10 @@ def adapt(text, keep_args=False):
                         ".agents/skills/mismagent-board/scripts/board.py")
     text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/board.py",
                         ".agents/skills/mismagent-board/scripts/board.py")
+    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"', COMPOSER_DIR + "/scripts/mismagent.py")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md")
+    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md")
     text = text.replace("(Agent tool)", "(the `subagent` tool)")
     text = text.replace("(Agent tool,", "(the `subagent` tool,")
     if not keep_args:  # pi substitutes $ARGUMENTS in prompt templates, not in skills
@@ -230,6 +237,20 @@ def convert_commands():
     shutil.copy(os.path.join(KERNEL, "tools", "board.py"),
                 _ensured(os.path.join(OUT, "skills", "mismagent-board", "scripts", "board.py")))
     print("  wrote pi/skills/mismagent-board/scripts/board.py")
+    # the build's deterministic tool + its interface, beside the skill that calls it
+    for src, sub in (("mismagent.py", "scripts"), ("board.py", "scripts"), ("CLI.md", "references"),
+                     ("LOOP.md", "references")):
+        path = os.path.join(KERNEL, "tools", src)
+        if not os.path.exists(path):
+            print("  WARNING: %s missing — not shipped" % path)
+            continue
+        dest = _ensured(os.path.join(OUT, "skills", "mismagent-worker-composer", sub, src))
+        if src.endswith(".md"):  # the interface doc names the plugin path: rewrite it
+            with open(path, encoding="utf-8") as f, open(dest, "w", encoding="utf-8") as g:
+                g.write(adapt(f.read()))
+        else:
+            shutil.copy(path, dest)
+        print("  wrote pi/skills/mismagent-worker-composer/%s/%s" % (sub, src))
 
 
 def _ensured(path):

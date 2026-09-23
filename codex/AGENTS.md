@@ -3,7 +3,7 @@
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request, which matches the run-sheet). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
+> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request, which matches the run-sheet). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
 
 
 > **It is not a methodology to read: it is a flow to invoke.** The substance is the agents
@@ -15,7 +15,7 @@
 > **Core + profile.** mismAgent is **portable**: the core (agents, skills, flow) names no
 > project. Each project provides its profile — **the active profile lives in
 > `<output_dir>/profile.md`, default `.mismagent/profile.md`** (template: `.agents/skills/mismagent-explore/references/PROFILE.md`; filled-in
-> example: `.agents/skills/mismagent-explore/references/profile-example.md`) — from which the agents read the sides, the repos, the gates, the
+> example: `.agents/skills/mismagent-explore/references/profile-example.md`) — from which the agents read the sides, their paths, the gates, the
 > dev-architecture skills, the boundary rules, the boundary projections and the commit format.
 >
 > **Handoff rule:** every handoff that crosses a movement is a **FILE** (e.g. the "Seeds for the
@@ -30,7 +30,7 @@ that is added and thrown away without touching anything above it.
 
 ```
 .mismagent/
-  profile.md            # THE JUNCTION POINT — sides, repos, gate, projections, commit format
+  profile.md            # THE JUNCTION POINT — sides (paths), gate, projections, commit format
   context-map.md        # strategic: bounded contexts + ubiquitous language + relationships
   architecture.md       # the chosen style + module map + allowed dependency directions
   code-rules.md         # the deliberated code-writing rules, each with its enforcement channel
@@ -169,12 +169,13 @@ at the first missing artifact. The step-by-step form stays equivalent:
 **build** · *you delegate; confirm each release* — from manifest to released code.
 - command **`$mismagent-worker-composer <feature>`** — thin coordinator, the only one that merges and
   moves state: readiness on the manifest (pinned types, or BOUNCE to the model movement; **git present** — if the
-  side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
+  project isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
   (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
   **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
   projection + the codebase's dev-architecture memory) → **D1** green on its own (fresh `mismagent-verifier`, +
-  `code-review` on deep-review blocks) → merge = composition → **D2** contract test on the welded boundary →
-  **you confirm** → green release-tag = turn on the flag.
+  `code-review` on deep-review blocks) → candidate merge = composition → **D2** contract test on the
+  welded boundary → **you confirm** → green release-tag = turn on the flag. Computation over files and git
+  (status, lint, ready set, state moves, proofs, candidate merge) it calls from **`tools/mismagent.py`**.
 - output: code composed at the boundaries, deployed behind a flag.
 - *(the file-driven flow — `/dev-orchestrator-v2`, `/project-orchestrator`, `mism-build-dag`,
   `mism-developer-lean`, `mism-dev-story-lean` — is superseded and lives in `attic/`, outside the
@@ -223,25 +224,24 @@ the checkpoints (you decide; it types). Or step-by-step, equivalently:
 with `$mismagent-readiness-gate`. → build.
 
 **3 · build — you delegate; confirm each release.**
-Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges) —
+Prerequisite: the project is **one git repo** (the worker-composer lives on worktrees and merges) —
 if it isn't, the worker-composer's Phase 1 `git init`s it **after asking you to confirm**.
 You type **`$mismagent-worker-composer <feature>`**. It: readiness (unpinned boundary →
 BOUNCE to the model movement; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
 owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (fresh verifier, + code-review
-on deep-review blocks) → merge = composition → D2 (contract test on the boundary) → loop.
+on deep-review blocks) → candidate merge → D2 (contract test on the boundary) → loop.
 Every dispatch runs on a model **routed by its action** (worker-composer §2a: `light`/`standard`/
 `deep` by block type and role — deep for aggregate/port and for deep-review reviewers, +1 on a
-cross-deploy seam and on the second rework) and is recorded in `features/<feature>/dispatch.log`, so
-the rework cap and the escalation hold across firings. D1's depth follows the block type
+cross-deploy seam and on the second rework); a rework cycle is a `rework/<id>-<n>.md` file, so
+the cap and the escalation hold across firings. D1's depth follows the block type
 (`build.review_depth_by_type`: one standard verifier for ui/adapter/read-model, verifier +
 code-review on deep for aggregate/port/application-service); only HIGH findings rework, MED/LOW
 collect in the feature's `pre-release.md` that each release must empty (or you waive, in
 `release-decisions/`). A build step that is slow or hangs is not waited out: it goes back to the
-architect as a strategy to replace (standard migrations, faithful in-memory substrates,
-incremental per-module builds). Releases (`release: R0…`) are manifest structure: R0 opens the app
+architect as a strategy to replace. Releases (`release: R0…`) are manifest structure: R0 opens the app
 within the first 3 build waves, central-risk spikes run at wave 0, and the first block of each
 type that passes D1 leaves its lessons in `architetture/lessons-by-block-type.md`. **Run it under `/loop`** (self-paced): each
-firing advances what is ready and ends; the folders + git + the ledger carry the rest. Tune the cap
+firing advances what is ready and ends; the folders + git carry the rest, and in doubt it stops and asks. Tune the cap
 and the tier→model binding in the profile's `build:` block.
 You step in **only** if a worker returns `BOUNCED` (ambiguous AC — the block is parked in `todo/`
 with the question in `open-questions/<block-id>.md`: you decide, then re-run
@@ -282,17 +282,15 @@ skill/agent, what it was attempting, what broke, `core` vs `profile`) — that i
    adverse review already closed). And artifacts stay reconciled: an ADR that answers an open spike
    **backlinks the slug and closes it** in the context-map; an ADR that contradicts a context-map
    line **updates it or records the supersede** — two artifacts that disagree in silence are two
-   sources of truth (friction-log-4 #9/#13/#14); build-manifest reconciles its pins with
-   profile · architecture · ADRs before emitting (friction-log-4 #22).
+   sources of truth; build-manifest reconciles its pins with
+   profile · architecture · ADRs before emitting.
 8. **a gate that cannot go red is not a gate.** The profile's gate must **execute the tests it
    guards** — not merely build their modules — proven red-green once at wave 0 (the scaffold's
    failing probe) and re-run **cache-bypassed** by the verifier at every D1: a cached green proves
-   *nothing changed*, not *the tests pass on this diff* (friction-log-4 #17/#31). Same doctrine
-   for `enforced_by` rules: prohibition vs presence (wave-gated), comment-stripped, shell-portable,
-   validated red AND green (friction-log-4 #19/#26/#35/#37/#49).
+   *nothing changed*, not *the tests pass on this diff*. Same doctrine for `enforced_by` rules:
+   prohibition vs presence (wave-gated), comment-stripped, shell-portable, validated red AND green.
 9. **what crosses a seam is PINNED, never invented in parallel.** The manifest pins the minting
    rule of every correlation key, the unit-vs-quantity granularity of what flows, the delivery
    guarantee folds design against, the source of every view field — and derives an **owner block**
-   for every shared artifact ≥2 same-wave blocks consume (friction-log-4
-   #25/#34/#38/#40/#41/#47/#48/#50): N parallel workers left to invent a shared convention produce
-   N divergent ones, and the divergence detonates at the weld, not at the build.
+   for every shared artifact ≥2 same-wave blocks consume: N parallel workers left to invent a
+   shared convention produce N divergent ones, and the divergence detonates at the weld, not at the build.

@@ -9,8 +9,8 @@ you gather the raw material on which the modeling is then done. Orientation: `me
 You work **autonomously** and return artifacts + a tight handoff.
 
 ## Boundary (the profile's boundary rules)
-Write **only** in the parent `<output_dir>/features/<feature>/research/`. **Never** code or files in the
-side repos: you gather and synthesize, you don't model and you don't implement. Respect the
+Write **only** in `<output_dir>/features/<feature>/research/`. **Never** code or files in the
+sides' paths: you gather and synthesize, you don't model and you don't implement. Respect the
 **profile's boundary rules**.
 
 ## Anti-zombie + anti-library principle (what keeps you mismAgent, not a wiki)
@@ -21,7 +21,7 @@ side repos: you gather and synthesize, you don't model and you don't implement. 
 
 ## Input you receive in the prompt
 - the **topic/question** to investigate and the **feature**;
-- (opt.) the profile's `materials.sample` (domain PDFs/screenshots; `none` → skip), the side's repo to grep for prior-art
+- (opt.) the profile's `materials.sample` (domain PDFs/screenshots; `none` → skip), the side's path to grep for prior-art
   (from the profile), the existing `context-map.md`.
 
 ## Research angles (choose based on the topic)

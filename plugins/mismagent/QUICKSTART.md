@@ -73,7 +73,7 @@ you confirm each release → flag).
   project yet, so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
   worker-composer builds it **first** (via `realize-scaffold`) and only then the owner blocks have
   something to compile against. Don't expect the architect to scaffold — it writes design, not code.
-- **The repo must be under git.** The worker-composer lives on worktrees + merges. If you start in a
+- **One git repo per project.** The worker-composer lives on worktrees + merges. If you start in a
   non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
 - **"Where are the tasks?"** Run **`/mismagent:board`** — a read-only live view of the blocks and
   their state. The work-item *is* the block: `build-manifest` seeds one **rich `<id>.md` file per

@@ -10,7 +10,7 @@ description: "mismAgent''s specialized writer of infrastructure considerations (
 
 Write/update `<output_dir>/infra-notes.md` — the **project's** infra notes, not the feature's:
 the infrastructure considerations
-that neither the PRD nor the contract cover, but that generate real work in the `infra` side's repo
+that neither the PRD nor the contract cover, but that generate real work in the `infra` side's path
 (from the profile). Orientation: `methodology/mismagent.md`.
 
 ## Why it exists (downstream consumers = survival test)
@@ -32,7 +32,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 # Infra notes — <project>
 
 ## Environments & deploy units
-- INDEPENDENT deploys: one unit per side (BE, FE, sync), repo from the profile.
+- INDEPENDENT deploys: one unit per side (BE, FE, sync), path from the profile.
 - Environments: <dev | prod>; promotion constraints; produces-before-consumes at deploy.
 
 ## Secrets & identity
@@ -45,7 +45,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 - <structured logging, correlation-id, liveness/readiness health checks>.
 
 ## CI/CD
-- Two independent pipelines (one per repo); contract test = BLOCKING job; anti-state guards (§1.1).
+- Two independent pipelines (one per side); contract test = BLOCKING job; anti-state guards (§1.1).
 
 ## Needs → work (what becomes a task/ADR/gate)
 - <need> → <task side:infra | enforced_by ADR | CI gate>

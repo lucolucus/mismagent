@@ -70,7 +70,7 @@ monolith): the `projection` of every boundary will be `in-process` and no OpenAP
 ```yaml
 sides:
   <side>:                       # e.g. be | fe | sync — or just `app` if single-side
-    repo: <path-or-repo-name>   # where this side's code lives
+    path: <dir>                 # the side's code, relative to the project root (one repo per project)
     dev_architecture: <skill | path.md>  # the CODEBASE's architecture memory: a harvested SKILL
                                 # (harvest-dev-architecture, from real code) or an AUTHORED doc
                                 # (the architect writes it BEFORE the first domain wave — its path
@@ -87,6 +87,8 @@ sides:
                                 # every block vacuously green). Discriminating power is proven
                                 # red-green once by the wave-0 scaffold; the composer's Phase 1
                                 # refuses a gate without the proof (friction-log-4 #17)
+    gate_files: [<glob>…]       # optional: the files defining the side's build/modules/tests —
+                                # a change to them invalidates the gate proof
     gate_after_release: "<steps that protect RELEASED versions, e.g. a check against released schemas>"
                                 # NOT in the gate before the side's first release (they guard
                                 # nothing yet and cost every dispatch); the worker-composer appends
@@ -167,17 +169,15 @@ The rule that decides the shape of every inter-context boundary (`build-manifest
 ## Branching
 - **tool:** `<script/command, or "manual">`
 - **commit:** `"<message format>"`
-- **model:** `<branch per block/story; merge strategy; what commits directly>`
+- **model:** `<branch per block/story; merge strategy; what commits directly — never <output_dir>/: it travels on the integration line>`
 
 ## Boundary rules
-What an agent must NEVER do, and who commits where. Pick the form:
-- **Multi-repo / multi-side:** `<never one side's code in another side's repo>`;
-  `<every sub-repo has its own .git: commit there, not in the parent>`.
-- **Single repo / single-side:** `<the boundary is the MODULE/package: never write outside
-  your own block's package; the other context is touched only via the port>`.
+What an agent must NEVER do:
+- `<never write outside your side's path or your own block's module/package; another side or
+  context is touched only via its port or contract>`.
 - Always: `<never commit secrets / .env / certificates / DB files and backups>`.
 
 ---
-*How the agents use it:* wherever an instruction says "the side's repo", "the side's gate
+*How the agents use it:* wherever an instruction says "the side's path", "the side's gate
 commands", "the codebase's dev-architecture memory", "the boundary rules", "the branching tool",
 "the boundary's projection" → the value comes from HERE. Nothing is hard-coded in the core.

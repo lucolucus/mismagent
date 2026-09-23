@@ -57,9 +57,34 @@ memory the profile points at, never a second fork of it.
    the codebase, to the **same** value (was `none`, or the authored doc you just reconciled).
    Tell the user the next worker dispatch will load it.
 
+## Lessons mode — one block type, dispatched by the worker-composer
+A narrow harvest the worker-composer dispatches **during** the build, when the first block of a type
+passes D1 or a rework fixed a defect the next block of that type could repeat — N blocks of one
+type failing review for the same reason is the case this exists for. The **Preconditions** above
+do not apply: a lesson comes from a review finding and its fix, not from a stabilized slice, so one
+block is enough. Input: the block id, its type,
+the review findings and the rework diff (the ledger + the reviewers' outputs the composer passes).
+1. Keep only what **generalizes to the type**: a defect class + the pattern that fixed it + the
+   golden file where the fix lives, phrased as a rule for the type (*"<type>: <what must always
+   hold> — see `<golden file>`"*). A one-off bug of that block is not a lesson.
+2. Append it under **`### <type>`** in **`<output_dir>/architetture/lessons-by-block-type.md`** —
+   a file of its own, **not** the dev-architecture memory: a lesson records a defect history the
+   code cannot re-derive, so it must survive every regeneration of the generated skill. One to
+   three lines per lesson, deduplicated against what is there. It works whether or not a
+   `dev_architecture` exists yet; the composer injects the type's section into every dispatch of
+   that type.
+3. **No blocking user checkpoint** (the build is delegated): the composer reports the lessons
+   written in its firing report, and the user strikes (`~~…~~`) any they disagree with — a struck
+   lesson is no longer injected. A lesson that contradicts the dev-architecture memory is **not**
+   written — it is a conflict for the user (rule 3 of the procedure above).
+4. A **full harvest** reads the lessons file and may promote a lesson that the code now embodies
+   everywhere into a convention of the memory; it never deletes or rewrites the lessons file.
+
 ## Rules
 - **Derived, regenerable:** re-running the harvest refreshes the skill from the code as it is now —
-  never hand-grow the generated file (edit the code or re-harvest; the code is the source).
+  never hand-grow the generated file (edit the code or re-harvest; the code is the source). The
+  lessons file is the exception by design: it is a log of review history, kept apart for that
+  reason.
 - **Real code only:** an unbuilt convention has no place in memory.
 - **No domain content:** conventions and shapes, never business rules (those live in the blocks).
 

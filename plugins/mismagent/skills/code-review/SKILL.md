@@ -49,10 +49,14 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
 
 ## Triage of every finding
 - **Severity:** `HIGH` (blocks the merge: correctness/security/AC-not-satisfied) · `MED`
-  (to be fixed) · `LOW` (could be improved).
-- **Disposition:** `Patch` (the worker fixes it now) · `Defer` (future work: recorded in the
-  worker-composer's report; a research unknown becomes a `spike` node via `write-task`) ·
-  `Decision` (a human/product choice is needed: do not invent it).
+  (to be fixed before the release) · `LOW` (could be improved).
+- **Disposition:** `Patch` (the worker fixes it now — **HIGH only**) · `Defer` (every MED/LOW, and
+  future work: the worker-composer writes it to the feature's **`pre-release.md`** file, which the
+  release must empty; a research unknown becomes a `spike` node via `write-task`) · `Decision` (a
+  human/product choice is needed: do not invent it).
+- **Only HIGH blocks.** A MED/LOW is never `Patch`, however cheap it looks: the rework carries HIGH
+  only, the rest waits in `pre-release.md` (worker-composer §3). Don't inflate a MED to HIGH to get
+  it fixed now — the severity is about the harm, not about the convenience.
 
 ## Outcome — strict handoff
 ```
@@ -64,5 +68,8 @@ NOTES: <1-2 sentences>
 ```
 - `APPROVE` — no `HIGH` finding and every AC satisfied in spirit.
 - `CHANGES` — ≥1 `HIGH` (or an AC not truly satisfied): the worker-composer re-dispatches the worker
-  with the `Patch` findings (max 2 cycles), then re-reviews.
+  with the HIGH `Patch` findings only (max 2 cycles), then re-reviews. MED/LOW alone → `APPROVE`
+  (they travel to `pre-release.md`).
 - `BLOCKED` — a finding is `Decision`: a human is needed, do not force it.
+- At `standard` review depth the worker-composer does not dispatch you separately: the verifier
+  applies your three lenses and reports only HIGH as failures, MED/LOW as `DEFERRED:`.

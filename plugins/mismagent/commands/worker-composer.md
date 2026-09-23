@@ -48,6 +48,11 @@ that runs this same lens before you launch). Verify, on the manifest:
   a contract whose files are an **output of the wave-0 scaffold** (e.g. `contracts/proto/` that the
   scaffold creates) is checked **when the first block consuming that boundary becomes ready**, not
   at this gate — the D2 contract test on the weld stays the real welder;
+- **releases and central risks are structure** (build-manifest rules 21–22): every non-scaffold
+  block carries `release:`, `releases.R0` is a launchable vertical slice whose blocks all sit within
+  the **first 3 build waves** (counted on the manifest's distinct `wave` values after the scaffold —
+  an intermediate rule-11 owner wave counts as a wave; brownfield counts from the first wave), and
+  every `central: true` context-map spike **whose `owner:` is this feature** has its spike node — a gap → **not ready**, BOUNCE to build-manifest with the gap named;
 - the manifest passes **build-manifest's pinning-completeness lints** (its rules 10–19: an owner
   block for every shared artifact ≥2 same-wave blocks consume; recursive pins; every
   id/correlation key with its `keys:` minting rule; every `view_shape` field sourced and supplier
@@ -75,6 +80,16 @@ that runs this same lens before you launch). Verify, on the manifest:
   hard-block every feature after the first.) No proof anywhere on a built side, or a gate blind to
   its modules' tests → **not ready**, bounce target = **the profile** (fix the gate string with the
   user);
+- **every gate step earns its place NOW**: a step that protects only **already-released
+  versions** (verification against released schemas, backward-compat of a published API) guards
+  nothing while the side has never released — it lives in the side's **`gate_after_release`** and
+  you switch it into `gate` at the side's **first release in the project** (§6). This is a
+  **project** fact, like the gate proof: once switched (`gate_after_release: switched@<tag>`), later
+  features find it in `gate` legitimately. A released-versions step in the gate of a side that has
+  **no release tag yet** → **not ready**, bounce target = **the profile** (which checks before the
+  first release, which after — with the user). A gate step known to be slow or to hang is not
+  something to wait out or cap: it is a **strategy to replace** (the architect's "Cheap, standard
+  verification") → bounce to `/mismagent:architect` with the step named;
 - **greenfield, next wave ≥2 parallel domain blocks, `dev_architecture: none`** → the codebase's
   style memory is MISSING (friction-log-4 #21): report it and route a **targeted architect style
   dispatch** (its §3½ — the authored dev-architecture, deliberated with the user; never a pass-1
@@ -131,6 +146,25 @@ GREEN → `git mv` it `→done` and start the owner waves; RED → rework (stays
 bounce. A scaffold has **no boundary**, so §5 D2 never applies to it. *(The worker's `RESULT` token is
 informational on this branch — acceptance is the gate, not a §3 review.)*
 
+**Central-risk spikes first.** An open `type: spike` node flagged `central: true` (build-manifest
+rule 22 — an unproven capability the product stands on) is dispatched **at wave 0, in parallel with
+the scaffold**, never after the domain waves: a risk that could sink the product is answered
+before the blocks that assume it are built. The spike has a lifecycle of its own, never the
+block's:
+- **dispatch:** `git mv` the node `tasks/<side>/{backlog,todo}/ → doing/`, append a ledger line
+  `action=spike` (tier `deep`), and dispatch a `mismagent-worker` with the node as its spec: a
+  **throwaway prototype** in its own worktree on a `spike/<id>` branch, **never merged**;
+- **return:** the result **skips §3/§4** (there are no ACs to verify, nothing to merge). Write the
+  evidence to **`<output_dir>/features/<feature>/spikes/<id>.md`** (a file: the next firing and the
+  user read it), log the `result`, remove the worktree (keep the branch), report it at once. The
+  node stays in `doing/` until the answer;
+- **closure:** the decision is the **user's**. It lands through the spike's protocol — an ADR via
+  `write-adr` (`closes_spike:`) or the consuming blocks' ACs via `build-manifest` — and then you
+  `git mv` the node `→ done/` with its `resolution:`. The blocks in its `Unblocks` wait until then;
+- **negative evidence** (the capability does not hold as assumed): **stop dispatching new owner
+  waves** — only the scaffold may complete — and report it as a model decision. Blocks built on a
+  disproved assumption are the waste the spike exists to prevent.
+
 `ready` = the blocks whose consumed boundaries' **owners are MERGED on the integration line**
 (D1 green + §4 — *not* "in `done`": `done` = welded (§5) requires the consumer merged, so keying
 ready on `done` would deadlock owner↔consumer) **and** with no open question parked
@@ -140,6 +174,12 @@ dispatch). Build the **owners** first
 parallel** (cap = the profile's `build.max_parallel_workers`, default **4**; **one worktree per block**, cut **from the integration line** — a consumer must
 see the owners already merged there, or it cannot compile against the root/port it consumes; never
 from the base branch). For each ready block:
+**Priority = the next release's critical path.** When more blocks are ready than the cap allows,
+dispatch first the blocks of the **earliest unreleased `release:`** (R0 before R1 …), and among
+them the ones on its critical path (the most downstream blocks waiting on them). R0 is the vertical
+slice that opens the app (build-manifest rule 21): reaching it early is how the human SEES the
+build, not a courtesy.
+
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
 - **route it** (§2a): resolve the tier/model of this dispatch and append its `dispatch` line to the
   ledger;
@@ -156,7 +196,11 @@ from the base branch). For each ready block:
   write the question to **`<output_dir>/features/<feature>/open-questions/<block-id>.md`** (rule #4: a
   cross-firing handoff is a FILE — the block stays visible on the board and is never re-dispatched
   while the file exists; the user answers, `build-manifest` folds the answer into the spec and
-  clears the file) · `BLOCKED` → stays.
+  clears the file) · `BLOCKED` → log its `result` with the cause; the block stays in `doing/` and is
+  **not** re-dispatched (orphan reconciliation reads the result — below): a BLOCKED names something
+  outside the block (the environment, the other side, a missing module). Report it; when the cause
+  is a build step that is too slow or never finishes, route it to the architect as a **strategy**
+  question (§1), never to another identical attempt.
 
 ## 2a · MODEL ROUTING — the model follows the ACTION, not the session
 Every dispatch you make (worker, verifier, code-review, run-app-smoke) runs on a model **chosen for
@@ -175,7 +219,19 @@ binding on Claude Code: `light → haiku`, `standard → sonnet`, `deep → opus
 | worker · `scaffold` | standard | acceptance is the gate alone |
 | worker · `application-service` · `adapter` · `read-model` · `ui` | standard | the pattern is fixed by the skill + the owner already merged |
 | worker · `aggregate` · `port` | deep | the invariants and the Published Language live HERE; a miss propagates to every consumer wave |
-| `mismagent-verifier` · `code-review` | deep | the guarantors before the merge — the SAME tier for both, so they judge the block with the same depth (friction-log-4 #39/#60) |
+| `mismagent-verifier` · `code-review` | per review depth | `deep` depth → both on `deep`, the SAME tier so they judge the block with the same depth (friction-log-4 #39/#60) · `standard` depth → the single verifier on `standard` |
+
+**Review depth by block type** — how HARD D1 looks, independent of the worker's model (the
+profile's `build.review_depth_by_type` overrides any row):
+| block type | depth | what D1 runs |
+|------------|-------|--------------|
+| `ui` · `adapter` · `read-model` | `standard` | **ONE** `mismagent-verifier` on tier `standard` with `REVIEW_DEPTH: standard`: full gate, AC coverage, `enforced_by`, render-check — plus the code-review lenses **reporting HIGH only**. No separate code-review dispatch. |
+| `aggregate` · `port` · `application-service` | `deep` | `mismagent-verifier` + a separate `code-review`, both on `deep` (as always) |
+Depth **escalates to `deep`** on a block that touches a **`cross-deploy`** boundary (a module/deploy
+boundary with a contract), carries `model_hint: deep`, or is **in rework** (cycle ≥ 1): a deep
+reviewer that first looks at the last cycle would find HIGHs when no cycle is left to fix them. The pattern-shaped
+consumers are fixed by their skill and by the owner already merged; paying two deep reviewers on
+each of them multiplies review rounds without catching more HIGHs.
 
 **Modifiers** on a worker dispatch, applied in order, each capped at `deep`:
 1. the block touches a **`cross-deploy`** boundary → **+1** (OpenAPI/event-schema + generated types + CDC);
@@ -190,9 +246,11 @@ writer; commit it with the state move of the same firing):
 ```
 <iso-time>  <block-id>  <action>  <event>  cycle=<n>  tier=<t>  model=<m>  [<outcome>]
 ```
-`action` = `worker | verifier | code-review | run-app-smoke`; `event` = `dispatch` | `result`
+`action` = `worker | verifier | code-review | run-app-smoke | spike | prerelease-rework |
+harvest-lessons`; `event` = `dispatch` | `result`
 (`result` carries the outcome: `READY-FOR-REVIEW`/`BOUNCED`/`BLOCKED`, `PASS`/`FAIL`,
-`APPROVE`/`CHANGES`/`BLOCKED`, `RENDER-OK`/`RENDER-FAIL`, or `D2-RED`). **Cycle** = the worker's
+`APPROVE`/`CHANGES`/`BLOCKED`, `RENDER-OK`/`RENDER-FAIL`, or `D2-RED`); a `dispatch` line of the
+verifier also carries `depth=<standard|deep>`. **Cycle** = the worker's
 rework number: `0` for the first build, `n+1` for a rework after a D1 FAIL / D2 RED. The **current
 series** of a block = its lines since its last `cycle=0` worker dispatch — an un-parked block (its
 `open-questions/` file cleared by build-manifest) starts a fresh series at `cycle=0`. The ledger is
@@ -208,9 +266,24 @@ tier with `model=default` and dispatch anyway — the ledger stays honest about 
 if `<output_dir>/features/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
 on the block's worktree (the worker can't manufacture evidence, and the verifier's step 8 demands
 it). `RENDER-FAIL` → a D1 FAIL (worker rework, findings named); `RENDER-OK` → proceed.
-For each `READY-FOR-REVIEW`, **with fresh context and routed per §2a** (ledger lines included): `mismagent-verifier` (the profile's build + tests +
-`enforced_by` §14 + every AC covered) + `code-review`. `PASS` and no HIGH finding → eligible
-for merge.
+For each `READY-FOR-REVIEW`, **with fresh context and routed per §2a** (ledger lines included),
+at the block's **review depth** (§2a): `deep` → `mismagent-verifier` (the profile's build + tests +
+`enforced_by` §14 + every AC covered) + `code-review`; `standard` → the single
+`mismagent-verifier` with `REVIEW_DEPTH: standard` (it lists its MED/LOW under `DEFERRED:`). `PASS`
+and no HIGH finding → eligible for merge. A finding that needs a **human/product choice**
+(code-review `BLOCKED`, or the standard verifier's `SKIP` with a `decision:` note) is not a rework:
+park the block like a `BOUNCED` one, the question in `open-questions/<id>.md`.
+
+**Only HIGH blocks — the rework carries ONLY HIGH.** A rework dispatch lists the verifier's FAILs
+and the HIGH findings, **nothing else**. Every MED/LOW finding (code-review's, or the standard
+verifier's `DEFERRED:`) goes to
+**`<output_dir>/features/<feature>/pre-release.md`** (a FILE, you are its only writer, one line per
+finding: `- [ ] <release> · <block-id> · <sev> · <file:line> · <issue> · <verifier|code-review> ·
+<date>`) and
+the block merges. **Never add a MED/LOW to a rework, not even because it is cheap** or the worker
+is "already there": every extra item is a new diff for the reviewers to judge, a new chance to go
+red, and a cycle stolen from the cap. The rule lives HERE, in the command, not in a per-project
+note: a rule the coordinator only remembers is a rule it will bend when bending looks cheap.
 
 ## 4 · COMPOSE (merge = composition)
 `git merge` of the block branch into the **integration line**. You are the **only one** that merges.
@@ -221,18 +294,52 @@ For each boundary whose **two sides** are now merged: run its real-on-real **`co
 the blocks → `done` (`git mv`) once **every** boundary they touch is welded (a block that touches
 no boundary goes to `done` at its merge). **RED** → composition failed → **BOUNCE the boundary's consumer
 block** (the non-owner side that just merged: adapter / application-service / read-model / ui),
-back to `doing` for rework.
+back to `doing` for rework. Same filter as §3: the rework carries the D2 red and HIGH findings
+only; anything MED/LOW surfaced while welding goes to `pre-release.md`.
 
 ## 6 · RELEASE
-A **slice is green** ⇔ all its blocks in `done` ∧ all its boundaries welded → **release-tag →
-feature-flag**. **Here the user confirms** (build = you delegate, confirm only at the end).
+Releases are **structure, not an afterthought**: every block carries its `release:` (R0, R1, …;
+build-manifest rule 21). **Release Rn is green** ⇔ all its blocks in `done` ∧ all their boundaries
+welded ∧ **`pre-release.md` holds no open (`- [ ]`) line for Rn**. Each line closes one of two ways:
+- **fixed — the pre-release rework.** Once Rn's blocks are all `done` and welded, group its open
+  lines by **(context, side)** and dispatch ONE `prerelease-rework` per group (not one per
+  finding): a worker on a fresh worktree from the integration line, tier = the highest base tier
+  among the group's block types; then D1 at the deepest review depth among them, merge, and
+  **re-run D2 on every boundary the diff touches** before the tag — welded code that changed is
+  unwelded until proven otherwise. The blocks stay in `done/` (what is pending is the release,
+  not the block). The group has its own ledger series (`action=prerelease-rework`) with the same cap
+  of 2; the cap hit → its remaining lines go to the user for a waiver. Fixed lines → `- [x]`. New
+  MED/LOW found by this review are tagged for the **next** release, so Rn converges;
+- **waived by the user** — never by you. The user writes
+  **`<output_dir>/features/<feature>/release-decisions/<Rn>.md`** (the lines waived + the reason);
+  you mark each `- [~] … · waived: <reason> · <date>`.
+Then → **release-tag → feature-flag**. **Here the user confirms** (build = you delegate, confirm
+at each release). Report Rn's open `pre-release.md` count in every firing's report, so the backlog
+is visible before the tag, not at it.
+**At a side's first release in the project** switch its `gate_after_release` steps into its `gate`
+and mark `gate_after_release: switched@<tag>` (a profile edit, confirmed with the release — from
+now on released versions exist to protect), then re-run the red-green probe on the new gate string
+(§1). Later releases, and later features, find it already switched.
 
 ## 7 · LOOP & REPORT
 Recompute `done` and repeat from §2 until all blocks are `done` and the boundaries welded (or only
 blocked, recorded work remains). Remove the worktrees. ~30-line report: green slices, done blocks,
 bounced/blocked and why (each parked bounce = its `open-questions/<id>.md`), this firing's dispatches
-with their tier/model (escalations named), welded boundaries,
-anomalies, next action. **Point the human to
+with their tier/model and review depth (escalations named), spikes and their evidence,
+welded boundaries, the next release and what is left on its critical path, open `pre-release.md`
+lines, lessons recorded (below), anomalies, next action.
+
+**Lessons by block type — harvest once, don't copy by hand.** When the **first** block of a type
+passes D1 — or when a rework on a type fixed a defect a later block of the same type could repeat
+(the same defect class the reviewers would otherwise find again, block after block) —
+dispatch `harvest-dev-architecture` in **lessons mode** (tier `standard`, ledger
+`action=harvest-lessons`) on that block: it writes the defect class + the fixed pattern to
+**`<output_dir>/architetture/lessons-by-block-type.md`** (project trunk, one section per type). You
+commit it, and from then on you **inject that file's section for the block's type into every worker
+and reviewer dispatch of that type** — mechanically, like the authored dev-architecture doc — so it
+reaches workers whatever branch they were cut from. **Never paste individual lessons into prompts
+by hand**: a hand-copied lesson reaches only the prompts you remember, and dies with the session.
+The user strikes a lesson they disagree with (`~~…~~`); a struck lesson is not injected. **Point the human to
 `/mismagent:board`** (the live read-only view) and name where the state is
 (`blocks/<context>/{todo,doing,done}/`).
 
@@ -251,10 +358,13 @@ is an orphan of a previous firing. Reconcile it from git, never from memory:
   weld (§5) — leave it, don't re-verify, don't re-merge;
 - its branch/worktree **has commits** (not yet merged) → treat as `READY-FOR-REVIEW` → route to
   §3 D1 (the verifier judges the code, not the story);
-- **no commits** → the work never landed: re-dispatch the worker at the **same cycle and tier** as
-  its last `dispatch` line in the ledger (does not count as a rework cycle);
+- **no commits** and its current series' last worker line is a `dispatch` with **no `result`** →
+  the work never landed: re-dispatch the worker at the **same cycle and tier** (does not count as
+  a rework cycle). Its last result is **`BLOCKED`** → not an orphan: it waits on its cause (§2) —
+  report it, never re-dispatch it blindly;
 - an orphan **worktree with no block** in `doing/` → remove it (state lives in the folders, not in
-  the worktree's existence).
+  the worktree's existence) — except a `spike/<id>` worktree whose spike node is in `doing/` with no
+  `result` logged yet: that spike is still running.
 Pacing: while workers run in the background the harness notifies on completion — use a **long
 fallback** interval, don't poll; waiting on the human → long interval too.
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to the model movement**

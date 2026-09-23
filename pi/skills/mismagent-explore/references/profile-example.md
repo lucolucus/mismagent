@@ -33,12 +33,14 @@ sides:
     repo: machinecare-be                    # e.g. .NET, Clean Arch + DDD, PostgreSQL
     dev_architecture: be-dev-architecture   # golden files in machinecare-be/docs/dev-architecture/
     gate: "dotnet build && dotnet test && dotnet test --filter Contract"
+    gate_after_release: "dotnet test --filter MigrationFromReleased"   # on at the first release
     toolchain: ".NET SDK 8 (pinned by global.json)"
     contract: "swagger.json compared against the YAML + response-shape tests on the real body"
   fe:
     repo: machinecare-fe                    # e.g. Next.js + TypeScript
     dev_architecture: fe-dev-architecture   # golden files in machinecare-fe/docs/dev-architecture/
     gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
+    gate_after_release: none
     toolchain: "Node 20 (pinned by .nvmrc)"
     ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"
     run: "npm run dev (http://localhost:3000)"

@@ -87,6 +87,14 @@ sides:
                                 # every block vacuously green). Discriminating power is proven
                                 # red-green once by the wave-0 scaffold; the composer's Phase 1
                                 # refuses a gate without the proof (friction-log-4 #17)
+    gate_after_release: "<steps that protect RELEASED versions, e.g. a check against released schemas>"
+                                # NOT in the gate before the side's first release (they guard
+                                # nothing yet and cost every dispatch); the worker-composer appends
+                                # them to `gate` at that release and sets `switched@<tag>`.
+                                # none if every step matters from day one. Keep every gate step
+                                # cheap by STRATEGY (architect §3¾: standard migrations, faithful
+                                # in-memory substrates, incremental per-module builds) — a slow or
+                                # hanging step is replaced, never waited out
     toolchain: "<prerequisite>" # what the gate needs to even START (e.g. "JDK 21 — set JAVA_HOME if
                                 # the shell default differs"): the same gate string must not flip
                                 # red on a differently-configured shell. Workers and the verifier
@@ -122,6 +130,13 @@ build:
     by_action: {}               # override a row of the base table, e.g. { adapter: deep,
                                 # code-review: standard } — keys: run-app-smoke, verifier,
                                 # code-review, or a block type (scaffold, aggregate, …)
+  review_depth_by_type:         # how hard D1 looks (worker-composer §2a); defaults shown
+    ui: standard                # standard = ONE verifier on the standard tier + HIGH-only semantic pass
+    adapter: standard
+    read-model: standard
+    aggregate: deep             # deep = verifier + separate code-review, both deep
+    port: deep
+    application-service: deep   # (a cross-deploy seam, model_hint: deep or any rework → deep)
 ```
 
 ## Domain bounded contexts

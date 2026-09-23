@@ -77,7 +77,12 @@ never a silent rewrite, and never something you decide because a feature would p
   now knowable — the bootstrap profile kept them as `manual — TBD after the stack ADR`), **and,
   for every side that renders UI, its `run` binding (+ port)** — pinned NOW, before any scaffold
   exists, so the wave-0 scaffold receives launch command and port as a **contract to satisfy**,
-  not as a wave-3 discovery (friction-log-4 #15).
+  not as a wave-3 discovery (friction-log-4 #15). **Finalizing the gate includes WHEN each check
+  starts to matter** — ask the user, don't deduce: a check that protects already-released
+  versions (verification against released schemas, backward-compat of a published API or event
+  schema) guards nothing before the side's first release and costs every dispatch — it goes to
+  **`gate_after_release`**, which the worker-composer switches into `gate` at that release. And
+  every gate step follows the **cheap, standard verification** strategies below.
 
 A foundational decision (stack, **architectural style**, **infra shape**) emitted **without** this
 pass-1 → checkpoint → pass-2 cycle is a **process defect**, even if the choice happened to be right.
@@ -223,19 +228,48 @@ The core has **two routes** to a dev-architecture, and you own the first:
 Distinct from the block-type skills (`realize-aggregate` & co.), which prescribe the **universal**
 form: the dev-architecture pins the **project** choices those leave open.
 
+## 3¾. Cheap, standard verification — choose strategies that keep the gate fast
+The gate runs on **every** dispatch of every worker and verifier: its cost multiplies by the whole
+build. A step that is slow, flaky or never finishes is not a thing to wait out or to cap with a
+timeout — it is the signal that a **strategy** was chosen badly. When you pin the stack, the
+persistence and the gate, prefer the stack's **conventional, well-trodden** mechanism over a
+bespoke or exotic one, and deliberate the exceptions with the user:
+- **persistence evolves by the stack's standard migrations from the first table**, unless the user
+  explicitly decides it is not needed (no persisted data to keep, a throwaway prototype). Numbered
+  migrations make "does the schema evolve correctly" an ordinary, fast test, instead of a bespoke
+  verification step that compares schemas;
+- **tests hit the cheapest faithful substrate**: an in-memory or embedded instance of the real
+  engine where the stack offers one, a container only where fidelity demands it — never a shared
+  external service;
+- **the gate is incremental and scoped by module** where the build tool supports it, and a step
+  that re-verifies what cannot have changed (a released contract before any release) is not in it;
+- **one conventional tool per concern** (build, test, lint, migrations): a second, parallel
+  mechanism for the same concern doubles the gate and the ways it can hang.
+A build step reported slow or hanging (a worker's `BLOCKED`, a verifier's `SKIP`) comes back HERE:
+replace the strategy with a standard one, never add patience.
+
 ## 4. Boundary breaking changes
 The "evolving contract" depends on the projection:
 - **Cross-deploy:** additive backward compatibility allows independent deploys. A non-additive
   breaking change (field removal/rename) requires a **versioning protocol**
   (new versioned `operationId`/path or a version header) decided in an **ADR beforehand**.
 - **In-process / single-side:** the evolving contract is the **persistence schema**: the
-  migrations (e.g. forward-only, compatible with the app update) must be fixed in an **ADR**
-  with their mechanical constraint, not left to chance.
+  migrations (the stack's standard ones, from the first table — §3¾; e.g. forward-only,
+  compatible with the app update) must be fixed in an **ADR** with their mechanical constraint,
+  not left to chance.
 
 ## Review
 After drafting: if the architecture deserves a second, adversarial pair of eyes, invoke
 **`mismagent-challenger`** (fresh context) on boundaries and architecture; the code's edge cases will
 later be taken by **`code-review`** in build.
+
+## Central risks — name them, they become wave-0 spikes
+Every capability the product **stands on** whose feasibility on the chosen stack is **unproven**
+(an external engine or library never exercised under the product's real conditions, a quality or
+performance target nobody has measured) is a **central risk**: list it in the outcome and in the context-map's open spikes with
+`central: true` and the `owner:` of the feature that raises it, so build-manifest (rule 22) emits it as a spike the worker-composer runs **at wave
+0, beside the scaffold**. A central risk discovered by the block that needs it is discovered after everything
+built on the assumption.
 
 ## NFR
 **Assess the NFRs** (performance, security, reliability) and pin them as **verifiable**
@@ -248,5 +282,6 @@ with `role`); ADRs emitted (flagging which ones have `enforced_by`); the **proje
 files** written (`<output_dir>/architecture.md` + `code-rules.md`, profile pointed at them, the
 gate's dependency lint named); foundational decisions
 **deliberated with the user** (and the profile's gate finalized, if there was a stack ADR);
-authorship/feasibility decisions. Flag every point where the PRD is ambiguous or an NFR is not
+authorship/feasibility decisions; the gate's split between `gate` and `gate_after_release`, and
+the standard strategies chosen to keep it cheap (§3¾); the **central risks** flagged for wave-0 spikes. Flag every point where the PRD is ambiguous or an NFR is not
 verifiable.

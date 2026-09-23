@@ -89,11 +89,11 @@ flowchart LR
         bman -. "if cross-deploy" .-> ccon
     end
 
-    subgraph BU["build — you delegate; confirm at the end"]
+    subgraph BU["build — you delegate; confirm each release"]
         direction TB
         comp["$mismagent-worker-composer<br/>owner-first waves · merge<br/>= composition · D2 weld"]
         wrk["mismagent-worker ×N<br/>block-type × projection<br/>+ side memory"]
-        ver["mismagent-verifier (structural)<br/>+ code-review (semantic)"]
+        ver["mismagent-verifier (structural)<br/>+ code-review (semantic, deep blocks)"]
         comp --> wrk --> ver
         ver -- FAIL --> wrk
     end
@@ -166,14 +166,14 @@ at the first missing artifact. The step-by-step form stays equivalent:
    cross-deploy boundaries, this step does not exist.
 - output: tactical model + **building-block manifest** (+ OpenAPI if cross-deploy) + ADRs.
 
-**build** · *you delegate; confirm only at the end* — from manifest to released code.
+**build** · *you delegate; confirm each release* — from manifest to released code.
 - command **`$mismagent-worker-composer <feature>`** — thin coordinator, the only one that merges and
   moves state: readiness on the manifest (pinned types, or BOUNCE to the model movement; **git present** — if the
   side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
   (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
   **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
-  projection + the codebase's dev-architecture memory) → **D1** green on its own (fresh `mismagent-verifier` +
-  `code-review`) → merge = composition → **D2** contract test on the welded boundary →
+  projection + the codebase's dev-architecture memory) → **D1** green on its own (fresh `mismagent-verifier`, +
+  `code-review` on deep-review blocks) → merge = composition → **D2** contract test on the welded boundary →
   **you confirm** → green release-tag = turn on the flag.
 - output: code composed at the boundaries, deployed behind a flag.
 - *(the file-driven flow — `/dev-orchestrator-v2`, `/project-orchestrator`, `mism-build-dag`,
@@ -222,23 +222,31 @@ the checkpoints (you decide; it types). Or step-by-step, equivalently:
 *Gate:* the worker-composer's **Phase 1** (the single survival-test gate) — optionally previewed early
 with `$mismagent-readiness-gate`. → build.
 
-**3 · build — you delegate; confirm only at the end.**
+**3 · build — you delegate; confirm each release.**
 Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges) —
 if it isn't, the worker-composer's Phase 1 `git init`s it **after asking you to confirm**.
 You type **`$mismagent-worker-composer <feature>`**. It: readiness (unpinned boundary →
 BOUNCE to the model movement; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
-owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
-code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
+owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (fresh verifier, + code-review
+on deep-review blocks) → merge = composition → D2 (contract test on the boundary) → loop.
 Every dispatch runs on a model **routed by its action** (worker-composer §2a: `light`/`standard`/
-`deep` by block type and role — deep for aggregate/port and for the verifier + code-review, +1 on a
+`deep` by block type and role — deep for aggregate/port and for deep-review reviewers, +1 on a
 cross-deploy seam and on the second rework) and is recorded in `features/<feature>/dispatch.log`, so
-the rework cap and the escalation hold across firings. **Run it under `/loop`** (self-paced): each
+the rework cap and the escalation hold across firings. D1's depth follows the block type
+(`build.review_depth_by_type`: one standard verifier for ui/adapter/read-model, verifier +
+code-review on deep for aggregate/port/application-service); only HIGH findings rework, MED/LOW
+collect in the feature's `pre-release.md` that each release must empty (or you waive, in
+`release-decisions/`). A build step that is slow or hangs is not waited out: it goes back to the
+architect as a strategy to replace (standard migrations, faithful in-memory substrates,
+incremental per-module builds). Releases (`release: R0…`) are manifest structure: R0 opens the app
+within the first 3 build waves, central-risk spikes run at wave 0, and the first block of each
+type that passes D1 leaves its lessons in `architetture/lessons-by-block-type.md`. **Run it under `/loop`** (self-paced): each
 firing advances what is ready and ends; the folders + git + the ledger carry the rest. Tune the cap
 and the tier→model binding in the profile's `build:` block.
 You step in **only** if a worker returns `BOUNCED` (ambiguous AC — the block is parked in `todo/`
 with the question in `open-questions/<block-id>.md`: you decide, then re-run
-`$mismagent-build-manifest` to fold the answer in) and **at the end**:
-you confirm the release → green tag → feature-flag.
+`$mismagent-build-manifest` to fold the answer in), when a spike returns its evidence, and **at each
+release**: you confirm it (waiving any `pre-release.md` line you accept) → green tag → feature-flag.
 *Other build steps:* **`$mismagent-run-app-smoke`** `[skill]` — the recorded render proof of `ui`
 blocks (launches the app via the profile's `run`, evidence in `render-proof/`). **Not optional on a
 manual-`ui_render_check` side: the worker-composer runs it itself at D1** when the proof is missing;

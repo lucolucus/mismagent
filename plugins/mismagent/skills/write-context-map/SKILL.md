@@ -34,6 +34,8 @@ If an element has no consumer, **do not write it**.
 - [ ] <spike-slug>: <question to answer> — <closure criterion> — expected side: <from the profile>
       — owner: <the feature that raised it>   <!-- REQUIRED: the map is project-wide, so a build
            run must be able to tell its own spikes from another feature's -->
+      — central: <true|false>   <!-- true = an unproven capability the product stands on: it
+           becomes a wave-0 spike (build-manifest rule 22), run beside the scaffold -->
 ```
 
 ## Rules

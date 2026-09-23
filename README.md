@@ -11,7 +11,7 @@ flowchart LR
     EX --> f1[("product-brief.md<br/>context-map.md")]
     f1 --> MO["2 · model<br/>you decide three things"]
     MO --> f2[("building-blocks.yaml<br/>+ one file per block")]
-    BU["3 · build<br/>you confirm at the end"] --> done([green tag → flag])
+    BU["3 · build<br/>you confirm each release"] --> done([green tag → flag])
     f2 --> BU
 
     classDef step fill:#f6f8fa,stroke:#d0d7de,color:#24292f
@@ -40,11 +40,13 @@ Then, on a feature:
 |---|---|
 | `/mismagent:explore <idea in one sentence>` | You dialogue, the challenger attacks, the analyst fixes the names. |
 | `/mismagent:model <feature>` | Stops exactly three times — ambiguities, stack/style/infra, `tests_nl` — then emits the manifest with boundary types pinned. |
-| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. |
+| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. Review depth follows the block type too: one standard verifier for `ui`/`adapter`/`read-model`, verifier + code-review on `deep` for aggregates, ports and services. Only HIGH findings go back to rework; MED/LOW land in `pre-release.md`, which a release must empty. A build step that is slow or hangs goes back to the architect as a strategy to replace, not a wait. |
 | `/mismagent:board [feature]` | Live read-only kanban. State *is* the folder; parked blocks show as ⏳. |
 
-You step in when a block parks with an open question, and at the end: confirm the release → green
-tag → feature flag on. When something jams, write it in the project's `MISMAGENT-LOG.md` the moment
+You step in when a block parks with an open question, and at each release: confirm it → green tag
+→ feature flag on. Releases are planned in the manifest: R0 is a thin vertical slice that opens the
+app within the first few waves, and the risks the product depends on run as spikes at wave 0,
+alongside the scaffold. When something jams, write it in the project's `MISMAGENT-LOG.md` the moment
 it happens — the method matures from those logs.
 
 ## The three movements
@@ -89,7 +91,7 @@ flowchart LR
         direction TB
         waves["owner-first waves<br/>worker ×N,<br/>one worktree each"]
         park{{"parks in<br/>open-questions/<br/>you answer, it resumes"}}
-        d1["D1 — green on its own<br/>verifier + review<br/>+ render proof"]
+        d1["D1 — green on its own<br/>verifier (+ review, deep blocks)<br/>+ render proof"]
         d2["D2 — merge composes<br/>contract test<br/>welds the boundary"]
         waves --> d1 --> d2
         waves -. BOUNCED .-> park
@@ -184,7 +186,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.14.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.15.0 is the current version.** Before, everything
 > lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
 > ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
 > is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,

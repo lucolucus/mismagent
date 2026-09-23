@@ -45,8 +45,8 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 tactical-modeler → ux-designer if there is UI → architect → build-manifest →
 `create-contract` if a boundary is cross-deploy, stopping only where YOU decide; the single
 commands stay invocable step-by-step) →
-**build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier + code-review →
-you confirm → flag).
+**build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier (+ code-review on deep-review blocks) →
+you confirm each release → flag).
 
 ---
 

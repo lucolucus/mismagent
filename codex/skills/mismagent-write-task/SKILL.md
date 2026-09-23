@@ -28,6 +28,8 @@ type: spike
 side: be | fe | sync | infra
 repo: <repo of the side that will investigate>
 depends_on: []
+central: false          # true = an unproven capability the product stands on (build-manifest
+                        # rule 22): the worker-composer dispatches it at wave 0, beside the scaffold
 ---
 # Spike / <question>
 
@@ -48,7 +50,11 @@ An open spike **blocks** its consumers; close it like this, never by "deleting i
    block**, with a dated note.
 2. **The spike node goes to `done/`** (not deleted) with a `resolution:` field pointing to the
    consumer of the decision (`resolution: ADR-NNNN` or `resolution: AC of <block-id>`) — non-zombie trace.
-3. **Who closes it:** in `build` the worker-composer moves it (sole git-writer of state); in
+3. **Who closes it:** in `build` the worker-composer moves it (sole git-writer of state) — a
+   `central: true` spike it dispatched sits in `doing/` with its evidence in
+   `features/<feature>/spikes/<id>.md` until the user decides; the decision is recorded by
+   `write-adr` (or folded into the consuming blocks' ACs by `build-manifest`), then the composer
+   moves the node to `done/`; in
    `model`/`explore` — where no orchestrator exists — whoever leads the movement in session closes it,
    noting it in the outcome. (Not a violation of "state = the folder": the monopolist rule holds inside build.)
 

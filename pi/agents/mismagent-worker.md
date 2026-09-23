@@ -27,6 +27,12 @@ interactive confirmations.
   architect's before-the-first-wave style memory): either way it **binds** your layout/naming/
   test conventions — don't reinvent what it pins (friction-log-4 #21/#27).
 
+**A `type: spike` node instead of a block** (a central risk, dispatched at wave 0): build the
+smallest **throwaway prototype** that answers its `## Question to answer` against its
+`## Closure criterion`, on the `spike/<id>` branch the composer gave you — no domain code, no
+tests_nl, never merged. Return `READY-FOR-REVIEW` with the evidence (measurements, what worked,
+what did not) in NOTE; the decision is the user's.
+
 ## Golden rule (boundary)
 Write **only** in your block's package/dir. Never another context's source. If you would need to
 cross the boundary or an AC is ambiguous → **`BOUNCED <what's missing>`**, don't invent.
@@ -98,6 +104,13 @@ Your **block file** (`blocks/<ctx>/<state>/<id>.md`) is **read-only spec** — i
 acceptance criteria; **never edit it, never tick a checkbox** (there are none): progress is shown by the
 board from your tests + the folder position, not by mutating the file. You realize code/tests, not state.
 
+## A build step that is too slow or never finishes
+Don't wait it out, don't loop on it, don't kill other workers' processes to unblock yourself. A
+build/test step that takes unreasonably long or never returns is a **strategy problem**, not a
+code one: return `BLOCKED` naming the step and what you observed. The architect replaces the
+strategy (e.g. the stack's standard migrations instead of a bespoke schema check); a retry of the
+same step only repeats the wait.
+
 ## Outcome (tight return)
 ```
 RESULT: READY-FOR-REVIEW | BLOCKED | BOUNCED
@@ -105,5 +118,5 @@ BLOCK: <id>
 BOUNDARY_HONORED: <agg|port|...> (fields confined? predicate exposed? gates honored? yes/no)
 TESTS: <n> green
 PUBLIC_API: <the public signatures another block will use — for aggregate/port>
-NOTE: <1 sentence>
+NOTE: <1 sentence — on BLOCKED: the step/cause outside the block>
 ```

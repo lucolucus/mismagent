@@ -168,6 +168,37 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
     commutativity guarantee, or its spec was reshaped by an answered `open-questions/` file. Never
     set it for size alone — a long but pattern-shaped block is still `standard`. The hint is
     derived like every other field: re-running build-manifest recomputes it.
+21. **Releases are STRUCTURE, decided here — R0 is a launchable vertical slice, early.** Every block
+    carries `release: R0 | R1 | …`, and the manifest's `releases:` section says what each one lets
+    the user DO. **R0** = the thinnest vertical slice that **starts the app and does one real thing
+    end to end** (a screen opens, a command runs through the root, a read-model shows the result)
+    and all its blocks must sit within the **first 3 build waves** (distinct `wave` values after
+    the scaffold, an intermediate rule-11 owner wave included; brownfield counts from the first
+    wave): size R0 down until they do. A
+    block goes to R0 only if R0's walk needs it; everything else is R1+. Present the R0 cut to the
+    user at the `tests_nl` checkpoint — it is what they will see first, so it is theirs to confirm.
+    A manifest whose first launchable build is only its last wave hides the whole build from the
+    human until the end; release labels bolted on mid-build are this rule, missing.
+22. **Central risks become spikes AT WAVE 0** — for every capability the product stands on whose
+    feasibility is **unproven** on this stack (an engine or library never exercised under the
+    product's real conditions, an unmeasured quality/performance target — the context-map's
+    `central: true` spikes and the architect's flagged risks), make sure a `type: spike` node
+    exists with `central: true`: the tactical-modeler normally materialized it already from the
+    context-map — then **set the flag on that node**, never emit a second one; only a risk with no
+    node yet gets one here, via `write-task`.
+    The worker-composer runs it **in parallel with the scaffold**, and the blocks it `Unblocks`
+    wait for its answer. A central risk opened after the domain waves means those waves were built
+    on a guess.
+23. **Granularity: group infrastructure by MODULE.** The `adapter` blocks of one infrastructure
+    module (the implementations of several ports in the same persistence/integration module) are
+    **one block**, not one per table/class/port-implementation: every extra block is one more
+    worker dispatch, verifier round and merge. The grouped block still `consumes` every boundary it
+    implements and D2 welds each of them. **Split** only where the pieces cannot travel together:
+    a **cross-deploy** wire (its own contract artifact and CDC), implementations whose owners land
+    in different waves, or pieces of different releases (rule 21). Two limits: files the module's
+    blocks **share** (the schema/migrations, DI wiring) stay a **rule-11 owner block** built before
+    them — grouping never hides a shared artifact; and domain blocks keep their own granularity
+    (one aggregate = one block).
 
 ## Output
 1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
@@ -195,7 +226,8 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
        view_shape: { <field>: <type>… }    # read-model
        consumes_rm: [<read-model id>…]     # ui
        triggers: [<Command>…]              # ui
-       model_hint: deep                    # OPTIONAL, any type — rule 18; omit otherwise
+       model_hint: deep                    # OPTIONAL, any type — rule 20; omit otherwise
+       release: R0 | R1 | …                # REQUIRED except scaffold — rule 21
    boundaries:                     # FIRST-CLASS section
      - id: <slug>
        owner: <block-id>           # aggregate | port — built before its consumers
@@ -223,6 +255,8 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
                                            # guarantee consumers design their folds against
                                            # (rule 17), e.g. "per-node in-order +
                                            # dedup(nodeId,seq) before the fold"
+   releases:                       # rule 21 — R0 first, the launchable vertical slice
+     R0: { goal: "<what the user can do>", launch: "<what opens: screen / command>", blocks: [<id>…] }
    build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]          # derived, rule 6
    ```
    Anything a consumer needs that is not in this shape **does not exist**: extend THIS section
@@ -230,7 +264,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 2. **The rich block files** — a **DERIVED, status-less rendering** of the manifest, seeded one per
    block into `blocks/<context>/todo/<id>.md`, so opening a block shows the *whole* block (no more
    empty folder markers). Frontmatter mirrors the manifest row — `type`, `context`, `side`, `wave`,
-   `consumes`, `related_adrs`, `model_hint` (when set), **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
+   `consumes`, `related_adrs`, `release`, `model_hint` (when set), **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
    `tables`; port → `projection`/`pinned_types`/`contract_test`; read-model → `view_shape`). Body:
    ```
    # <id> — <title>
@@ -278,7 +312,8 @@ green/red) → a live kanban with each block's `## What to do`/`## Tasks`. It **
 state". This is the visible surface that the hidden `.mismagent/.../blocks/` would otherwise bury.
 
 ## Outcome
-Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), confirmation of
+Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), the releases
+(R0's blocks and the wave by which it launches), the central-risk spikes at wave 0, confirmation of
 pinned types, `tests_nl` elicited from the user, and what is missing before launching
 `/mismagent:worker-composer`. Tell the user the block files are seeded in
 `blocks/<context>/todo/` and that **`/mismagent:board`** shows them live.

@@ -31,7 +31,17 @@ Run exactly that lens on `building-blocks.yaml` (do not invent extra rules):
   `<output_dir>/features/*/gate-proof/<side>.md`, not only the current feature's — feature 2 emits no
   wave-0 scaffold, so looking only under this feature would report a false BLOCKED, and the side's repo is **under git** (the worker-composer
   init's it with confirmation if not); a UI side with manual `ui_render_check` carries its
-  **`run` binding** (pinned a priori — a gap here bounces to **the profile**, a targeted field edit).
+  **`run` binding** (pinned a priori — a gap here bounces to **the profile**, a targeted field edit);
+- **every gate step earns its place now**: on a side with **no release tag yet**, no step that
+  protects only already-released versions sits in `gate` — it belongs in `gate_after_release`
+  (once switched, `switched@<tag>`, it is legitimately in `gate` for every later feature). A gap →
+  **the profile** (which checks before the first release, which after — with the user). A step
+  known to be slow or to hang → **the architect** (a strategy to replace, not a wait);
+- **releases are structure**: every non-scaffold block carries `release:`, R0 is a launchable
+  vertical slice within the first 3 build waves (distinct manifest `wave` values after the
+  scaffold, an intermediate owner wave included), and every `central: true` context-map spike
+  **whose `owner:` is this feature** has its spike node (build-manifest rules 21–22) — a gap →
+  **build-manifest**.
 
 ## Useful verification commands (read-only)
 ```bash

@@ -55,7 +55,7 @@ memories, boundary rules, boundary projections and the commit format.
 **model** (`mismagent-tactical-modeler` → `ux-designer` → `mismagent-architect` → `build-manifest`
 → if a boundary is cross-deploy: `create-contract`, from the module) →
 **build** (`/mismagent:worker-composer` → `mismagent-worker` ×N with block-type × projection skills →
-`mismagent-verifier` + `code-review` → confirmation → feature-flag).
+`mismagent-verifier` (+ `code-review` on deep-review blocks) → confirmation per release → feature-flag).
 
 ## Installation (local marketplace)
 The **marketplace is the root of this repo** (it contains `.claude-plugin/marketplace.json`,

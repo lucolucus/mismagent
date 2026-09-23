@@ -212,6 +212,11 @@ COMPOSER_PI_NOTES = """
   glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
+- **Model routing (§2a) on pi:** bind the tiers to your pi models in the profile's
+  `build.model_routing.tiers`. Pass the routed model on each task when your `subagent` tool accepts
+  a per-task model; when it does not, the `model:` of the agent definition in `.pi/agents/`
+  applies — write `model=default` in the ledger line, never a tier binding you could not apply.
+  Size `build.max_parallel_workers` to the tool's cap (8 tasks per call, 4 concurrent).
 """
 
 

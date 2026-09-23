@@ -40,7 +40,7 @@ Then, on a feature:
 |---|---|
 | `/mismagent:explore <idea in one sentence>` | You dialogue, the challenger attacks, the analyst fixes the names. |
 | `/mismagent:model <feature>` | Stops exactly three times — ambiguities, stack/style/infra, `tests_nl` — then emits the manifest with boundary types pinned. |
-| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. |
+| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. |
 | `/mismagent:board [feature]` | Live read-only kanban. State *is* the folder; parked blocks show as ⏳. |
 
 You step in when a block parks with an open question, and at the end: confirm the release → green
@@ -167,6 +167,7 @@ away without touching anything above it.
   context-map.md        # bounded contexts + ubiquitous language + relationships
   architecture.md       # style + module map + allowed dependency directions
   code-rules.md         # the deliberated rules, each with its enforcement channel
+  infra-notes.md        # the deploy/infra context
   decisions/            # ADRs — scope: global | <side> | infra
   architetture/         # architecture overview · dev-architecture per codebase · contracts
   features/
@@ -177,14 +178,20 @@ A signal is read at the **scope of the artifact it guards**. A new feature's fol
 construction, so emptiness there says nothing about whether the project has chosen its stack: the
 foundational deliberation happens **once per project**, the ubiquitous language is **amended** in
 the one context map rather than re-forked, and changing a foundational decision is an explicit
-amendment (a superseding ADR) rather than a silent rewrite.
+amendment (a superseding ADR) rather than a silent rewrite. The same rule fixes what the *second*
+feature inherits: the gate's red-green proof and the infra notes are project facts, an OpenAPI
+belongs to the **boundary** (the file the feature that introduced it opened, extended ever after),
+and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
+another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking).** Before, everything lived in `<output_dir>/<feature>/`
-> — the context map included — so a second feature forked the ubiquitous language and made the
-> architect re-deliberate the stack and rewrite the profile. There is no compatibility shim: in an
-> existing project, move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to
-> the `<output_dir>` root, move the rest under `features/<feature>/`, and reconcile by hand if two
-> features had diverging context maps.
+> **v0.13.0 changes this layout (breaking); v0.14.0 is the current version.** Before, everything
+> lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
+> ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
+> is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,
+> `architetture/` and `infra-notes.md` up to the `<output_dir>` root, move the rest under
+> `features/<feature>/`, and reconcile by hand if two features had diverging context maps. Add an
+> `owner:` to each open spike in the context map while you are there — v0.13.1 requires it, and an
+> entry without one is reported, never acted on.
 
 ## Going deeper
 
@@ -194,3 +201,11 @@ amendment (a superseding ADR) rather than a silent rewrite.
   of the architecture-driven build.
 - [`docs/PACKAGING.md`](docs/PACKAGING.md) — kernel and modules, the supporting skills the flow
   invokes, the generated packagings for Codex and pi, and the guards that keep them aligned.
+
+## Working on this repo
+
+- `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
+  (`git config core.hooksPath .githooks` once per clone).
+- `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a
+  `README.md` update in the same commit — `[skip-readme]` in the message opts out when nothing a
+  reader sees has changed.

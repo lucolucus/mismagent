@@ -229,6 +229,12 @@ You type **`/skill:mismagent-worker-composer <feature>`**. It: readiness (unpinn
 BOUNCE to the model movement; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
 owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
 code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
+Every dispatch runs on a model **routed by its action** (worker-composer §2a: `light`/`standard`/
+`deep` by block type and role — deep for aggregate/port and for the verifier + code-review, +1 on a
+cross-deploy seam and on the second rework) and is recorded in `features/<feature>/dispatch.log`, so
+the rework cap and the escalation hold across firings. **Run it under `/loop`** (self-paced): each
+firing advances what is ready and ends; the folders + git + the ledger carry the rest. Tune the cap
+and the tier→model binding in the profile's `build:` block.
 You step in **only** if a worker returns `BOUNCED` (ambiguous AC — the block is parked in `todo/`
 with the question in `open-questions/<block-id>.md`: you decide, then re-run
 `/skill:mismagent-build-manifest` to fold the answer in) and **at the end**:

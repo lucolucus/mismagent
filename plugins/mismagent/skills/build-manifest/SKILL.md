@@ -160,6 +160,14 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
     arrow the map forbids) is resolved **with the user** and the losing artifact amended in the
     same pass. Two authoritative artifacts that disagree in silence are two sources of truth;
     nothing downstream re-aligns them (methodology rule 7 applied to yourself).
+20. **Flag the blocks that need the deepest model — `model_hint: deep`** (worker-composer §2a
+    routes every dispatch by action; the hint is the one input only YOU can give it). The
+    base table already puts `aggregate`/`port` on `deep`, so set the hint on a **consumer** block
+    only when the model says it carries owner-grade judgment: it folds ≥ 2 boundaries, it mints or
+    re-keys an id the rule-13 key discipline governs, its fold depends on a rule-17 ordering /
+    commutativity guarantee, or its spec was reshaped by an answered `open-questions/` file. Never
+    set it for size alone — a long but pattern-shaped block is still `standard`. The hint is
+    derived like every other field: re-running build-manifest recomputes it.
 
 ## Output
 1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
@@ -187,6 +195,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
        view_shape: { <field>: <type>… }    # read-model
        consumes_rm: [<read-model id>…]     # ui
        triggers: [<Command>…]              # ui
+       model_hint: deep                    # OPTIONAL, any type — rule 18; omit otherwise
    boundaries:                     # FIRST-CLASS section
      - id: <slug>
        owner: <block-id>           # aggregate | port — built before its consumers
@@ -221,7 +230,7 @@ hand-written. Rationale: `redesign/composer-spec.md` §8.
 2. **The rich block files** — a **DERIVED, status-less rendering** of the manifest, seeded one per
    block into `blocks/<context>/todo/<id>.md`, so opening a block shows the *whole* block (no more
    empty folder markers). Frontmatter mirrors the manifest row — `type`, `context`, `side`, `wave`,
-   `consumes`, `related_adrs`, **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
+   `consumes`, `related_adrs`, `model_hint` (when set), **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
    `tables`; port → `projection`/`pinned_types`/`contract_test`; read-model → `view_shape`). Body:
    ```
    # <id> — <title>

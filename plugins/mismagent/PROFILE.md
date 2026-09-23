@@ -107,6 +107,23 @@ sides:
                                 # contract / generates the types. Single-side: none
 ```
 
+## Build loop (read by the worker-composer — optional, defaults shown)
+
+```yaml
+build:
+  max_parallel_workers: 4       # the wave's cap: consumers dispatched at once (size it to `capacity`
+                                # and to the machine running the gates — N workers = N gates at once)
+  model_routing:                # the model follows the ACTION (worker-composer §2a); omit to keep
+                                # the defaults
+    tiers:                      # rebind the abstract tiers to your harness' models
+      light: haiku
+      standard: sonnet
+      deep: opus
+    by_action: {}               # override a row of the base table, e.g. { adapter: deep,
+                                # code-review: standard } — keys: run-app-smoke, verifier,
+                                # code-review, or a block type (scaffold, aggregate, …)
+```
+
 ## Domain bounded contexts
 The natural contexts of the domain (they seed the boundaries and the canonical names):
 - `<Context1>`, `<Context2>`, …

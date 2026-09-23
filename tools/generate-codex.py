@@ -163,7 +163,14 @@ COMPOSER_CODEX_NOTES = """
      and `max_concurrency` = the wave's cap;
   3. each row's `result_json` is the worker handoff → route it to §3 D1 as usual.
 - **Concurrency/config:** the global `[agents]` settings gate this (`max_threads` default 6,
-  `max_depth` 1 — you run in the main thread, so depth is never exceeded).
+  `max_depth` 1 — you run in the main thread, so depth is never exceeded). Keep the profile's
+  `build.max_parallel_workers` ≤ `max_threads`.
+- **Model routing (§2a) on Codex:** the tiers bind to reasoning effort by default — `light → low`,
+  `standard → medium`, `deep → high` (the profile's `build.model_routing.tiers` may name a model
+  instead). A CSV wave mixes tiers, so **split it: one `spawn_agents_on_csv` call per tier**, each
+  passing that tier's model/effort if the spawn accepts one. When a spawn takes no per-call
+  model/effort, the agent's TOML `model_reasoning_effort` applies: write `model=default` in the
+  ledger line, never the tier's binding you could not apply.
 """
 
 

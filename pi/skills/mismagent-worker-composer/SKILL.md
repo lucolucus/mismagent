@@ -140,11 +140,13 @@ ready on `done` would deadlock owner↔consumer) **and** with no open question p
 (`<output_dir>/features/<feature>/open-questions/<id>.md` exists → not ready: report the question, don't
 dispatch). Build the **owners** first
 (aggregate, port), then the **consumers** (application-service, adapter, read-model, ui) **in
-parallel** (cap N; **one worktree per block**, cut **from the integration line** — a consumer must
+parallel** (cap = the profile's `build.max_parallel_workers`, default **4**; **one worktree per block**, cut **from the integration line** — a consumer must
 see the owners already merged there, or it cannot compile against the root/port it consumes; never
 from the base branch). For each ready block:
 - `git mv` `todo/ → doing/` (you are the git-writer of the state);
-- dispatch **`mismagent-worker`** (the `subagent` tool) with: the block's **rich `<id>.md` spec** (its
+- **route it** (§2a): resolve the tier/model of this dispatch and append its `dispatch` line to the
+  ledger;
+- dispatch **`mismagent-worker`** (the `subagent` tool) **on the routed model** with: the block's **rich `<id>.md` spec** (its
   `## What to do`/`## Tasks` = `tests_nl` → the worker translates them into tests), the **skills** = `select(block-type ×
   projection)` + the **dev-architecture memory the profile points at** — a harvested SKILL loads
   by name; an **authored DOC** (`dev_architecture: <path>` — the architect's before-the-first-wave
@@ -159,12 +161,57 @@ from the base branch). For each ready block:
   while the file exists; the user answers, `build-manifest` folds the answer into the spec and
   clears the file) · `BLOCKED` → stays.
 
+## 2a · MODEL ROUTING — the model follows the ACTION, not the session
+Every dispatch you make (worker, verifier, code-review, run-app-smoke) runs on a model **chosen for
+that action**, never blindly the session's: the judgment a block needs is known from its type and
+its boundary, and a rework that re-runs the same model on the same prompt is the "third identical
+attempt" the cap exists to prevent. You resolve it, you record it, you pass it.
+
+**Tiers** — abstract, so the core names no vendor model: `light` · `standard` · `deep`. Default
+binding on Claude Code: `light → haiku`, `standard → sonnet`, `deep → opus` (the Agent tool's
+`model` parameter); the profile's `build.model_routing.tiers` rebinds them.
+
+**Base tier by action** (the profile's `build.model_routing.by_action` overrides any row):
+| action | tier | why |
+|--------|------|-----|
+| `run-app-smoke` | light | launches + records; the verdict is the evidence, not a judgment |
+| worker · `scaffold` | standard | acceptance is the gate alone |
+| worker · `application-service` · `adapter` · `read-model` · `ui` | standard | the pattern is fixed by the skill + the owner already merged |
+| worker · `aggregate` · `port` | deep | the invariants and the Published Language live HERE; a miss propagates to every consumer wave |
+| `mismagent-verifier` · `code-review` | deep | the guarantors before the merge — the SAME tier for both, so they judge the block with the same depth (friction-log-4 #39/#60) |
+
+**Modifiers** on a worker dispatch, applied in order, each capped at `deep`:
+1. the block touches a **`cross-deploy`** boundary → **+1** (OpenAPI/event-schema + generated types + CDC);
+2. the block's frontmatter carries **`model_hint: deep`** (set by build-manifest) → **deep**;
+3. **rework escalation**: rework cycle 1 keeps the tier (it carries NEW input — the findings); rework
+   cycle 2 → **+1**. On a block already at `deep`, cycle 2 still differs: tell the worker it is the
+   LAST cycle and to re-read the findings of BOTH previous rounds before touching code.
+
+**The dispatch ledger — the routing's memory across firings.** You append one line per event to
+**`<output_dir>/features/<feature>/dispatch.log`** (tab-separated, append-only, you are its only
+writer; commit it with the state move of the same firing):
+```
+<iso-time>  <block-id>  <action>  <event>  cycle=<n>  tier=<t>  model=<m>  [<outcome>]
+```
+`action` = `worker | verifier | code-review | run-app-smoke`; `event` = `dispatch` | `result`
+(`result` carries the outcome: `READY-FOR-REVIEW`/`BOUNCED`/`BLOCKED`, `PASS`/`FAIL`,
+`APPROVE`/`CHANGES`/`BLOCKED`, `RENDER-OK`/`RENDER-FAIL`, or `D2-RED`). **Cycle** = the worker's
+rework number: `0` for the first build, `n+1` for a rework after a D1 FAIL / D2 RED. The **current
+series** of a block = its lines since its last `cycle=0` worker dispatch — an un-parked block (its
+`open-questions/` file cleared by build-manifest) starts a fresh series at `cycle=0`. The ledger is
+how the **rework cap survives `/loop`**: the next firing reads the series' highest cycle, never
+counts from memory. It is a log the composer re-reads, never state: the block's state is still its
+folder.
+
+**Where a model cannot be applied** (a harness whose dispatch takes no per-spawn model), record the
+tier with `model=default` and dispatch anyway — the ledger stays honest about what really ran.
+
 ## 3 · D1 — GREEN ON ITS OWN
 **`ui` block on a manual-`ui_render_check` side — the render proof comes FIRST, and you own it:**
 if `<output_dir>/features/<feature>/render-proof/<block-id>/` is absent, produce it now via **`run-app-smoke`**
 on the block's worktree (the worker can't manufacture evidence, and the verifier's step 8 demands
 it). `RENDER-FAIL` → a D1 FAIL (worker rework, findings named); `RENDER-OK` → proceed.
-For each `READY-FOR-REVIEW`, **with fresh context**: `mismagent-verifier` (the profile's build + tests +
+For each `READY-FOR-REVIEW`, **with fresh context and routed per §2a** (ledger lines included): `mismagent-verifier` (the profile's build + tests +
 `enforced_by` §14 + every AC covered) + `code-review`. `PASS` and no HIGH finding → eligible
 for merge.
 
@@ -186,7 +233,8 @@ feature-flag**. **Here the user confirms** (build = you delegate, confirm only a
 ## 7 · LOOP & REPORT
 Recompute `done` and repeat from §2 until all blocks are `done` and the boundaries welded (or only
 blocked, recorded work remains). Remove the worktrees. ~30-line report: green slices, done blocks,
-bounced/blocked and why (each parked bounce = its `open-questions/<id>.md`), welded boundaries,
+bounced/blocked and why (each parked bounce = its `open-questions/<id>.md`), this firing's dispatches
+with their tier/model (escalations named), welded boundaries,
 anomalies, next action. **Point the human to
 `/skill:mismagent-board`** (the live read-only view) and name where the state is
 (`blocks/<context>/{todo,doing,done}/`).
@@ -206,7 +254,8 @@ is an orphan of a previous firing. Reconcile it from git, never from memory:
   weld (§5) — leave it, don't re-verify, don't re-merge;
 - its branch/worktree **has commits** (not yet merged) → treat as `READY-FOR-REVIEW` → route to
   §3 D1 (the verifier judges the code, not the story);
-- **no commits** → the work never landed: re-dispatch the worker (does not count as a rework cycle);
+- **no commits** → the work never landed: re-dispatch the worker at the **same cycle and tier** as
+  its last `dispatch` line in the ledger (does not count as a rework cycle);
 - an orphan **worktree with no block** in `doing/` → remove it (state lives in the folders, not in
   the worktree's existence).
 Pacing: while workers run in the background the harness notifies on completion — use a **long
@@ -214,14 +263,16 @@ fallback** interval, don't poll; waiting on the human → long interval too.
 - under-specified boundary (Phase 1, or discovered in Phase 5) → **to the model movement**
   (`/mismagent-architect`: pin the Published Language);
 - worker `BOUNCED` → parked + `open-questions/` (§2), the answer flows back via `build-manifest`; ·
-  D1 `FAIL` / D2 `RED` → to the worker (rework, **max 2 cycles**; the cap hit → stop reworking and
+  D1 `FAIL` / D2 `RED` → to the worker (rework, **max 2 cycles**, counted from the ledger's current
+  series and escalated per §2a; the cap hit → stop reworking and
   park it like a bounce, findings in `open-questions/<id>.md` — a block that won't go green in two
   cycles needs a human/spec decision, not a third identical attempt).
 
 ## INVARIANTS you NEVER violate
 1. You are the **only one** that does `git merge` and `git mv` (moving state). Workers write **code**
    in the worktrees, **never** state, **never** merges, **never** the other side.
-2. **State = the folder** (`blocks/<context>/{todo,doing,done}/`); no `status:` in the files.
+2. **State = the folder** (`blocks/<context>/{todo,doing,done}/`); no `status:` in the files. The
+   `dispatch.log` is your re-read memory of *how* each block was attempted, never its state.
 3. The **types at the boundary** are Published Language (primitive/shared-kernel), **never** the
    supplier's domain.
 4. **No merge/push onto the base branch** without an explicit user request.
@@ -247,3 +298,8 @@ fallback** interval, don't poll; waiting on the human → long interval too.
   glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
+- **Model routing (§2a) on pi:** bind the tiers to your pi models in the profile's
+  `build.model_routing.tiers`. Pass the routed model on each task when your `subagent` tool accepts
+  a per-task model; when it does not, the `model:` of the agent definition in `.pi/agents/`
+  applies — write `model=default` in the ledger line, never a tier binding you could not apply.
+  Size `build.max_parallel_workers` to the tool's cap (8 tasks per call, 4 concurrent).

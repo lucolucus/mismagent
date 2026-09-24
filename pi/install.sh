@@ -26,4 +26,4 @@ else
   cp "$HERE/AGENTS.md" "$TARGET/AGENTS.md"
 fi
 echo "mismAgent (pi) installed into $TARGET — verify with /skill:mismagent-explore."
-echo "[agent] steps need pi's subagent example extension (AGENTS.md, step 0) with agentScope 'both'."
+echo "[agent] steps need pi's subagent example extension (AGENTS.md, Setup) with agentScope 'both'."

@@ -1,6 +1,6 @@
 ---
 name: mismagent-run-app-smoke
-description: "mismAgent build movement \u2014 the RENDER PROOF for ui blocks (runtime layout bugs are invisible to green presenter tests). LAUNCHES the side's app for real (profile sides.<side>.run), walks the ui blocks' screens with realize-ui's render checklist (sizing/overflow/contrast/state-rendering/recomposition) and RECORDS the evidence (screenshots/notes) in <output_dir>/features/<feature>/render-proof/<block-id>/ \u2014 the recorded proof mismagent-verifier step 8 demands when ui_render_check is manual. Writes evidence only, never app code. Use at D1 of a ui block (the worker-composer invokes it there itself when the side's ui_render_check is manual and the proof is missing), or on the whole slice before confirming the release."
+description: "mismAgent build: the recorded render proof for ui blocks \u2014 launches the side's app (profile run), walks each screen with the render checklist, records evidence + sha under render-proof/<block-id>/. Use at a ui block's review or before release."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -8,12 +8,11 @@ description: "mismAgent build movement \u2014 the RENDER PROOF for ui blocks (ru
 
 # run-app-smoke — the render proof, recorded
 
-You produce the **second proof** of a `ui` block (realize-ui: *"presenter-green alone is NOT done"*)
-by **running the real app** and recording what you see — clipped, wrapped or invisible controls
-are caught **only** this way.
+You produce the **second proof** of a `ui` block (presenter-green alone is not done) by **running
+the real app** and recording what you see — clipped or invisible controls are caught only this way.
 
 ## Input
-- the **ui block(s)** to prove: one block (at D1) or every `ui` block of a slice (before release);
+- the **ui block(s)** to prove: one block (at its review) or every `ui` block of a slice (before release);
 - the **active profile**: `sides.<side>.run` (how to launch the side locally) and `ui_render_check`;
 - the block specs (`blocks/<ctx>/*/<id>.md`) + `UI/ux-proposal.md` (how to reach each screen).
 
@@ -28,7 +27,7 @@ are caught **only** this way.
    - **contrast/visibility** — every control visible against its background;
    - **state rendering** — empty / error / loading actually render (drive the app into each state
      where the seams allow it);
-   - **recomposition** — interact and watch the re-render actually happen.
+   - **re-render** — interact and watch the view actually update.
 3. **Record the evidence** in `<output_dir>/features/<feature>/render-proof/<block-id>/`: a screenshot per
    checklist item where the platform allows capture (browser tooling, OS screenshot), otherwise a
    dated observation note per item — **what was checked, what was seen**. Evidence is written even
@@ -39,7 +38,7 @@ are caught **only** this way.
    - `RENDER-OK` — checklist green, evidence recorded → this is the proof the verifier's step 8
      accepts for a manual `ui_render_check`;
    - `RENDER-FAIL` — findings named (which item, which screen, evidence attached) → routes like a
-     D1 FAIL: the worker reworks the block (max 2 cycles), then re-prove.
+     review FAIL: the worker reworks the block (max 2 cycles), then re-prove.
 
 ## Boundaries
 - You write **evidence only**, under `<output_dir>/features/<feature>/render-proof/` — **never** app code,

@@ -1,6 +1,7 @@
 ---
 name: write-infra-notes
-description: 'mismAgent''s specialized writer of infrastructure considerations (explore/model). Produces the PROJECT-level <output_dir>/infra-notes.md (trunk: one per project, AMENDED across features, never redrafted) in the FORM the profile dictates: cloud/cross-side (independent deploy units, secrets & identity, CI/CD) or desktop/single-side (desktop stack, local DB+migrations, backup/restore, per-OS packaging, updates). Seeds infra tasks/blocks and enforced_by ADRs. Invoked by explore ONLY to draft it when it does not exist yet, and by mismagent-architect (consolidation/amendment) — the architect owns the trunk.'
+description: 'mismAgent explore/model: writes the project-level <output_dir>/infra-notes.md (amended, never redrafted) in the form the profile''s sides dictate; each need maps to a task, an enforced_by ADR or a gate. Drafted by explore, amended by the architect.'
+user-invocable: false
 ---
 
 # MismAgent — Write Infra Notes (writer, explore/model)
@@ -13,12 +14,15 @@ that neither the PRD nor the contract cover, but that generate real work in the 
 ## Why it exists (downstream consumers = survival test)
 - → **infra blocks/tasks** (`build-manifest` / `write-task` generate them from the needs
   listed here).
-- → **`enforced_by` ADRs** (`write-adr`): a mechanical infra constraint (e.g. Managed Identity,
-  no connection strings; or: forward-only migrations) becomes a grep-rule that the
-  `mismagent-verifier` checks.
+- → **`enforced_by` ADRs** (`write-adr`): a mechanical infra constraint (e.g. workload identity,
+  no embedded secrets; or: forward-only migrations) becomes a versioned check the gate runs.
 - → **CI gates**: pipeline per side, with the **contract test as a blocking job**
   and the anti-state guards (no `status:` / state files committed).
 If an infra need generates neither a task nor an ADR nor a gate, **do not write it** (it is noise).
+
+## The architect's INFRA_QUESTIONS (asked, never defaulted)
+Distribution and updates · workstations and connectivity · destiny of the data · retention ·
+lifecycle and maintenance.
 
 ## Choose the FORM from the profile (the declared sides decide the template)
 The cloud/cross-side template on a desktop app produces only zombies (and vice versa): use the form
@@ -33,7 +37,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 - Environments: <dev | prod>; promotion constraints; produces-before-consumes at deploy.
 
 ## Secrets & identity
-- <e.g. Blob via Managed Identity (DefaultAzureCredential), NEVER connection strings> → enforced_by ADR.
+- <e.g. storage via the platform's workload identity, NEVER embedded secrets> → enforced_by ADR.
 
 ## Scaling & performance (link to the PRD's NFRs)
 - <e.g. NFR1 list ≤ 1.5s; rate-limiting on writes; server-side LIMIT>.
@@ -42,7 +46,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 - <structured logging, correlation-id, liveness/readiness health checks>.
 
 ## CI/CD
-- Two independent pipelines (one per side); contract test = BLOCKING job; anti-state guards (§1.1).
+- Two independent pipelines (one per side); contract test = BLOCKING job; anti-state guards.
 
 ## Needs → work (what becomes a task/ADR/gate)
 - <need> → <task side:infra | enforced_by ADR | CI gate>
@@ -73,7 +77,7 @@ that matches the profile's sides. Sections that do not apply **are not written**
 
 ## Rules
 - **Project scope — amend, never redraft.** One infra-notes per project, in the `<output_dir>` root.
-  The templates below are the shape of the **first draft**; on any later feature you **read the
+  The templates above are the shape of the **first draft**; on any later feature you **read the
   existing file first** and emit a **delta** — add what this feature's infra needs, leave everything
   another feature established untouched. Only the **architect** amends it (explore drafts it once,
   when it does not exist). Rewriting it per feature silently drops the packaging, backup, retention

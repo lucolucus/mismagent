@@ -12,7 +12,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | Command | Output |
 |---|---|
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}]}` — exit 1 if any |
-| `MM lint F` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
+| `MM lint F [--pre-contract]` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{id, from, to, path, git}` or `{refused}` |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
@@ -43,8 +43,13 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`.
 - **pack** / **spec_hash** share ONE dependency resolution: the block file, its manifest row, the rows
   of the boundaries it touches, and the ADRs of the block ∪ of the owners of the boundaries it
-  consumes (`<output_dir>/decisions/NNNN-*.md`). The pack adds the goal (`F/product-brief.md`), the
-  ADRs' `## Decision` + `## Rationale` (else `## Consequences`), the block type's section of
+  consumes (`<output_dir>/decisions/NNNN-*.md`) ∪ every ADR with a check whose `from` is the block; a `scaffold` block honours every block's ADRs (it
+  writes the checks with no `from`). The pack adds the goal (`F/product-brief.md`), the
+  ADRs' `## Decision` + `## Rationale` (else `## Consequences`) and their `enforced_by` checks, each
+  marked `applicable` (no `from`, or `from` integrated), `THIS block writes it` (`from` = the packed
+  block), `not yet applicable` or `UNRESOLVED` (no such block). `from` resolves **project-wide**:
+  integrated = any feature's `integrated/<from>.json` or `blocks/*/done/<from>.md`; an entry that is not `{check: <repo-relative path>, from: <block>}`
+  is listed `LEGACY` (never executed). Then the block type's `## <type>` section of
   `<output_dir>/architetture/lessons-by-block-type.md` (struck `~~…~~` lessons skipped), and each
   `--extra` file, under a first line `spec_hash: <h>`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
   never makes a proof stale. An id that is not a block (a pre-release group) has its
@@ -87,14 +92,16 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `boundary.pinned_types` | `pinned_types` present and non-empty → `architect` |
 | `boundary.contract_test` · `boundary.projection` | `invariant-test \| consumer-driven` · `in-process \| cross-deploy` |
 | `projection.contract_form` · `projection.openapi` · `projection.event_schema` | `cross-deploy` ⇒ `contract_form` ∈ openapi, event-schema; `openapi` ⇒ `contract_path` + `operation_ids`; `event-schema` ⇒ `schema_paths` |
-| `contract.exists` · `contract.operation_ids` | `contract_path` / `schema_paths` exist under the repo, the project root or `<output_dir>/architetture/`; each operation id appears as an `operationId: <id>` key (a comment line does not count). While a `scaffold` block is not in `done/`, a missing file is `deferred`, not a gap |
+| `contract.exists` · `contract.operation_ids` | `contract_path` / `schema_paths` exist under the repo, the project root or `<output_dir>/architetture/`; each operation id appears as an `operationId: <id>` key (a comment line does not count). While a `scaffold` block is not in `done/` — or, with `--pre-contract`, for an `openapi` boundary (create-contract writes it) — a missing file is `deferred`, not a gap |
 | `blockfile.exists` · `blockfile.unique` · `blockfile.orphan` | exactly one `blocks/<ctx>/{todo,doing,done}/<id>.md` per row; no file without a row |
 | `blockfile.frontmatter` · `blockfile.context_dir` | frontmatter `type`/`context`/`wave` equal the row; the file sits under `blocks/<context>/` |
 | `blockfile.status_free` | no `status:` field, no checkbox |
 | `spec.what` · `spec.tasks` · `spec.sources` | non-scaffold: `## What to do` non-empty; `## Tasks` ≥ 1 list item; a `Sources:` line |
 | `spec.invariants` | each `INV-n` tag of the row's `invariants` appears in `## Tasks`; with untagged invariants, criteria ≥ invariants |
 | `spec.commands` | each `commands` entry appears in `## Tasks` |
+| `adr.checks` | every `enforced_by` entry of the ADRs the blocks resolve (as `pack`) is `{check: <repo-relative path>, from: <block>?}`, its `from` is a block of some feature's manifest, and the check exists in the repo → `architect`. A missing check is `deferred` while its `from` block is not integrated (project-wide), or — with no `from` — while a `scaffold` block is not in `done/` |
 | `spikes.central_node` · `spikes.central_flag` | each open `[ ]` entry of the context map's `## Open spikes` with `owner: <this feature>` and `central: true` has a `type: spike` node carrying `central: true` |
 
 Not linted (judgment — the composer's readiness and the reviewers): whether a criterion is
-meaningful, whether pinned types are complete, the gate's discrimination, the profile's bindings.
+meaningful, whether pinned types are complete, the gate's discrimination, whether an ADR check is
+registered in the gate and discriminates (the verifier), the profile's bindings.

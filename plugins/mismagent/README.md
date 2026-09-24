@@ -17,19 +17,16 @@ project. Each project provides its own profile — **the active profile lives in
 point**: written once, read by every feature. Features are folders under
 `<output_dir>/features/<feature>/`; the project trunk (`context-map.md`, `architecture.md`,
 `code-rules.md`, `infra-notes.md`, `decisions/`, `architetture/`) sits in the `<output_dir>` root and
-only the architect writes it — the one exception being `context-map.md`, which the **analyst**
-amends (see `methodology/mismagent.md` § "Where things live") (template: `PROFILE.md`; filled-in
-example: `profiles/example.md`): from there agents read sides, paths, gates, dev-architecture
-memories, boundary rules, boundary projections and the commit format.
+only the architect writes it, except `context-map.md`, which the **analyst** amends. Template:
+`PROFILE.md`; filled-in example: `profiles/example.md`.
 
 ## Contents (kernel)
-- `methodology/mismagent.md` — the map of the flow (what to invoke, in what order).
-  `redesign/composer-spec.md` — rationale of the architecture-driven build.
+- `methodology/mismagent.md` — the map of the flow (who owns what, in what order).
 - `skills/`:
   - `explore` (explore) — orchestrates the dialogue; profile bootstrap; challenger + analyst.
   - `build-manifest` (model) — from the tactical model → **building-block manifest**
     (types pinned at the boundaries, projection, `tests_nl`).
-  - `readiness-gate` (model→build) — survival test on the manifest.
+  - `readiness-gate` (model→build) — optional pre-flight of the worker-composer's readiness (`MM lint`).
   - `realize-{aggregate,application-service,port,adapter,read-model,ui,scaffold}` + `seam-in-process`
     (build) — the worker's skills: block-type × boundary projection (`scaffold` = the greenfield
     wave-0 buildable skeleton).

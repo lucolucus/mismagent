@@ -1,6 +1,7 @@
 ---
 name: write-code-rules
-description: 'mismAgent model movement — writer of the project''s CODE-WRITING RULES as a USER-VISIBLE file: <output_dir>/code-rules.md (project-level, next to profile.md and architecture.md). Each deliberated rule carries its ENFORCEMENT CHANNEL: mechanical → the gate''s dependency/style lint (runs in the worker''s own loop + verifier step 2 + CI), discursive → a code-review criterion, structural → a citation of the owner (realize-*/seam/gates), never restated. A rule with NO channel is not written. Invoked by mismagent-architect in pass-2, after the user deliberated the rules inside ARCH_PROPOSAL and after the stack ADR (the lint choice needs the stack).'
+description: 'mismAgent model: writes the project''s <output_dir>/code-rules.md — each deliberated coding rule with its enforcement channel (gate lint, review criterion or structural owner); a rule with no channel is not written. Invoked by the architect in pass 2.'
+user-invocable: false
 ---
 
 # write-code-rules — rules that survive because something enforces them
@@ -24,7 +25,7 @@ the last three rows are genuine decisions — the rest is doctrine the method al
 | principle | in mismAgent terms | channel |
 |---|---|---|
 | **SRP** | one block = one reason to change (the tactical→block map fixes the granularity) | **structural** — cite the map + `realize-*` |
-| **LSP** | any adapter must pass the port's contract test unchanged | **structural** — the D2 contract test *is* LSP made executable |
+| **LSP** | any adapter must pass the port's contract test unchanged | **structural** — the port's contract test *is* LSP made executable |
 | **ISP** | consumer-owned port: only the methods the consumer needs | **structural** — `realize-port` |
 | **KISS / YAGNI / DRY-at-the-root** | less code, reuse the root's rule, no speculative abstraction | **structural** — the worker's frugality ladder |
 | **naming = ubiquitous language** | one concept, one canonical name | **structural** — the verifier's anti-shadow check |
@@ -33,15 +34,16 @@ the last three rows are genuine decisions — the rest is doctrine the method al
 | **immutability** | domain values immutable by default; mutation through the root | **gate lint** where lint-able, else **review criterion** |
 
 ## The mechanical channel is the GATE, not a grep
-A dependency rule is a **graph property**: POSIX grep is the wrong tool (blind to FQN use, build
-files, aliases). Use the stack's **dependency lint**, named here and in the style ADR, its config
-derived from `architecture.md`'s module map:
-- JVM/Kotlin → **Konsist** or **ArchUnit** · TypeScript → **dependency-cruiser** or
-  eslint-plugin-boundaries · Python → **import-linter** · (per stack: the architect proposes).
+A dependency rule is a **graph property**: a text search is the wrong tool (blind to qualified
+names, build files, aliases). Use the stack's **dependency lint** (the architect proposes one per
+stack), named here and in the style ADR, its config derived from `architecture.md`'s module map:
 - The config **lives in the side's path** (wired by the wave-0 `scaffold`, like the ui-test dep):
   it runs in the worker's own gate loop, in verifier step 2 and in CI — and on a module rename the
   worker maintains it like any build file (no ownerless rot).
 - Style rules (empty-catch, mutability) join the same linter's ruleset where it has them.
+- **This is the ADR checks' mechanism:** the style ADR's `enforced_by` names the lint config as its
+  `check` (see `write-adr`) — one mechanism, with the same violating/conforming fixtures and
+  recognizable result; no second grep beside it.
 
 ## Output — `<output_dir>/code-rules.md`
 One section per rule: the statement (one line), the channel, and the pointer —

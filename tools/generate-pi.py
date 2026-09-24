@@ -3,11 +3,11 @@
 generate-pi.py — derive the pi (pi.dev) packaging of mismAgent from the Claude Code plugin.
 
 The Claude plugin (plugins/mismagent + plugins/mismagent-cross-deploy) is the ONLY source of
-truth; pi/ is a GENERATED view (methodology rule #3: a derived view regenerated from a source,
+truth; pi/ is a GENERATED view (the methodology's derived-view rule: a derived view regenerated from a source,
 never hand-maintained). Do not edit pi/ by hand — edit the plugin, then re-run this script.
 
 Mapping (verified against pi.dev/docs/latest + the earendil-works/pi subagent example, 2026-07):
-  plugin skill  SKILL.md            -> pi/skills/mismagent-<name>/SKILL.md    (.agents/skills)
+  plugin skill  SKILL.md (+ references/) -> pi/skills/mismagent-<name>/        (.agents/skills)
   command       worker-composer.md  -> skill mismagent-worker-composer        (model-referenceable)
   command       board.md + board.py -> skill mismagent-board (script in scripts/)
   command       model.md            -> skill mismagent-model
@@ -60,6 +60,7 @@ def adapt(text, keep_args=False):
     # module-namespaced skill first (more specific than the generic rule)
     text = text.replace("/mismagent-cross-deploy:create-contract",
                         "/skill:mismagent-create-contract")
+    text = text.replace("`/mismagent:<name>`", "`/mismagent-<name>`")  # the wrappers' prompt templates
     # /mismagent:X — prompt template if X is a thin [agent] wrapper, skill otherwise
     text = re.sub(r"/mismagent:([a-z0-9-]+)",
                   lambda m: ("/mismagent-%s" if m.group(1) in WRAPPERS
@@ -97,9 +98,10 @@ def parse_frontmatter(text):
         m = re.match(r"^([A-Za-z_-]+):\s*(.*)$", line)
         if m:
             val = m.group(2).strip()
-            if (val.startswith("'") and val.endswith("'")) or \
-               (val.startswith('"') and val.endswith('"')):
-                val = val[1:-1]
+            if val.startswith("'") and val.endswith("'") and len(val) > 1:
+                val = val[1:-1].replace("''", "'")
+            elif val.startswith('"') and val.endswith('"') and len(val) > 1:
+                val = json.loads(val)
             fm[m.group(1)] = val
     return fm, text[end + 4:].lstrip("\n")
 
@@ -134,6 +136,25 @@ def convert_skills(plugin_dir, cross=False):
             note = ("> Cross-deploy module: install only when a boundary crosses a deploy unit\n"
                     "> (`install.sh --with-cross-deploy`).\n")
         emit_skill(name, fm.get("description", ""), body, note)
+        copy_references(os.path.join(skills_dir, name), "mismagent-%s" % name)
+
+
+def copy_references(src_skill_dir, out_name):
+    """A skill's references/ ship beside its SKILL.md (Markdown adapted, anything else copied)."""
+    src = os.path.join(src_skill_dir, "references")
+    if not os.path.isdir(src):
+        return
+    for fn in sorted(os.listdir(src)):
+        path = os.path.join(src, fn)
+        if not os.path.isfile(path):
+            continue
+        dest = os.path.join(OUT, "skills", out_name, "references", fn)
+        if fn.endswith(".md"):
+            with open(path, encoding="utf-8") as f:
+                write(dest, adapt(f.read()))
+        else:
+            shutil.copy(path, _ensured(dest))
+            print("  wrote %s" % os.path.relpath(dest, ROOT))
 
 
 # ---- agents -> subagent-extension markdown -----------------------------------
@@ -148,11 +169,11 @@ TOOL_MAP = {
 WEB_NOTE = ("> pi note (generated): WebSearch/WebFetch have no pi equivalent — `bash` (curl)\n"
             "> substitutes for web access here.\n")
 
-# generated packaging glue: pi's subagent tool spawns only NAMED agents, so the composer's D1
+# generated packaging glue: pi's subagent tool spawns only NAMED agents, so the composer's review
 # semantic review (a skill on Claude/Codex) needs a fresh-context host agent on pi.
 REVIEWER_DESCRIPTION = (
     "GENERATED packaging glue (pi only) — fresh-context host for the mismagent-code-review "
-    "skill. Spawned by the worker-composer at D1 after mismagent-verifier; loads the skill and "
+    "skill. Spawned by the worker-composer at review (step 5) after mismagent-verifier; loads the skill and "
     "applies it to the diff of ONE block. Read-only — finds and triages (HIGH|MED|LOW -> "
     "Decision|Patch|Defer), does not fix.")
 
@@ -203,23 +224,23 @@ def convert_agents():
 COMPOSER_PI_NOTES = """
 ## pi execution notes (generated — how to run the waves on this harness)
 - **All subagent dispatch goes through the `subagent` tool** (pi's official example extension —
-  AGENTS.md §0), with the mismAgent agent definitions in `.pi/agents/`; always pass
+  AGENTS.md, Setup), with the mismAgent agent definitions in `.pi/agents/`; always pass
   `agentScope: "both"` so the project-local agents are visible. Every spawn is a fresh, isolated
-  context — exactly the fresh-context guarantee D1 relies on.
+  context — exactly the fresh-context guarantee the review relies on.
 - **Parallel consumers in a wave — use the tool's parallel mode**: one
   `{agent: "mismagent-worker", task: ...}` entry per ready block, each task carrying `block_id`,
   `block_type`, `context`, the `select(block-type × projection)` skill names (e.g.
   `mismagent-realize-aggregate` — the worker reads them from `.agents/skills/<name>/SKILL.md`),
   the path of the block's rich `<id>.md` spec and the side's gate commands. The extension caps a
   call at 8 tasks (4 concurrent) — size waves accordingly. Ask each worker to end with the RESULT
-  handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to §3 D1
+  handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to step 4
   as usual.
-- **D1 after the worker**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
+- **Review (step 5)**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
   (structural), then `{agent: "mismagent-reviewer", task: <block id + diff scope>}` — a generated
   glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
-- **Model routing (§2a) on pi:** bind the tiers to your pi models in the profile's
+- **Model routing on pi:** bind the tiers to your pi models in the profile's
   `build.model_routing.tiers`. Pass the routed model on each task when your `subagent` tool accepts
   a per-task model; when it does not, the `model:` of the agent definition in `.pi/agents/`
   applies — write `model=default` in the ledger line, never a tier binding you could not apply.
@@ -259,7 +280,7 @@ def _ensured(path):
 
 
 # ---- thin agent-wrapper commands -> prompt templates -------------------------
-PROMPT_NOTE = ("> `[agent]` dispatch: needs pi's `subagent` example extension (AGENTS.md §0);\n"
+PROMPT_NOTE = ("> `[agent]` dispatch: needs pi's `subagent` example extension (AGENTS.md, Setup);\n"
                "> call it with `agentScope: \"both\"` so the `.pi/agents/` definitions are "
                "visible.\n")
 
@@ -287,7 +308,7 @@ def copy_profile_templates():
 
 # ---- AGENTS.md from the methodology ------------------------------------------
 PI_SETUP = (
-    "**0 · Setup (once).** From the mismagent repo: `pi/install.sh <your-project-root>` "
+    "**Setup (once).** From the mismagent repo: `pi/install.sh <your-project-root>` "
     "(add `--with-cross-deploy` only if boundaries cross deploy units). It copies the skills "
     "into `<project>/.agents/skills/`, the prompt templates into `<project>/.pi/prompts/`, the "
     "subagent definitions into `<project>/.pi/agents/`, and this file as the project's "
@@ -305,7 +326,7 @@ PI_LEGEND = (
     "prefix because pi's skill space is flat). `[agent]` steps are **prompt templates** "
     "(`/mismagent-<name>`) that dispatch the matching subagent definition in `.pi/agents/` "
     "through the `subagent` tool (`agentScope: \"both\"`; every spawn is a fresh isolated "
-    "context — the guarantee D1 relies on). The board script lives at "
+    "context — the guarantee the review relies on). The board script lives at "
     "`.agents/skills/mismagent-board/scripts/board.py`. The worker-composer's parallel waves map "
     "onto the subagent tool's parallel mode (max 8 tasks per call, 4 concurrent — see its "
     "skill's pi execution notes); `mismagent-reviewer` is generated glue hosting the "
@@ -314,42 +335,53 @@ PI_LEGEND = (
     "`model:` in their `.pi/agents/*.md`.\n"
 )
 
-METHODOLOGY_REWRITES = (
-    # repo-internal pointers make no sense inside a consuming project
-    (r"> Extended reasoning: `redesign/composer-spec\.md`.*?outside the registry\)\.",
-     "> Extended reasoning lives in the mismagent source repo\n"
-     "> (`plugins/mismagent/redesign/composer-spec.md`)."),
-    # the "how to invoke" paragraph and the run-sheet legend speak slash-command; re-speak pi
-    (r"\*How to invoke it \(in order\)\..*?headless form\.\):\*",
-     "*How to invoke it (in order). `[skill]`/`[command]` are pi **skills** — invoke with "
-     "`/skill:mismagent-<name>`; `[agent]` is a **prompt template** — type `/mismagent-<name>` "
-     "and it dispatches the subagent of the same name via the `subagent` tool. You can still ask "
-     "pi to *\"spawn `mismagent-X` via the subagent tool\"* if you prefer the headless form.):*"),
-    (r"Legend: \*\*you type\*\* the slash-commands.*?dispatch `mismagent-X`\"\*\.",
-     "Legend: `[skill]`/`[command]` are skills **you invoke** as `/skill:mismagent-<name>`; "
-     "`[agent]` is a **prompt template you type** as `/mismagent-<name>` — it dispatches the "
-     "subagent of the same name through the `subagent` tool (fallback: ask pi to *\"spawn "
-     "`mismagent-X` via the subagent tool\"*)."),
-)
-
-
 def convert_methodology():
-    with open(os.path.join(KERNEL, "methodology", "mismagent.md"), encoding="utf-8") as f:
+    """The methodology ships WHOLE (no paragraph surgery): its H1 is replaced by the pi header,
+    setup and legend; the rest is adapted like any other file."""
+    path = os.path.join(KERNEL, "methodology", "mismagent.md")
+    with open(path, encoding="utf-8") as f:
         text = f.read()
-    # swap the Claude-plugin setup paragraph for the pi install one
-    text, n = re.subn(r"\*\*0 · Setup \(once\)\.\*\*.*?(?=\n\n)", PI_SETUP,
-                      text, count=1, flags=re.S)
-    if n != 1:
-        sys.exit("methodology setup paragraph not found — update generate-pi.py")
-    for pattern, repl in METHODOLOGY_REWRITES:
-        text, n = re.subn(pattern, lambda _m, r=repl: r, text, count=1, flags=re.S)
-        if n != 1:
-            sys.exit("methodology passage for %r not found — update generate-pi.py" % pattern[:40])
-    text = adapt(text)
-    header = ("# mismAgent — pi packaging\n\n" + GENERATED_NOTE + PI_LEGEND + "\n")
-    # drop the original H1 line, keep the rest
-    body = text.split("\n", 1)[1]
+    if not text.startswith("# "):
+        sys.exit("%s must start with its '# ' title line — generate-pi.py replaces it" % path)
+    body = adapt(text.split("\n", 1)[1] if "\n" in text else "")
+    header = ("# mismAgent — pi packaging\n\n" + GENERATED_NOTE + PI_LEGEND + "\n" + PI_SETUP + "\n")
     write(os.path.join(OUT, "AGENTS.md"), header + body)
+
+
+# ---- the generated tree must be self-contained ---------------------------------
+CLAUDE_ONLY = ("$CLAUDE_PLUGIN_ROOT", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
+               "/mismagent-cross-deploy:")
+
+
+def check_tree():
+    """Fail loudly on a Claude-only idiom left in the output, a relative Markdown link, a
+    `.agents/skills/...` path or a skill's `references/<file>` that does not resolve in pi/."""
+    bad = []
+    for d, _, fns in os.walk(OUT):
+        for fn in fns:
+            if not fn.endswith((".md", ".toml")):
+                continue
+            path = os.path.join(d, fn)
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            rel = os.path.relpath(path, ROOT)
+            bad += ["%s: Claude-only idiom %r" % (rel, t) for t in CLAUDE_ONLY if t in text]
+            bad += ["%s: /skill:mismagent-%s is no shipped skill" % (rel, n)
+                    for n in re.findall(r"/skill:mismagent-([a-z0-9-]+)", text)
+                    if not os.path.isdir(os.path.join(OUT, "skills", "mismagent-" + n))]
+            for link in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
+                if not re.match(r"^[a-z]+:", link) and not os.path.exists(os.path.join(d, link)):
+                    bad.append("%s: link %s does not resolve" % (rel, link))
+            for p in re.findall(r"\.agents/skills/([A-Za-z0-9_./-]+)", text):
+                p = p.rstrip(".")
+                if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
+                    bad.append("%s: path .agents/skills/%s not shipped" % (rel, p))
+            skill = re.match(r"skills/([^/]+)/", os.path.relpath(path, OUT))
+            for p in re.findall(r"`references/([A-Za-z0-9_.-]+)`", text) if skill else []:
+                if not os.path.exists(os.path.join(OUT, "skills", skill.group(1), "references", p)):
+                    bad.append("%s: references/%s not shipped" % (rel, p))
+    if bad:
+        sys.exit("generated pi/ is not self-contained:\n  " + "\n  ".join(bad))
 
 
 # ---- package.json + install.sh -----------------------------------------------
@@ -395,7 +427,7 @@ else
   cp "$HERE/AGENTS.md" "$TARGET/AGENTS.md"
 fi
 echo "mismAgent (pi) installed into $TARGET — verify with /skill:mismagent-explore."
-echo "[agent] steps need pi's subagent example extension (AGENTS.md, step 0) with agentScope 'both'."
+echo "[agent] steps need pi's subagent example extension (AGENTS.md, Setup) with agentScope 'both'."
 """
 
 
@@ -415,6 +447,7 @@ def main():
     write_manifest()
     write(os.path.join(OUT, "install.sh"), INSTALL_SH)
     os.chmod(os.path.join(OUT, "install.sh"), 0o755)
+    check_tree()
     print("done.")
 
 

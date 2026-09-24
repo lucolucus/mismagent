@@ -1,17 +1,17 @@
 ---
 name: code-review
-description: 'mismAgent ADVERSARIAL semantic review (build movement, after the structural verifier). Runs in a FRESH-CONTEXT subagent on the diff of ONE block. Three lenses — Blind Hunter (correctness bugs, without trusting names/comments), Edge Case Hunter (boundaries, branches, empty/error state/concurrency/volumes), Acceptance Auditor (is every AC of the block REALLY satisfied? do the profile''s discursive code rules hold?) — and finding triage (HIGH|MED|LOW → Decision|Patch|Defer). Invoked by the worker-composer (D1, after mismagent-verifier). Read-only: finds and triages, does not fix.'
+description: 'mismAgent build: adversarial semantic review of ONE block''s diff in fresh context — Blind Hunter, Edge Case Hunter, Acceptance Auditor — with triage HIGH|MED|LOW → Patch|Defer|Decision. Read-only. Invoked by the worker-composer after the verifier.'
+user-invocable: false
 ---
 
 # mismAgent — Code Review (semantic, adversarial, build movement)
 
-mismAgent's **semantic review**: it finds what tests and grep do not catch — logic bugs,
+mismAgent's **semantic review**: it finds what tests and checks do not catch — logic bugs,
 missed edge cases, ACs satisfied only "on paper".
 You run in **fresh context** in a subagent: you did not see the development, so you don't trust — you hunt.
 
 ## Complementary to the verifier (you do not duplicate it)
-`mismagent-verifier` is **structural and deterministic** (build/test/contract green, AC has *a* test,
-no shadow-types, ADR `enforced_by`). You are **semantic**: the test passes, but is the code *right*?
+`mismagent-verifier` is **structural** (gate green, AC has *a* test, no shadow types, ADR checks). You are **semantic**: the test passes, but is the code *right*?
 Is the AC satisfied in *spirit*? The verifier says "there is a test"; you say "the test proves the
 right thing and none is missing".
 
@@ -33,7 +33,7 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
    inverted condition, wrong error handling, race/concurrency, resource leak, ignored return
    value. **Do not trust names and comments**: read the actual logic.
 2. **Edge Case Hunter** — walk **every branch and every boundary**: empty state, error path, dirty/
-   partial data, concurrency, volumes, and the invariant/422 paths. Which input breaks it?
+   partial data, concurrency, volumes, the invariant and rejection paths. Which input breaks it?
 3. **Acceptance Auditor** — for **every** AC (`## Tasks` criterion) of the block: is it really
    satisfied, or is there a test that passes trivially? Is the invariant *enforced* or only declared?
    Is the contract shape respected on the real body (cross-deploy)? Is an implicit AC missing

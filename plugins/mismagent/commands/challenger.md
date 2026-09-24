@@ -1,5 +1,5 @@
 ---
-description: Invoke mismAgent's challenger (explore movement) — dispatches the mismagent-challenger subagent with FRESH CONTEXT to try to DEMOLISH the idea before it is modeled. Read-only; returns KILL | RESHAPE | PROCEED with the sharpest objections. Use early in explore (and optionally on the draft model).
+description: Dispatch mismAgent's challenger (explore movement) with fresh context to try to demolish the idea before it is modeled. Read-only; returns KILL | RESHAPE | PROCEED. Use early in explore.
 argument-hint: "[the idea / what to attack]"
 ---
 

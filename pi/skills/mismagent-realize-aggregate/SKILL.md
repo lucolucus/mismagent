@@ -1,6 +1,6 @@
 ---
 name: mismagent-realize-aggregate
-description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A). Realizes an Aggregate root + value objects \u2014 the block that OWNS the rule: invariants live HERE, written and tested once (invariant-test, one per invariant). State with private setters, invariant_fields confined (named predicate exposed, not the raw field), no deletion (soft-delete). Primitive/Published Language identity at the boundary, value class internal only. Carries the \u00a714 gate (invariant-bearing state captive of the root). Loaded by the worker when block.type = aggregate."
+description: "mismAgent worker block-type skill for `aggregate`. Realizes an Aggregate root + value objects that own the invariants \u2014 one invariant test each, state captive of the root, named predicates exposed. Loaded by the worker."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -8,52 +8,45 @@ description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A
 
 # realize-aggregate — the Aggregate owns the rule
 
-You realize **ONE Aggregate root** (+ its value objects). It is the **owner of the intra-context
-boundary**: invariants live here, written **once**. Application Services lean on them, they do not
-copy them. Rationale: `redesign/composer-spec.md` §1·§9·§14.
+You realize **one Aggregate root** and its value objects. Invariants live here, written once;
+application services go through the root, they never copy the rule.
 
 ## The pattern
-- **Pure domain:** no dependency on DB/framework. The invariants must hold in ms, without persistence
-  (persistence is a separate `realize-adapter`).
-- **State with private setters:** no mutation except via a **method of the root**. That is where the
-  invariant lives.
-- **`invariant_fields` confined:** the fields that embody an invariant are `private`/`private set`.
-  Expose the **named predicate** (e.g. `vendibile`), **never** the raw field (e.g. `attivo`).
-  Consumers ask for the predicate, they do not re-decide from the field.
-- **No deletion method:** soft-delete (the state is a confined flag), never a physical `delete`.
-- **Identity:** at the **boundary** it is **primitive / Published Language** (e.g. `Int`, or a
-  shared-kernel); the `value class`/strong identity type lives **only inside** the context (you do not
-  export it to the consumer — it would recreate a coupling on your domain).
+- **Pure domain:** no database or framework dependency; invariants hold in milliseconds without
+  persistence (persistence is a `realize-adapter` block).
+- **Identity:** at the boundary it is the Published Language type pinned in the manifest (a
+  primitive or a shared-kernel VO); a strong identity type stays inside the context.
+- **Deletion follows the domain:** if the model says a record is never physically removed, deletion
+  is a state change of the root (e.g. a confined flag), never a physical delete.
 
-## The check (you carry it with you)
-- **Invariant-test: one per invariant** declared in the block-spec (`invariants`). They are the
-  **contract test of the intra**: the Aggregate's boundary is welded when these stay green.
-- **Translate the user's `tests_nl`** (§16) into these invariant-tests: the sentence *"I cannot sell a
-  deactivated product"* → a test that encodes INV-…; the test is the **encoding** of their intent, not
-  an invention of yours.
-- **A CONCURRENCY claim requires a REAL contention test** (friction-log-4 #39): an invariant/AC
-  whose text says "under any concurrency" / "simultaneous" is **not** encoded by two sequential
-  calls — write the test **genuinely multi-threaded**: N threads/coroutines released by a start
-  barrier/latch against the SAME instance, proven **fail-before/pass-after** the synchronization
-  lands. And guard the implementation against **check-then-act** (TOCTOU): the root exposes an
-  atomic all-or-nothing operation, never a read-then-write the caller composes (and never a
-  `require` that crashes where the outcome is a value). A sequential test satisfies the verifier's
-  structural coverage and merges an oversell bug — the semantic code-review hunts exactly this.
-- **Test names carry the invariant tag, JVM-safe** (friction-log-4 #24): prefix the test **name**
-  with `INV-n ` (no brackets — `[ ] . ; : / < >` don't compile in JVM method names, backticks
-  included), so the per-block coverage grep is mechanical.
+## The confinement guarantees — invariant-bearing state is captive of the root
+1. **Persistent writes only in the adapter:** nothing outside this aggregate's persistence adapter
+   inserts, updates or deletes its tables.
+2. **State mutations only through the root:** invariant-bearing properties have no public setter
+   (private or init-only); the only way to change them is a method of the root, where the invariant
+   is checked.
+3. **Reads through predicates:** the `invariant_fields` are referenced only inside the aggregate;
+   the root exposes a **named predicate** (e.g. `sellable`) and consumers ask it instead of
+   re-deciding from the raw field.
 
-## The §14 gate (you bring it respected, the verifier checks it)
-Invariant-bearing state is **captive of the root**:
-1. invariant-bearing properties `private set`/init-only → no one outside mutates the state;
-2. `invariant_fields` fields (e.g. `Attivo`) referenced **only inside** the Aggregate → no
-   re-deciding from raw reads; consumers use the named predicate.
-(Rule 1 on persistence — no `INSERT/UPDATE/DELETE` from outside — is honored by the `realize-adapter`.)
+The manifest turns these into check references on the aggregate's ADR (`enforced_by`); the gate runs
+them and the verifier reads the result. They prove state is confined, not that a rule exists only
+once — a parallel predicate that never touches the confined fields is for the code review.
 
-## TDD + green on its own
-`tdd` red-green-refactor. Self-review fix-loop: run the **side's gate** (profile) and re-read the diff
-against every invariant, until green and every invariant covered.
+## The check you carry
+- **One invariant test per declared invariant**; they are the aggregate's contract test.
+- **Translate the user's `tests_nl`** into those tests — they encode the user's intent, not yours.
+- **Test names start with the invariant tag `INV-n `** — no brackets or other characters illegal in
+  the stack's test names — so per-block coverage is matched mechanically.
+- **A concurrency claim needs a real contention test:** an invariant or AC that says "under
+  concurrency" / "simultaneous" is proven by N concurrent callers released together against the same
+  instance, failing before the synchronization lands and passing after — never by sequential calls.
+  The root exposes an atomic all-or-nothing operation, never a check-then-act the caller composes,
+  and returns an outcome value instead of crashing where the outcome is expected.
 
-## Return (to the worker)
-`PUBLIC_API`: the public signatures of the root + the **named predicate** that consumers will use
-(for an aggregate this IS the boundary another block will use).
+## TDD, green on its own
+Red-green-refactor. Run the side's gate and re-read the diff against every invariant until green and
+every invariant covered.
+
+## Return
+`PUBLIC_API`: the root's public signatures and the named predicates consumers will use.

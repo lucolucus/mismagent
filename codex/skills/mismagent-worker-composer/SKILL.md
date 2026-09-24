@@ -1,6 +1,6 @@
 ---
 name: mismagent-worker-composer
-description: "mismAgent's worker-composer (build movement). Reads the building-block manifest and builds it block by block \u2014 in parallel \u2014 then integrates in series (review \u2192 candidate merge \u2192 gate + contract tests \u2192 promote), boundary owners first. The ONLY one that composes and moves state; writes no code. Follows a short linear procedure and, in doubt, stops and asks. Design: tools/LOOP.md."
+description: "mismAgent build: builds the block manifest \u2014 blocks in parallel, integration in series (review, candidate merge, gate + contract tests, promote), owners first. The only one that moves state; writes no code; in doubt stops and asks."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -42,7 +42,7 @@ with the gap named (regenerate, never hand-patch). Then the judgment items, your
   --gate "<gate>" --gate-files <gate_files>`; a greenfield side owes it at the scaffold. No
   `gate_files` in the profile → ask the user for them (a profile edit);
 - a gate step guarding only released versions, on a side not yet released → the profile's
-  `gate_after_release`; a slow or hanging step → `$mismagent-architect` (a strategy, never a wait);
+  `gate_after_release`; a slow or hanging step → the `mismagent-architect` subagent (a strategy, never a wait);
 - greenfield, ≥2 parallel domain blocks next, `dev_architecture: none` → an architect style
   dispatch with the user first;
 - **stale spikes**: context-map entries whose `owner:` is this feature — one an ADR already answers →
@@ -50,7 +50,7 @@ with the gap named (regenerate, never hand-patch). Then the judgment items, your
 - greenfield with no `scaffold` block and a non-runnable gate → `$mismagent-build-manifest`; a UI
   side with a manual `ui_render_check` and no `run` binding → the profile.
 
-Bounce targets: `$mismagent-build-manifest`, `$mismagent-architect`, or **the profile** (a targeted
+Bounce targets: `$mismagent-build-manifest`, the `mismagent-architect` subagent, or **the profile** (a targeted
 field edit with the user).
 
 **2 · Scaffold** (greenfield, before any owner). `MM move F <id> --to doing`, a worktree on
@@ -87,7 +87,7 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
    <head_sha> --spec-hash <spec_hash>` (refused: the spec changed → review again) → `MM compose
    start F <id> --integration B --branch block/<id>`. A merge conflict → rework with the conflicting
    files.
-5. **In the candidate** (`candidate_path`): the side's gate + the `contract_test` of every
+5. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair, on a boundary the block touches, whose both sides are in the candidate.
    **Green** → `MM compose promote F <id>`, then finish as in step 0. **Red** → `MM compose abort F
    <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.
@@ -167,7 +167,7 @@ long fallback interval; don't poll.
 
 ## Codex execution notes (generated — how to run the waves on this harness)
 - **Workers and the verifier are Codex subagents** (`.codex/agents/`): spawn them explicitly; each
-  spawn is a fresh, independent session — exactly the fresh-context guarantee D1 relies on.
+  spawn is a fresh, independent session — exactly the fresh-context guarantee the review relies on.
   **`code-review` is a skill**: run it by spawning a plain subagent instructed to apply
   `mismagent-code-review` on the block's diff (same fresh-context effect, no TOML needed).
 - **Parallel consumers in a wave — use `spawn_agents_on_csv`** (one worker per ready block):
@@ -179,11 +179,11 @@ long fallback interval; don't poll.
      the skills {skills}, follow the spec at {spec_path}, …"), an `output_schema` mirroring the
      worker's RESULT handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, `file_list`, `notes`),
      and `max_concurrency` = the wave's cap;
-  3. each row's `result_json` is the worker handoff → route it to §3 D1 as usual.
+  3. each row's `result_json` is the worker handoff → route it to step 4 as usual.
 - **Concurrency/config:** the global `[agents]` settings gate this (`max_threads` default 6,
   `max_depth` 1 — you run in the main thread, so depth is never exceeded). Keep the profile's
   `build.max_parallel_workers` ≤ `max_threads`.
-- **Model routing (§2a) on Codex:** the tiers bind to reasoning effort by default — `light → low`,
+- **Model routing on Codex:** the tiers bind to reasoning effort by default — `light → low`,
   `standard → medium`, `deep → high` (the profile's `build.model_routing.tiers` may name a model
   instead). A CSV wave mixes tiers, so **split it: one `spawn_agents_on_csv` call per tier**, each
   passing that tier's model/effort if the spawn accepts one. When a spawn takes no per-call

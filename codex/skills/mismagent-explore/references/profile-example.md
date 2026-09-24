@@ -1,9 +1,7 @@
 # Profile: example — "machinecare" (fictional, multi-side, one repo)
 
-> **Filled-in example** of `../PROFILE.md`, for a fictional machine-maintenance SaaS with
-> independent BE/FE deploy units. Use it as a model of what a complete profile looks like;
-> on your project, write an analogous one in `<output_dir>/profile.md` (default
-> `.mismagent/profile.md`). For a single-side project, see the single-side notes in the template.
+> **Filled-in example** of `../PROFILE.md`: a fictional machine-maintenance SaaS with independent
+> BE/FE deploy units. On your project, write an analogous one in `<output_dir>/profile.md`.
 
 ## Bootstrap (prerequisite of explore)
 
@@ -34,6 +32,7 @@ sides:
     dev_architecture: be-dev-architecture   # golden files in be/docs/dev-architecture/
     gate: "dotnet build && dotnet test && dotnet test --filter Contract"
     gate_files: ["be/**/*.csproj", "be/*.sln", "be/global.json"]
+    gate_verify: "dotnet build --no-incremental && dotnet test && dotnet test --filter Contract"
     gate_after_release: "dotnet test --filter MigrationFromReleased"   # on at the first release
     toolchain: ".NET SDK 8 (pinned by global.json)"
     contract: "swagger.json compared against the YAML + response-shape tests on the real body"
@@ -41,6 +40,7 @@ sides:
     path: fe                                # e.g. Next.js + TypeScript
     dev_architecture: fe-dev-architecture   # golden files in fe/docs/dev-architecture/
     gate: "npm run lint && npm run build && npm run test && npm run test:contract && npm run test:ui"
+    gate_files: ["fe/package.json", "fe/package-lock.json", "fe/*.config.*"]
     gate_after_release: none
     toolchain: "Node 20 (pinned by .nvmrc)"
     ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"

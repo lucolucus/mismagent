@@ -35,7 +35,7 @@ explore — you need the **bootstrap** (`explore` also creates it at step 0 if i
   no skill hunts for folders that don't exist) and **capacity** (who builds, with how many hours —
   the architecture is sized to the team).
 
-The rest is completed **inside model**: `gate` and `dev_architecture` only become knowable
+The rest is completed **inside model**: `gate` (with its `gate_files`) and `dev_architecture` only become knowable
 after the **stack ADR** (which the architect **deliberates with you**, never alone) — until then
 `gate: "manual — TBD after the stack ADR"`. Template: `PROFILE.md`; filled-in example: `profiles/example.md`.
 
@@ -64,13 +64,13 @@ you confirm each release → flag).
   afterwards — and the architect finalizes the `gate` in the profile (and, for UI sides, the
   `run` binding: pinned **before** the scaffold, which must then satisfy it).
 - **Boundaries pinned before the workers.** The worker-composer's readiness blocks a manifest with
-  unpinned boundary types (Published Language): it is the most expensive lesson of the first run —
-  two workers blind on an under-specified boundary produce pieces that do NOT compose.
+  unpinned boundary types (Published Language): two workers blind on an under-specified boundary
+  produce pieces that do NOT compose.
 - **Single-side is not a degraded case.** A single side ⇒ all boundaries `in-process`
   (port = interface + contract test): no OpenAPI, and the `mismagent-cross-deploy` module
   **simply doesn't get enabled** — the kernel is enough, and that's fine.
-- **Someone has to scaffold the buildable skeleton.** In greenfield there is no Gradle/npm/csproj
-  project yet, so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
+- **Someone has to scaffold the buildable skeleton.** In greenfield there is no build project yet,
+  so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
   worker-composer builds it **first** (via `realize-scaffold`) and only then the owner blocks have
   something to compile against. Don't expect the architect to scaffold — it writes design, not code.
 - **One git repo per project.** The worker-composer lives on worktrees + merges. If you start in a
@@ -86,5 +86,4 @@ you confirm each release → flag).
 ## When something doesn't add up
 The first real run surfaces the holes in the core. Keep a **`MISMAGENT-LOG.md`** in the project
 root and record **every friction point the moment it happens** (which skill/agent, what it was
-attempting, what jammed, `core` vs `profile`, proposed fix) — it is the mechanism by which the
-methodology matures: the reviews and the core fixes are born from the log.
+attempting, what jammed, `core` vs `profile`, proposed fix): the core fixes are born from the log.

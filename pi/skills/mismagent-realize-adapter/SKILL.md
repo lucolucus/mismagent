@@ -1,49 +1,49 @@
 ---
 name: mismagent-realize-adapter
-description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A). Realizes an Adapter \u2014 impl. of a Port, in two variants: READ (towards another context, delegates the predicate to the root, does not re-decide) and PERSISTENCE (repository, keeps the Aggregate agnostic of the technology). Carries the round-trip test and honors the \u00a714 enforced_by gates (no DELETE/state writes from outside). Makes the port's consumer-driven contract test pass real-on-real (D2). Loaded by the worker when block.type = adapter."
+description: "mismAgent worker block-type skill (type adapter): the implementation of a Port \u2014 READ (delegates the predicate to the supplier root) or PERSISTENCE (the only writer of the aggregate's storage) \u2014 with its round-trip or contract test green."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-# realize-adapter — the impl. of the boundary; does not re-decide, delegates
+# realize-adapter — the boundary's implementation: it delegates, never re-decides
 
-You realize **ONE Adapter**: the concrete implementation of a **Port**, or the **persistence** of an
-Aggregate. Rationale: `redesign/composer-spec.md` §4·§9·§14.
+You realize **one Adapter**: the concrete implementation of a **Port**, or the **persistence** of
+an Aggregate.
+
+## The three guarantees (you honor them; the ADRs' checks and the reviewers verify them)
+1. **Persistent writes only in the persistence adapter:** no insert/update/delete of an
+   aggregate's stored state anywhere else.
+2. **State changes go through the root:** the adapter stores what the root decided; it never
+   mutates state the root did not produce, and never bypasses an invariant.
+3. **Reads go through the root's named predicates:** a read adapter asks the supplier's predicate
+   (e.g. `isSellable`); it never re-reads the raw fields and re-decides.
+
+Plus the `enforced_by` checks of your block's ADRs (e.g. soft-delete, write-once) where they apply.
 
 ## Two variants
 
-### READ Adapter (towards another context)
-- Implements a read port by **delegating the predicate to the root** of the supplier: it asks
-  `prodotto.vendibile`, it does **not** re-read `attivo` and re-decide. (The port already exposes the
-  named predicate.)
-- Knows **only the public API** of the supplier (the signature), never its source nor its internal
-  state.
-- Makes the port's **consumer-driven contract test pass** (the one written by `realize-port`) — first
-  on the fake, then real-on-real when the worker-composer re-runs it in **D2**.
+### READ adapter (towards another context)
+- Implements a read port by **delegating to the supplier root's predicate** (the port exposes it).
+- Knows **only the supplier's public API** (the signature), never its source or internal state.
+- Makes the port's **consumer-driven contract test** (from `realize-port`) pass — on the fake
+  first, then real-on-real when the composer runs it in the candidate.
 
-### PERSISTENCE Adapter (repository)
-- Keeps the Aggregate **agnostic of the technology**: the domain is pure, persistence lives here
-  (hypothesis A, §9).
+### PERSISTENCE adapter (repository)
+- Keeps the Aggregate **agnostic of the technology**: the domain stays pure, persistence lives here.
 - **Round-trip test:** save → reload → the reconstructed Aggregate is equivalent (identity, state,
   invariants).
-- It is the **only place** where the Aggregate's schema is touched (see gate below).
+- The **only place** that touches the aggregate's storage schema (guarantee 1).
 
-## The §14 gate (you honor it, the verifier checks it)
-The persistence adapter is the **only one** authorized to write the Aggregate's tables:
-- rule 1: no `INSERT/UPDATE/DELETE` on the Aggregate's tables **outside of here** (generalizes
-  ADR-0002/0004: no `DELETE FROM prodotti`, no `UPDATE … prezzo_applicato`);
-- you respect the `enforced_by` constraints declared in the block-spec's ADRs (soft-delete,
-  write-once, …).
+## The projection (the composer chooses it)
+`seam-in-process` = the adapter as a code object + an in-process test. `seam-cross-deploy` =
+generated client + consumer-driven verification on the producer side. You write the
+implementation; the seam skill fixes the medium.
 
-## The projection (the worker-composer chooses it, §13.B)
-`seam-in-process` = adapter as a code object + in-process test. `seam-cross-deploy` = generated HTTP
-client + CDC verify on the producer side. You realize the impl.; skill B fixes the medium.
-
-## TDD + green on its own
-`tdd` red-green-refactor. Self-review fix-loop on the **side's gate** until green, round-trip/contract
-green, §14 gate respected.
+## TDD, green on its own
+Red-green-refactor; fix-loop on the **side's gate** until green, round-trip/contract green, the
+three guarantees held.
 
 ## Return (to the worker)
-`BOUNDARY_HONORED`: port contract test green? writes confined (§14 gate)? predicate delegated (not
-re-decided)? yes/no.
+`BOUNDARY_HONORED`: contract/round-trip test green? writes confined? state through the root?
+predicate delegated? yes/no.

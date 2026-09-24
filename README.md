@@ -123,9 +123,9 @@ Each is also invocable directly as **`/mismagent:<name>`**.
 | `researcher` | explore | Gathers domain material *per feature* — prior art, constraints, real terminology. Dispatched only when the domain is new. |
 | `analyst` | explore | The **strategic** level: bounded contexts, relationships, **ubiquitous language**. |
 | `tactical-modeler` | model | The **tactical** level per context: aggregates, invariants, domain events, commands. Unknowns become spike nodes. |
-| `architect` | model | Architecture + ADRs, **guarantor of the boundaries**. Stack, style, infra and the code-writing rules deliberated **with you** (two-pass); mechanical constraints carry an `enforced_by` channel. Leaves ADRs ↔ context-map reconciled. |
+| `architect` | model | Architecture + ADRs, **guarantor of the boundaries**. Stack, style, infra and the code-writing rules deliberated **with you** (two-pass); mechanical constraints point to a versioned check the gate runs (`enforced_by`). Leaves ADRs ↔ context-map reconciled. |
 | `worker` | build | Realizes **one building block** in its own worktree — skills = block-type × projection, plus the side's memory — TDD until green. Returns `BOUNCED` on ambiguity instead of inventing. |
-| `verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, `enforced_by` greps, anti-shadow types, render check. Read-only. |
+| `verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, the ADRs' versioned checks, anti-shadow types, render check. Read-only. |
 
 ## The ideas that hold it together
 
@@ -186,7 +186,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.16.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.17.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No compatibility shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -197,12 +197,17 @@ another feature's work for a gap in yours.
 > **v0.16.0 (breaking for a build in progress):** one repository per project — a side is a path inside
 > it (`path:` replaces `repo:` in the profile, `gate_files:` added); `dispatch.log` is no longer read —
 > the build's state is the block folders plus `rework/`, `review-proof/`, `integrated/`.
+>
+> **v0.17.0:** prompts cut from ~35k to ~21k words (budgets enforced by a test); an ADR's `enforced_by` is
+> `[{check: <repo path>, from: <block>}]` — a versioned check the gate runs; a legacy grep string is
+> reported, never executed. Optional `gate_verify:` per side forces the tests to run for the verifier.
+> The design rationale moved to `docs/rationale/` (not read by the agents).
 
 ## Going deeper
 
 - [`methodology/mismagent.md`](plugins/mismagent/methodology/mismagent.md) — the full map of the flow
   and the run-sheet: who types what, in what order.
-- [`redesign/composer-spec.md`](plugins/mismagent/redesign/composer-spec.md) — the design rationale
+- [`docs/rationale/composer-spec.md`](docs/rationale/composer-spec.md) — the (non-normative) design rationale
   of the architecture-driven build.
 - [`docs/PACKAGING.md`](docs/PACKAGING.md) — kernel and modules, the supporting skills the flow
   invokes, the generated packagings for Codex and pi, and the guards that keep them aligned.

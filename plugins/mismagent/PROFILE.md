@@ -1,183 +1,133 @@
 # mismAgent — Project profile (TEMPLATE)
 
-> The mismAgent **core** (agents, skills, flow) is **generic and portable**. This file is the
-> **binding to your project**: you fill it in per project. Agents and skills never name a
-> specific project — they read *"the profile"*.
+> The core (agents, skills, flow) is generic; this file is the **binding to your project**. Agents
+> read *"the profile"* and never name a project. The active profile lives in
+> **`<output_dir>/profile.md`** (default `.mismagent/profile.md`); `profiles/example.md` is a
+> filled-in fictional instance.
 >
-> **Binding (where the active profile lives):** the project's filled-in profile lives in
-> **`<output_dir>/profile.md`** — default **`.mismagent/profile.md`** in the project root.
-> That is where every agent/skill looks for it; the plugin's `profiles/*.md` are just
-> **examples** (see **`profiles/example.md`**, a filled-in fictional instance).
+> **One profile per project** — the junction point, not a per-feature artifact. Features
+> (`<output_dir>/features/<feature>/`) read it and never rewrite it; `gate`, `run`, `architecture`
+> and `code_rules` change only when the user asks, through a superseding ADR.
 >
-> **ONE profile per PROJECT — it is the junction point, not a per-feature artifact.** Features are
-> folders under `<output_dir>/features/<feature>/`; they read the profile and never rewrite it. A
-> second feature does **not** re-run the bootstrap and does **not** re-deliberate `gate`, `run`,
-> `architecture` or `code_rules` — those are amended only when the user asks, through a superseding
-> ADR. Layout:
->
-> ```
-> .mismagent/
->   profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
->   decisions/ · architetture/          # the PROJECT trunk (the architect writes it)
->   features/<feature>/                 # brief · tactical-model · manifest · blocks · proofs
-> ```
->
-> **It is filled in at TWO moments** (a greenfield doesn't know everything yet) — both of them
-> happen on the **first** feature; later features only read it:
-> - **Bootstrap** (prerequisite of *explore*): `output_dir`, language of the ubiquitous
->   language, known bounded contexts, list of sides. These are enough to start.
-> - **Post-architect** (inside *model*): `gate`, `dev_architecture`, stack-specifics — they
->   become knowable **only after the stack ADR** (deliberated with the user); it is **the
->   architect** who finalizes them here. Until then: `gate: "manual — TBD after the stack ADR"`.
+> **Filled in at two moments, both on the first feature:**
+> - **Bootstrap** (explore creates it if missing): output dir, language, validation mode, materials,
+>   capacity, contexts, sides.
+> - **Post-architect** (model): `gate` and its companions, `run`, `dev_architecture`, the definition
+>   files — knowable only after the stack ADR. Until then: `gate: "manual — TBD after the stack ADR"`.
 
-## Bootstrap (prerequisite of explore)
+## Bootstrap
 
 ```yaml
-output_dir: .mismagent          # where mismAgent writes its artifacts (recommended default)
+output_dir: .mismagent          # where mismAgent writes its artifacts
 ubiquitous_language:
-  lang: <it|en|...>             # language of the canonical names = the language the domain speaks
-validation_mode: normal         # or: greenfield_from_requirements — the deliverable is (re)built
-                                # from the stated requirements ONLY: challenger/analyst never treat
-                                # a prior implementation of it as ground truth. It should surface at
-                                # bootstrap; if it doesn't, explore ASKS the user explicitly.
-materials:                      # what source material EXISTS — declared ONCE, here. `none` is an
-                                # answer, not a gap: a skill whose input names sample/ or UI/ reads
-                                # THIS field and never hunts for folders that don't exist.
+  lang: <it|en|...>             # the language the domain speaks — canonical names are never translated
+validation_mode: normal         # or greenfield_from_requirements: the deliverable is (re)built from the
+                                # stated requirements ONLY — no prior implementation is ground truth.
+                                # explore asks if it does not surface.
+materials:                      # what source material EXISTS; `none` is an answer — no skill hunts
   sample: <path | none>         # domain PDFs/screenshots (analyst, researcher, challenger, ux-designer)
-  ui: <path | none>             # pre-existing mockups/UI spikes (ux-designer, architect)
-capacity: <team & hours>        # who builds it and with how much time — e.g. "2 devs, ~6h/week" or
-                                # "full-agentic". The architect (pass-1) and build-manifest MUST read
-                                # it: stack, architecture and waves are sized to the TEAM, never to
-                                # the idealized problem. If it doesn't surface, explore ASKS.
+  ui: <path | none>             # pre-existing mockups (ux-designer, architect)
+capacity: <team & hours>        # e.g. "2 devs, ~6h/week" or "full-agentic" — the architect and
+                                # build-manifest size stack, architecture and waves on it.
+                                # explore asks if it does not surface.
 ```
 
-## Project definition files (the architect writes these in *model* — user-visible)
+## Project definition files (written by the architect)
 
 ```yaml
-architecture: .mismagent/architecture.md  # the chosen style + module map + allowed dependency
-                                          # directions — source for the scaffold's skeleton and
-                                          # for the gate's dependency-lint config
-code_rules: .mismagent/code-rules.md      # the deliberated code-writing rules, each with its
-                                          # enforcement channel (workers apply them; the
-                                          # code-review audits the discursive ones)
+architecture: .mismagent/architecture.md  # style + module map + allowed dependency directions
+                                          # (source of the scaffold and of the dependency lint)
+code_rules: .mismagent/code-rules.md      # the deliberated rules, each with its enforcement channel
 ```
 
 ## Sides (independent deploy units)
 
-One entry for every unit you deploy autonomously. **A single side is legitimate** (desktop app/
-monolith): the `projection` of every boundary will be `in-process` and no OpenAPI will exist.
+A single side is legitimate: every boundary is then `in-process` and no contract file exists.
 
 ```yaml
 sides:
-  <side>:                       # e.g. be | fe | sync — or just `app` if single-side
+  <side>:                       # e.g. be | fe | sync — or `app` if single-side
     path: <dir>                 # the side's code, relative to the project root (one repo per project)
-    dev_architecture: <skill | path.md>  # the CODEBASE's architecture memory: a harvested SKILL
-                                # (harvest-dev-architecture, from real code) or an AUTHORED doc
-                                # (the architect writes it BEFORE the first domain wave — its path
-                                # here; the worker-composer injects it into every dispatch). It
-                                # attaches to the CODEBASE, not the deploy role: sides sharing one
-                                # domain codebase point at ONE shared memory — three per-side
-                                # copies would describe the same files (friction-log-4 #21/#23/#27).
-                                # none = not yet authored/harvested
-    gate: "<commands>"          # build + test that must turn green
-                                # bootstrap: "manual — TBD after the stack ADR" (the architect finalizes it)
-                                # The gate must EXECUTE the tests of the side's whole module graph,
-                                # not merely build it (Gradle trap: `:app-X:build` runs app-X's own
-                                # check ALONE — dependency modules compile, their tests never run →
-                                # every block vacuously green). Discriminating power is proven
-                                # red-green once by the wave-0 scaffold; the composer's Phase 1
-                                # refuses a gate without the proof (friction-log-4 #17)
-    gate_files: [<glob>…]       # optional: the files defining the side's build/modules/tests —
-                                # a change to them invalidates the gate proof
-    gate_after_release: "<steps that protect RELEASED versions, e.g. a check against released schemas>"
-                                # NOT in the gate before the side's first release (they guard
-                                # nothing yet and cost every dispatch); the worker-composer appends
-                                # them to `gate` at that release and sets `switched@<tag>`.
-                                # none if every step matters from day one. Keep every gate step
-                                # cheap by STRATEGY (architect §3¾: standard migrations, faithful
-                                # in-memory substrates, incremental per-module builds) — a slow or
-                                # hanging step is replaced, never waited out
-    toolchain: "<prerequisite>" # what the gate needs to even START (e.g. "JDK 21 — set JAVA_HOME if
-                                # the shell default differs"): the same gate string must not flip
-                                # red on a differently-configured shell. Workers and the verifier
-                                # run the gate under this. none if the gate is self-sufficient
-    ui_render_check: "<mechanism>"  # ONLY for sides that render UI: how a `ui` block proves it
-                                # RENDERS (not just that the presenter is green). Either an automated
-                                # UI smoke/screenshot test folded INTO the gate, or "manual run-the-app
-                                # (recorded)". Read by realize-ui. Sides with no UI: none
-    run: "<command + port>"     # ONLY for sides that render UI: how to LAUNCH the side locally —
-                                # read by run-app-smoke to produce the recorded render proof
-                                # (render-proof/). REQUIRED when ui_render_check is manual (the
-                                # worker-composer's readiness bounces without it), and PINNED A
-                                # PRIORI: the architect finalizes it (with the gate) BEFORE any
-                                # scaffold exists — it is a CONTRACT the wave-0 scaffold must
-                                # satisfy (launch task/entry + port), not a wave-3 discovery.
-                                # Headless sides: none
-    contract: "<mechanism>"     # ONLY for sides with cross-deploy boundaries: how it verifies the
-                                # contract / generates the types. Single-side: none
+    dev_architecture: <skill | path.md | none>   # the CODEBASE's style memory: authored by the
+                                # architect before the first domain wave, or harvested from real code.
+                                # Sides sharing one codebase point at ONE memory. The worker-composer
+                                # injects it into every dispatch.
+    gate: "<commands>"          # build + test that must turn green; bootstrap value
+                                # "manual — TBD after the stack ADR". It must EXECUTE the tests of the
+                                # side's whole module graph, not merely build it. Its discriminating
+                                # power is proven red-green (at the scaffold on greenfield); the
+                                # worker-composer refuses a gate without a fresh proof.
+    gate_files: [<glob>…]       # REQUIRED whenever `gate` is set: the files defining the side's
+                                # build, modules, tests and registered checks (repo-relative, `**`
+                                # allowed). They key the gate proof: a change to them makes it stale.
+    gate_verify: "<commands>"   # optional: `gate` + the stack's re-run switch (no cached test phase); verifier and candidate run it
+    gate_after_release: "<steps>" # checks that protect RELEASED versions (e.g. against a released
+                                # schema). Kept out of `gate` until the side's first release, when
+                                # the worker-composer appends them and records `switched@<tag>`.
+                                # none if every step matters from day one.
+    toolchain: "<prerequisite>" # what the gate needs to START (e.g. a pinned runtime/SDK and how to
+                                # select it), so the same gate never flips on another shell. none if
+                                # self-sufficient.
+    ui_render_check: "<mechanism>"  # UI sides only: how a `ui` block proves it RENDERS — an automated
+                                # smoke/screenshot test folded into the gate, or
+                                # "manual run-the-app (recorded)". none otherwise.
+    run: "<command + port>"     # UI sides only: how to launch the side locally (run-app-smoke).
+                                # REQUIRED when ui_render_check is manual. Pinned by the architect
+                                # BEFORE any scaffold: a contract the wave-0 scaffold satisfies.
+    contract: "<mechanism>"     # sides with cross-deploy boundaries only: how the side verifies the
+                                # contract / generates its types. none otherwise.
 ```
 
-## Build loop (read by the worker-composer — optional, defaults shown)
+Keep every gate step cheap by strategy (standard migrations, faithful in-memory substrates,
+incremental per-module builds): a slow or hanging step is replaced by the architect, never waited out.
+
+## Build loop (optional — defaults shown; read by the worker-composer)
 
 ```yaml
 build:
-  max_parallel_workers: 4       # the wave's cap: consumers dispatched at once (size it to `capacity`
-                                # and to the machine running the gates — N workers = N gates at once)
-  model_routing:                # the model follows the ACTION (worker-composer §2a); omit to keep
-                                # the defaults
-    tiers:                      # rebind the abstract tiers to your harness' models
-      light: haiku
-      standard: sonnet
-      deep: opus
-    by_action: {}               # override a row of the base table, e.g. { adapter: deep,
-                                # code-review: standard } — keys: run-app-smoke, verifier,
-                                # code-review, or a block type (scaffold, aggregate, …)
-  review_depth_by_type:         # how hard D1 looks (worker-composer §2a); defaults shown
-    ui: standard                # standard = ONE verifier on the standard tier + HIGH-only semantic pass
+  max_parallel_workers: 4       # the wave's cap — size it to `capacity` and to the machine (N workers
+                                # = N gates at once)
+  model_routing:                # the model follows the ACTION
+    tiers: { light: haiku, standard: sonnet, deep: opus }   # rebind to your harness' models
+    by_action: {}               # override a row, e.g. { adapter: deep, code-review: standard } —
+                                # keys: run-app-smoke, verifier, code-review, or a block type
+  review_depth_by_type:         # how hard D1 looks
+    ui: standard                # standard = one verifier on the standard tier
     adapter: standard
     read-model: standard
     aggregate: deep             # deep = verifier + separate code-review, both deep
     port: deep
-    application-service: deep   # (a cross-deploy seam, model_hint: deep or any rework → deep)
+    application-service: deep   # a cross-deploy seam, model_hint: deep or a rework → deep
 ```
 
 ## Domain bounded contexts
-The natural contexts of the domain (they seed the boundaries and the canonical names):
-- `<Context1>`, `<Context2>`, …
-- List **only** contexts with a domain language of their own. A cross-cutting architectural concern
-  (sync/replication, caching, auth) is an **NFR or an architect spike, not a bounded context** — a
-  modeler that takes it literally reifies a zombie context (friction-log-4 #4).
+- `<Context1>`, `<Context2>`, … — only contexts with a domain language of their own. A cross-cutting
+  concern (sync, caching, auth) is an NFR or a spike, not a bounded context.
 
-## Boundaries & projection
-The rule that decides the shape of every inter-context boundary (`build-manifest` applies it):
-- `side(consumer) == side(supplier)` → **`in-process`**: port = code interface +
-  in-process consumer-driven contract test. No YAML.
-- different sides → **`cross-deploy`**: the port is projected into an executable contract in the
-  **form the boundary declares** (`contract_form`) — request/response → **OpenAPI** + generated
-  types + CDC; a replication/sync wire (local-first, warm-standby, …) → a **versioned
-  event-schema** (e.g. proto + event catalogue, additive evolution) + CDC on the events — requires
-  the **`mismagent-cross-deploy`** module (enable it in the marketplace: it is
-  the profile that decides the weight of the method).
-- **contract form/location per boundary** (only if cross-deploy boundaries exist):
-  `<e.g. openapi in architetture/api/<introducing-feature>.openapi.yaml · event-schema in contracts/proto/>`
-  <!-- openapi: ONE file per boundary for the life of the project, named after the feature that
-       introduced it — a later feature reusing the boundary extends that file (manifest:
-       `contract_path`), it does not open a second one -->
-
-- **authorship:** reads consumer-driven; writes producer-driven; the architect arbitrates.
+## Boundaries & projection (build-manifest applies it)
+- `side(consumer) == side(supplier)` → **`in-process`**: a code interface + an in-process
+  consumer-driven contract test.
+- different sides → **`cross-deploy`**, in the `contract_form` the boundary declares:
+  request/response → **OpenAPI** + generated types + CDC; replication/sync → a **versioned
+  event-schema** with additive evolution + CDC on the events. Requires the `mismagent-cross-deploy`
+  module.
+- **contract location** (cross-deploy only): `<e.g. architetture/api/<introducing-feature>.openapi.yaml ·
+  contracts/<schema dir>/>` — one OpenAPI file per boundary for the project's life, named after the
+  feature that introduced it; later features extend it (`contract_path`).
+- **authorship:** reads consumer-driven, writes producer-driven; the architect arbitrates.
 
 ## Branching
 - **tool:** `<script/command, or "manual">`
 - **commit:** `"<message format>"`
-- **model:** `<branch per block/story; merge strategy; what commits directly — never <output_dir>/: it travels on the integration line>`
+- **model:** `<branch per block; merge strategy; what commits directly — never <output_dir>/: it
+  travels on the integration line>`
 
 ## Boundary rules
 What an agent must NEVER do:
-- `<never write outside your side's path or your own block's module/package; another side or
-  context is touched only via its port or contract>`.
-- Always: `<never commit secrets / .env / certificates / DB files and backups>`.
+- `<write outside its side's path or its own block's module; another side or context is touched only
+  via its port or contract>`
+- `<commit secrets / .env / certificates / DB files and backups>`
 
 ---
-*How the agents use it:* wherever an instruction says "the side's path", "the side's gate
-commands", "the codebase's dev-architecture memory", "the boundary rules", "the branching tool",
-"the boundary's projection" → the value comes from HERE. Nothing is hard-coded in the core.
+Wherever an instruction says "the side's path", "the gate", "the dev-architecture memory", "the
+boundary rules", "the branching tool" or "the boundary's projection", the value comes from HERE.

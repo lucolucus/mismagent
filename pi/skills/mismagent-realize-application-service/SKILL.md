@@ -1,39 +1,33 @@
 ---
 name: mismagent-realize-application-service
-description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A). Realizes a thin command/use-case (Application Service) \u2014 does NOT re-implement an aggregate's rule: it goes through the root that owns it (previous block) and reads the other context ONLY via the port's interface. AC-test with a fake port. 'Green on its own' includes that the Aggregate's invariant-tests stay green. Loaded by the worker when block.type = application-service."
+description: "mismAgent worker block-type skill for `application-service`. Realizes a thin use-case that goes through the owning root and reads other contexts only via their port; AC tests with a fake port. Loaded by the worker."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-# realize-application-service — the thin use-case, does not duplicate the rule
+# realize-application-service — the thin use-case
 
-You realize **ONE command/use-case** (an Application Service). It is **thin**: it orchestrates, it
-owns no rules. Rationale: `redesign/composer-spec.md` §1·§4.3.
+You realize **one command/use-case**. It orchestrates; it owns no rule.
 
 ## The pattern
-- **You do not duplicate the rule: you go through the owner.** You go through the **Aggregate root**
-  that owns the invariant (block built earlier), you do **not** rewrite it. If you call a root to
-  mutate, the invariant is its.
-- **Read the other context ONLY via the Port** (consumer-owned interface, in primitives). Never the
-  other context's source, never its domain types — only the port's signature.
-- **No domain decision in the service:** if you catch yourself evaluating a raw field (e.g.
-  `attivo == true`), it is a **bounce**: the decision is a predicate of the root/port (`vendibile`),
-  not yours.
-- Stay **mute on the how** of persistence: write via the repository/adapter, do not touch the DB
-  directly.
+- **Go through the owner:** state changes happen by calling the Aggregate root that owns the
+  invariant (built in an earlier block) — never by assigning its fields or rewriting its rule.
+- **Other contexts only via their port**, in its Published Language — never their source or their
+  domain types.
+- **No domain decision here:** evaluating a raw invariant field (e.g. `active == true`) is a bounce —
+  the decision is a predicate of the root or port.
+- **Persistence through the repository/adapter**, never the database directly.
 
-## The check (you carry it with you)
-- **AC-test with a fake port:** you verify the use-case's behavior using a **fake** of the port (green
-  on its own, without the real other side). The real-on-real welding is done by the worker-composer in D2.
-- **Translate the user's `tests_nl`** (§16) into the use-case's AC-tests.
-- **Green on its own includes the Aggregate's invariant-tests:** if your use-case breaks a root
-  invariant, you are not green. The invariant tests of the owner block remain your safety net.
+## The check you carry
+- **AC tests with a fake port** — green on its own; the real weld is D2.
+- **Translate the user's `tests_nl`** into the AC tests, with a rejection/failure case per command.
+- **Green includes the owner's invariant tests:** breaking a root invariant means not green.
 
-## TDD + green on its own
-`tdd` red-green-refactor. Self-review fix-loop: run the **side's gate** and re-read the diff against
-every AC, until green and every AC covered.
+## TDD, green on its own
+Red-green-refactor. Run the side's gate and re-read the diff against every AC until green and every
+AC covered.
 
-## Return (to the worker)
-`BOUNDARY_HONORED`: did you call the root instead of re-deciding? did you read the other side only via
-the port? yes/no.
+## Return
+`BOUNDARY_HONORED`: went through the root instead of re-deciding? read other contexts only via the
+port? yes/no.

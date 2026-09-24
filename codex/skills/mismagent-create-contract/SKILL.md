@@ -1,6 +1,6 @@
 ---
 name: mismagent-create-contract
-description: "Model movement of mismAgent \u2014 ONLY for boundaries with CROSS-DEPLOY projection and contract_form: openapi (the OpenAPI is the REQUEST/RESPONSE cross-deploy projection of a Bounded Context boundary; an event-schema wire is reconciled on its schema files, not here; in-process/single-side the port stays a code interface and this skill is NOT used). RECONCILES the API CONTRACT (executable OpenAPI YAML, single source) as a CONSEQUENCE of the manifest's blocks + boundaries: they declare the operations, here the shapes are filled in and the names are fixed from the ubiquitous language of explore. Stable operationIds, components/schemas with the canonical domain name, + the ADRs. Re-entrant: an existing YAML is extended (additive-vs-breaking), never regenerated. Consumer-driven authorship on reads, producer-driven on writes; the architect arbitrates feasibility. Use after build-manifest when at least one boundary is cross-deploy openapi."
+description: "mismAgent model movement, cross-deploy only. Reconciles the OpenAPI of each openapi boundary from the manifest \u2014 stable operationIds, canonical schema names, declared errors \u2014 extending an existing contract. Use after build-manifest."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -8,132 +8,75 @@ description: "Model movement of mismAgent \u2014 ONLY for boundaries with CROSS-
 > Cross-deploy module: install only when a boundary crosses a deploy unit
 > (`install.sh --with-cross-deploy`).
 
-# MismAgent — Create Contract (model movement, cross-deploy projection only)
+# mismAgent — Create Contract (cross-deploy, `openapi` form)
 
-**When it is used:** only if at least one **boundary** has `projection: cross-deploy` **with
-`contract_form: openapi`** (request/response between different sides). The OpenAPI **is** the
-request/response cross-deploy projection of a Bounded Context boundary — if all boundaries are
-in-process (`contract: none`), the port stays a code interface
-with its contract test and **this skill has no object**. A boundary with **`contract_form:
-event-schema`** (a replication/sync wire) is reconciled with the **same disciplines** — single
-source at the declared `schema_paths`, canonical names from the ubiquitous language,
-additive-vs-breaking with the versioning protocol in an ADR, **plus the pinned `delivery:`
-guarantee** consumers design their folds against and the descriptor-reflection CDC
-(seam-cross-deploy; friction-log-4 #36/#50) — on its **schema files** (proto/event
-catalogue), not here: this skill's OpenAPI mechanics don't apply, and those files may be a wave-0
-scaffold output (the worker-composer's Phase 1 defers their check accordingly).
+**Scope:** only boundaries with `projection: cross-deploy` **and** `contract_form: openapi`
+(request/response between sides). In-process boundaries stay code interfaces; an `event-schema` wire
+follows the same disciplines (single source at its `schema_paths`, canonical names, additive
+evolution with a versioning ADR, the pinned `delivery:` guarantee) on its schema files, not here —
+see `seam-cross-deploy`. Orientation: `methodology/mismagent.md`.
 
-**Re-entrance — the contract belongs to the BOUNDARY, not to the feature (friction-log-4 #14,
-extended in v0.13.0).** Before generating anything, scan **`<output_dir>/architetture/api/*.openapi.yaml`**
-— all of them, not just this feature's — for a contract that already covers this boundary
-(same consumer/supplier side pair). `api/<feature>.openapi.yaml` is absent **by construction** on a
-new feature: taking that absence as "no contract yet" would emit a *second* "SINGLE source" for a
-boundary that already has one, forking its `components/schemas` names and its `operationId`
-namespace — the exact drift the canonical-name discipline exists to prevent. If a contract for this
-boundary exists **under any name**, you **extend that file** — the additive-vs-breaking
-discipline below governs every touch, and the outcome reports the **delta** (operations
-added/changed/unchanged), not a fresh contract.
+Write only in `<output_dir>/architetture/` and, via `write-adr`, `<output_dir>/decisions/`. Never code
+in the sides' paths.
 
-The contract is a **consequence of the manifest**, not its source: the `boundaries:` section of
-`building-blocks.yaml` (the rows with `projection: cross-deploy`) and the blocks at each such
-boundary declare *which* operations exist — a write per `application-service` command, a read per
-view that crosses the boundary. Here you **reconcile them into ONE executable OpenAPI**, filling in
-the shapes from the domain model and taking the **names** from the ubiquitous language of explore.
-Orientation: `methodology/mismagent.md`. Write **only** in
-`<output_dir>/architetture/` and — via `write-adr` — `<output_dir>/decisions/` (the two are siblings
-in the project trunk, not nested): you are the trunk's second ADR writer alongside the architect.
-Never code in the sides' paths.
+## The contract belongs to the BOUNDARY, not to the feature
+Before generating anything, scan **all** `<output_dir>/architetture/api/*.openapi.yaml` for a
+contract that already covers this boundary (same consumer/supplier pair). A new feature has no file
+of its own by construction; if a contract exists **under any name**, extend that file under the
+additive-vs-breaking discipline and report the **delta** (operations added / changed / unchanged).
+Only a boundary with no contract gets a new `architetture/api/<feature>.openapi.yaml`, named after
+the feature that introduced it — for the project's life. Report its path so the manifest's
+`contract_path` points at it.
 
 ## Input
-- **`building-blocks.yaml`** — the **`boundaries:`** rows with `projection: cross-deploy` (pinned
-  types + `contract_test`) and the blocks at each such boundary: the supplier's
-  `application-service` (`commands` → the writes), the consumer's `read-model`/`ui`
-  (`view_shape`/`consumes_rm` → the reads);
-- `<output_dir>/context-map.md` — the **ubiquitous language** (= the canonical schema names);
-  `<output_dir>/features/<feature>/tactical-model.md` — the **tactical
-  model**: commands → write endpoints, domain events → read-model, aggregates/invariants → write-schema + AC;
-- `UI/` (visual source of the views for the reads), the per-side guides (from the profile), any contract to extend.
+- `building-blocks.yaml`: the cross-deploy `boundaries:` rows (pinned types, `operation_ids`,
+  `contract_test`) and the blocks at each — the supplier's `application-service` `commands` (writes),
+  the consumer's `read-model`/`ui` views (reads);
+- `<output_dir>/context-map.md` (canonical names) and `features/<feature>/tactical-model.md`
+  (commands, events, invariants);
+- `UI/` for the views, the per-side guides, the contract to extend.
 
-## Output
-1. The boundary's OpenAPI — **SINGLE source** of that contract, ONE file per boundary for the life
-   of the project. Extend the existing one if the boundary already has it; only a boundary with no
-   contract yet gets a new `<output_dir>/architetture/api/<feature>.openapi.yaml`, named after the
-   feature that introduced it. Report its path so the manifest's `contract_path` can point at it.
-2. `<output_dir>/decisions/NNNN-<slug>.md` — the ADRs for the non-obvious choices (via `write-adr`).
-3. (optional) `api-backend-spec.md` narrative **generated** from the YAML or reduced to pointers.
+## Rules of the contract
+- Every operation has a **stable, expressive `operationId`**; manifests and block files reference
+  it, never a path pointer.
+- Every domain enum/object is a `components/schemas` entry **named with the canonical domain
+  name**, so each side's type generation (profile `sides.<side>.contract`) fails to compile on a
+  divergent name.
+- **One source:** never duplicate a schema elsewhere; a narrative spec is generated from the YAML or
+  reduced to pointers.
+- **Authorship:** reads are shaped by the **consumer** (the producer's gate must satisfy them);
+  writes by the **producer/domain** (the consumer builds on the generated types). An infeasible or
+  costly view → counter-proposal + ADR. The shared `architetture/api/` is where both sides publish
+  and verify.
 
-## Non-negotiable rules of the contract
-- **STABLE and expressive `operationId`** for every operation. The manifest's boundaries (and the
-  block files' `## Dependencies`, which inline the pinned signature) point to this, **never** to
-  path JSON Pointers (a path rename must not break the refs).
-- **`components/schemas` NAMED with the canonical domain name** (e.g. `InterventionType`, not
-  an anonymous name): this way the **side's contract-test/types mechanism** (profile:
-  `sides.<side>.contract`) generates the type with the canonical name, and a consumer side that
-  imports a diverging name fails to compile. It defends against NAME drift, not only shape drift.
-- **Never duplicate the schema** elsewhere. Blocks point to it, they do not copy it.
+## Errors and invariants on writes
+- Model every **error response the contract declares** for a write (for example a validation error
+  with per-field detail) as a named schema, not only the success responses — the consumer renders
+  them.
+- **Domain invariants** come from the tactical model, never reinvented. OpenAPI cannot express them:
+  they stay in the producer's domain, and the supplier's `application-service` block carries an AC
+  (a `tests_nl` item) proving the declared error when the invariant is violated. The verifier checks
+  that AC has a test.
 
-## Authorship — consumer-driven (read) / producer-driven (write)
-The source is one; what changes is who authors what (the architect's authorship rule):
+## Change to an existing operation — classify it
+- **Additive** (optional field, new operation): `operationId` unchanged; the consumer keeps building
+  in parallel on the generated types; only deployment is ordered, producer before consumer.
+- **Breaking** (removal, rename, type change): never in place — a versioning protocol (new
+  versioned `operationId`/path or a version header) decided in an ADR **before** applying it.
 
-| Operation | Who authors the schema | Executable verification |
-|---|---|---|
-| **Read** (GET/query/view) | the **consumer side** (it knows the views it needs) | the **producer side's** gate must satisfy it → red if not |
-| **Write** (POST/PUT/DELETE/command) | the **producer/domain side** (invariants, validation) | the consumer side consumes the types generated from the contract; its contract test breaks if the shape diverges |
-| feasibility/coherence arbitration | **you (architect)** | counter-proposal + ADR when a view is infeasible/costly |
-
-The shared location `architetture/api/` IS the **pact broker**: the consumer side publishes the
-read-schemas, the producer side the write-ones, the gates of both sides verify against it.
-
-## Errors and invariants on writes (the success shape is not enough)
-A write has **two** pieces of contract beyond the success response:
-- **Error response** `422 ValidationError` (with `fieldErrors`): it is **consumer-driven** — the
-  consumer side consumes it to render the field errors. ALWAYS model it in the YAML (named
-  `ValidationError` schema), not only the 200/201s.
-- **Domain invariants** (cross-field rules, e.g. "subtype X valid only for category Y"):
-  **take them from the "Tactical model" sections of `features/<feature>/tactical-model.md`** (captured by
-  `mismagent-tactical-modeler`), **do not reinvent them**. They are NOT expressible in OpenAPI (the shape does
-  not capture them) → they remain in the **producer side's domain**. To make them executable truth,
-  the supplier's `application-service` block must have an **AC on the invariant** (a `tests_nl` item
-  that verifies the 422 when the invariant is violated). The `mismagent-verifier` checks that this
-  AC has a test. The consumer side
-  discovers them via 422 (which is why the 422 is contract, not extra).
-
-## ADR — delegate to `write-adr`
-Non-obvious decisions become ADRs: **invoke `write-adr`** (it owns format,
-numbering, `supersedes`, `enforced_by` rule). Reminder: `enforced_by` (executable grep/lint,
-checked by the `mismagent-verifier`) **only** for mechanical constraints; discursive ADRs are
-verified by the code-review. Typical here: additive-vs-breaking choice, canonical naming
-of a schema, access constraint (e.g. Managed Identity).
-
-## Change on an EXISTING endpoint — additive vs breaking (decides the downstream fan-out)
-Modifying an existing operation is normal; **always classify** the change (it decides whether the
-consumer side can keep building in parallel):
-- **Additive** (field/endpoint added, optional, backward-compatible): `operationId`
-  unchanged. The consumer side can develop **in parallel** (it has the types generated
-  from the contract); only the **deploy** is ordered (supplier-before-consumer).
-- **Breaking** (removal/rename/type change): NOT in-place. It requires a **versioning
-  protocol** (new `operationId`/versioned path or version header) decided in an **ADR
-  before** applying it; there the consumer side depends-at-development on the new contract.
-
-## Procedure (reconcile, do not invent upstream)
-1. **Collect** from the manifest the cross-deploy boundaries and the operations their blocks imply
-   (`application-service` `commands` → writes · `read-model`/`ui` views → reads): this is the
-   **skeleton** of the operations that must exist, each under a declared `operationId`.
-2. **Fill in the reads** (the views the consumer side's blocks need — `view_shape`, `consumes_rm`):
-   named response schema, driven by the views in `UI/` (consumer-driven).
-3. **Fill in the writes** (the commands the supplier side's `application-service` blocks expose):
-   schema from the domain (invariants, validation — producer-driven), including the errors (see below).
-4. **Names from the ubiquitous language:** every schema carries the canonical name from the
-   project `context-map` (one concept = one name). No synonyms.
-5. For every feasibility/cost conflict: decide, write an ADR (via `write-adr`),
-   possibly with a counter-proposal.
-6. **Close the loop:** every operation the manifest's boundaries imply exists in the YAML and vice
-   versa (no orphan endpoint, no boundary citing a non-existent `operationId` — the
-   worker-composer's Phase 1 re-checks exactly this resolution).
-7. The contract is executable truth only when the contract test harness exists on **both**
-   sides; flag it if missing.
+## Procedure
+1. **Collect** the operations the manifest implies (commands → writes, views → reads), each under a
+   declared `operationId`.
+2. **Fill the reads** from the consumer's views (`view_shape`, `consumes_rm`, `UI/`).
+3. **Fill the writes** from the domain, with their declared errors.
+4. **Names** from the project context-map: one concept, one name, no synonyms.
+5. **Decide** each feasibility or naming conflict in an ADR (via `write-adr`, which owns format and
+   the mechanical-check form).
+6. **Close the loop:** every operation the boundaries imply exists in the YAML and vice versa
+   (`MM lint` checks that each `operation_ids` entry resolves in `contract_path`).
+7. The contract is executable only when the contract-test harness exists on **both** sides: flag it
+   if missing.
 
 ## Outcome
-Summary: YAML path, list of `operationId`s with the owning side (writes on the supplier / reads
-driven by the consumer), ADRs issued, authorship/feasibility decisions, points where the
-requirements are ambiguous or an NFR is not verifiable.
+Contract path (new or extended, with the delta), `operationId`s with their owning side, ADRs,
+authorship/feasibility decisions, ambiguous requirements and unverifiable NFRs.

@@ -1,137 +1,75 @@
 ---
 name: write-adr
-description: 'mismAgent''s specialized ADR writer (model movement). Produces <output_dir>/decisions/NNNN-<slug>.md with scope/status/supersedes and — for MECHANICAL constraints — enforced_by (executable grep/lint rule that mismagent-verifier checks). Distinguishes mechanical ADRs (verified by the verifier) from discursive ones (verified by the code-review). Invoked by create-contract, mismagent-architect, write-infra-notes.'
+description: 'mismAgent model: writes <output_dir>/decisions/NNNN-<slug>.md (scope, status, supersedes, closes_spike) and, for mechanical constraints, enforced_by versioned checks run by the gate. Invoked by the architect, create-contract, write-infra-notes.'
+user-invocable: false
 ---
 
-# MismAgent — Write ADR (writer, model)
+# write-adr — decisions that something enforces
 
-Write an Architecture Decision Record in `<output_dir>/decisions/NNNN-<slug>.md`.
-Orientation: `methodology/mismagent.md`.
-
-## Why it exists (downstream consumers = survival test)
-- ADRs with **`enforced_by`** → the `mismagent-verifier` runs the grep/lint rule on the diff → if the
-  constraint is violated, **FAIL**. This is what makes the ADR non-zombie.
-- **Discursive** ADRs (without `enforced_by`) → verified by the semantic **code-review**.
-- Blocks reference them in `related_adrs` → the verifier knows which rules to apply to that block.
+Write an ADR in `<output_dir>/decisions/NNNN-<slug>.md` (4-digit number, the next free one).
+`MM pack` carries it to the worker and the reviewers; the **gate** runs its checks; the
+**code-review** judges discursive ADRs.
 
 ## Template
 ```markdown
 ---
-scope: global | be | fe | sync | infra
+scope: global | <side> | infra
 status: proposed | accepted | superseded
-supersedes: <NNNN-slug | null>
-closes_spike: <spike-slug | null>   # the context-map "Open spikes" entry this ADR answers, if any
-enforced_by: "<executable grep/lint rule, ONLY if the constraint is mechanical>"
-# a bare string = kind: prohibition ("must find nothing"). A PRESENCE rule ("must exist") uses the
-# structured form — it is WAVE-GATED on the block that satisfies it:
-# enforced_by:
-#   kind: presence
-#   rule: "<executable grep/lint>"
-#   exigible_from: <block-id>   # from the manifest: the block owning the symbol; the verifier
-#                               # enforces the rule only once that block is merged
+supersedes: <NNNN-slug>          # only when it replaces one
+closes_spike: <spike-slug>       # only when it answers one
+enforced_by:                     # only for mechanical constraints
+  - check: <path of the check, relative to the repo>
+    from: <block-id>             # optional: the block that makes it applicable
 ---
-# NNNN — <title of the decision>
+# NNNN — <decision>
 
 ## Context
-<why a decision is needed; possible link to research/<topic>.md>
-
 ## Decision
-<what was decided>
-
 ## Consequences
-<trade-offs, what becomes binding>
 ```
 
+## enforced_by — versioned checks, never shell strings
+A **mechanical** constraint (dependency direction, a confined write, presence or absence of a
+construct) gets a **check**: a file in the project repo, run by the side's **gate**.
+Judgment → no `enforced_by`: the code-review's. Dependency rules go to the gate's
+dependency lint (`write-code-rules`), cited as the check.
+
+Each check:
+- lives in the repo with a **violating fixture it must fail on** and a **conforming fixture it must
+  pass on**, and runs on both inside the gate — that is its red-green proof;
+- is **registered in the gate** and prints a recognizable result naming the ADR
+  (`ADR-NNNN <check>: PASS|FAIL`); the gate files it adds join the profile's `gate_files`,
+  renewing the gate proof;
+- matches **code, not text**: a comment or a test-fixture string naming the construct neither
+  violates a prohibition nor satisfies a presence — the fixtures include both cases;
+- covers the **alternative violations**: list the idiomatic ways to break the rule and put each in
+  the violating fixture;
+- targets modules/packages or symbols the architecture fixes, never a guessed filename, and **fails
+  when its applicable target is missing** (a fixture proves it: a scan over nothing is not green);
+- runs with a **declared interpreter/toolchain** (no implicit shell, no GNU-only tools) and is
+  validated invoked **exactly as the gate invokes it**, quoting included.
+
+**Presence and prohibition are separate checks.** A prohibition applies from the start (no `from`:
+the wave-0 scaffold writes it, or it already exists). A presence is red until its block exists:
+give it `from: <block-id>` — that block writes the check and registers it, and the check applies
+from that block's own review onward (`from` may name a block of any feature). `MM lint` checks
+existence and `from`.
+
+**Migration:** a legacy `enforced_by` string (or an old `kind`/`rule` entry) is never executed —
+`MM lint` reports it; rewrite it as checks.
+
 ## Rules
-- **`enforced_by` ONLY for mechanical constraints** (path, identity, naming, presence/absence of a
-  pattern). Example (e.g.): `"grep -rn 'DefaultAzureCredential' src/ && ! grep -rn 'ConnectionString=' src/"`.
-  If the constraint requires judgment, **leave `enforced_by` empty** (the code-review verifies it).
-  Do not invent non-executable rules: that would be a check that always or never fails.
-- **`enforced_by` greps are CODE-scoped, never TEXT-scoped** (friction-log #11). Anchor to
-  **import/dependency statements** or **identifiers in expression context**, never a bare token — a
-  doc-comment that *names* the forbidden tech (the clearest documentation) must not trip the gate.
-  Forbidden-tech absence → match the import (`! grep -rEn '^\s*import .*(ktor|okhttp|retrofit)' <dir>/`),
-  not `! grep 'OpenAPI'` over raw text; a confined field → match its access in code, **excluding
-  comment lines** (the comment syntax comes from the stack).
-- **Target DIRS/PACKAGES or SYMBOLS, never a guessed filename** (friction-log #12). The file layout
-  is the **worker's** choice — it may name the class `FooSqlDelight.kt`, not `Foo.kt`. A grep pinned
-  to a non-existent filename **matches nothing and looks green** (a false-green, worse than a
-  failure). Scope the target to a package/dir (`.../persistenza/`) or a symbol; the verifier FAILs a
-  rule whose target path does not exist.
-- **Greps must be POSIX-PORTABLE** (friction-log #3). The `enforced_by` rule runs on whatever `grep`
-  the machine has (BSD/macOS *and* GNU/Linux). **Avoid GNU-only extensions** — no `grep -z`
-  (multiline/NUL match), no `-P` (PCRE), no `\d`/`\b`-style PCRE classes; stick to BRE/ERE
-  (`grep -rEn`), POSIX classes (`[[:space:]]`), and per-line matching. If a constraint truly needs a
-  multiline match, express it as two single-line greps combined with `&&`/`!` instead of `-z`.
-- **…and SHELL-PORTABLE — the rule is executed via `bash -c '<exact string>'`** (friction-log-4
-  #30/#37/#49): quote every glob (`--include='*.kt'` — unquoted, zsh errors or expands it) and
-  every expansion (`":${m}:"` — an unquoted `:$m:` trips zsh's history/glob modifiers), no
-  undeclared bash-only constructs. Validate by executing the EXACT frontmatter string via
-  `bash -c '<string>'` — the way the verifier runs it — never by retyping it in an interactive
-  shell (aliases/`ugrep` wrappers give false verdicts). A rule whose verdict changes with the
-  shell is not mechanical.
-- **Two kinds of rule — prohibition and presence; presence is WAVE-GATED** (friction-log-4 #19).
-  A *prohibition* ("this grep must find nothing") is exigible from wave 0 forever — the bare-string
-  form implies it. A *presence* ("this construct MUST exist") is red **by construction** until the
-  block that satisfies it lands: write it in the structured form (`kind: presence` +
-  `exigible_from: <block-id>`, the manifest block owning that symbol) so the verifier enforces it
-  only once that block is merged. An ungated presence rule stays red for half the build about a
-  block nobody has built yet — a failure that tells its recipient nothing, and teaches everyone to
-  ignore the verifier.
-- **A presence rule anchors to a CODE CONSTRUCT, never a bare name** (friction-log-4 #37): match a
-  declaration / import / type-use (`class NetworkEscPos`, `: StampaBigliettoPort`, an `import`
-  line), never a name a KDoc or a test fixture can *mention* — a presence grep green on a comment
-  green-lights a block that does not exist (a false green hiding unbuilt work).
-- **Comment-strip EVERY grep that scans code — prohibition AND presence** (friction-log-4 #35/#37).
-  A prohibition that doesn't exclude comments turns the prose documenting the rule into a
-  violation (the worker rewrites honest KDoc to appease the grep); a presence that counts comments
-  is the false green above. Apply one uniform idiom (e.g. after `grep -rn`, drop comment lines
-  with `grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*|/\*)'` — adjust the tokens to the stack) — or state
-  in the ADR that prose may not name the symbol. Two sibling rules where one strips and one
-  doesn't is an incoherence workers pay for.
-- **Ask: "what OTHER ways to violate this does the rule NOT catch?"** (friction-log-4 #26) before
-  shipping any `enforced_by` — enumerate the idiomatic alternatives, cover the set, then scope the
-  rule to the modules where the discipline applies. Cautionary tale: a no-wall-clock rule grepping
-  only `System.currentTimeMillis` while `Instant.now()` / `Clock.systemUTC()` /
-  `LocalDateTime.now()` pass untouched. A guard covering ONE violation path is worse than no
-  guard: it promises a discipline it doesn't enforce.
-- **An ADR that elects a field as a KEY implies a UNIQUENESS invariant** (friction-log-4 #43): if
-  the decision uses a field as a lookup/correlation/decode key (a per-version compact index, a
-  correlation id), the aggregate publishing it must carry the matching uniqueness invariant
-  (`[INV-n]` + its test) — name it in the ADR and check it exists in the model/manifest, or record
-  explicitly why it holds by construction. A key-electing ADR without its uniqueness invariant is
-  a mechanically detectable gap: the decode is ambiguous exactly when it matters.
-- **Validate every rule on a fixture — positive AND negative** before committing it: it must FAIL on
-  a snippet that violates the constraint and PASS on one that satisfies it (run both via
-  `bash -c`, as above). A rule that can't be made
-  to fail (or can't be made to pass) is a false-green/false-red — do not ship it. *(The architect
-  already does this spontaneously; make it part of the protocol.)*
-- **Numbering** progressive with 4 digits; check the last number in `decisions/`.
-- **`supersedes`**: if you replace an ADR, set `status: superseded` on the old one and link it.
-- **An ADR that ANSWERS an open spike closes it — in BOTH directions** (friction-log-4 #13). If the
-  decision satisfies a spike's closure criterion (context-map "Open spikes", or a `type: spike`
-  node), set **`closes_spike: <spike-slug>`** in the frontmatter AND mark the spike **`[x]`** in the
-  context-map (and close its materialized node, if one exists) in the same pass. A spike whose
-  criterion an ADR satisfies but that stays `[ ]` open is a stale artifact: the human reader — and
-  every future feature that cites the map — will re-open a settled question.
-- **Reconcile with the context-map BEFORE finalizing** (friction-log-4 #9). Grep the context-map for
-  the decision's subject: a line that contradicts the ADR (e.g. a tactical note still deferring, or
-  asserting, what this ADR just decided otherwise) must be **updated** — or the supersede recorded
-  there — in the same pass. An ADR and a context-map that disagree in silence are two sources of
-  truth; no downstream step re-aligns them for you.
-- **…and with the PROFILE's boundary rules** (friction-log-4 #18): check the decision's
-  *mechanism* against them too. An ADR whose guardian collides with a profile rule — the canonical
-  case: a migration-verify tool that requires a **committed snapshot `.db`** vs the profile's
-  "never commit DB files", so the `.gitignore` silently drops the guardian's input and the ADR
-  runs unguarded forever — is a **collision to surface as a decision** (scope an explicit
-  exception into the profile rule, or renounce the mechanism and record that the ADR has no
-  mechanical guardian). Never leave it for a worker to trip over at wave 0: two authoritative
-  artifacts contradicting each other is the #9 family, on the profile axis.
-- Breaking change of the contract → the ADR fixes the **versioning protocol** BEFORE
-  applying it, **and generates** (via `write-task`) a `type: cleanup` task to remove the
-  old `operationId`, with `ready_when: "no-consumer-uses:<operationId>"`. So v1 does not stay
-  alive forever (the contract does not rot with dead endpoints).
+- **A key implies uniqueness:** an ADR electing a field as a lookup/correlation/decode key names
+  the uniqueness invariant (`[INV-n]` + its test) on the aggregate publishing it, or states why it
+  holds by construction.
+- **Supersede:** set `status: superseded` on the old ADR and link it.
+- **Closing a spike, both directions:** `closes_spike` here **and** `[x]` on the context-map entry
+  (and its node to `done/`) in the same pass.
+- **Reconcile before finalizing:** a context-map line contradicting the decision is updated in the
+  same pass; a mechanism colliding with a profile boundary rule is surfaced as a decision (scope an
+  exception or drop the mechanism) — never left for a worker.
+- **Breaking contract change:** fix the versioning protocol first and create (via `write-task`) a
+  `type: cleanup` node with `ready_when: "no-consumer-uses:<operationId>"`.
 
 ## Outcome
-Path of the ADR, number, scope, and whether it has `enforced_by` (→ verified by the verifier) or is
-discursive (→ verified by the code-review).
+Path, number, scope; its checks (path, `from`) or "discursive → code-review".

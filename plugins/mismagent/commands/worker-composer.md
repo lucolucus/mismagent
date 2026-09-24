@@ -1,5 +1,5 @@
 ---
-description: mismAgent's worker-composer (build movement). Reads the building-block manifest and builds it block by block — in parallel — then integrates in series (review → candidate merge → gate + contract tests → promote), boundary owners first. The ONLY one that composes and moves state; writes no code. Follows a short linear procedure and, in doubt, stops and asks. Design: tools/LOOP.md.
+description: "mismAgent build: builds the block manifest — blocks in parallel, integration in series (review, candidate merge, gate + contract tests, promote), owners first. The only one that moves state; writes no code; in doubt stops and asks."
 argument-hint: "[feature | <output_dir>/features/<feature>/]"
 ---
 
@@ -84,7 +84,7 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
    <head_sha> --spec-hash <spec_hash>` (refused: the spec changed → review again) → `MM compose
    start F <id> --integration B --branch block/<id>`. A merge conflict → rework with the conflicting
    files.
-5. **In the candidate** (`candidate_path`): the side's gate + the `contract_test` of every
+5. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair, on a boundary the block touches, whose both sides are in the candidate.
    **Green** → `MM compose promote F <id>`, then finish as in step 0. **Red** → `MM compose abort F
    <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.

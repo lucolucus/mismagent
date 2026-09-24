@@ -267,6 +267,69 @@ class TestLint(Base):
         self.put("tasks/be/backlog/sync-spike.md", "---\nid: sync-spike\ntype: spike\ncentral: true\n---\n")
         self.assertFalse({g for g in self.gaps()[0] if g[0].startswith("spikes")})
 
+    def test_adr_checks_exist_unless_deferred(self):
+        self.put("decisions/0001-money.md", "---\nscope: global\nstatus: accepted\nenforced_by:\n"
+                 "  - check: checks/no-float.sh        # no from: the scaffold writes it\n"
+                 "  - { check: checks/port-exists.sh, from: svc-order }\n---\n# 0001 — Money\n", base=self.out)
+        out = self.run_tool("lint", self.feat, expect=0)  # scaffold open, svc-order not integrated
+        self.assertEqual(sorted((d["file"], d["until"]) for d in out["deferred"] if d["file"].startswith("checks/")),
+                         [("checks/no-float.sh", "the wave-0 scaffold is done"),
+                          ("checks/port-exists.sh", "svc-order is integrated")])
+        self.move("scaffold-app", "done")
+        self.put("api/orders.openapi.yaml", "paths:\n  /o:\n    get:\n      operationId: listOrders\n", base=self.repo)
+        self.assertIn(("adr.checks", "decisions/0001-money.md"), self.gaps()[0])
+        self.put("checks/no-float.sh", "#!/bin/sh\n", base=self.repo)
+        self.run_tool("lint", self.feat, expect=0)
+        self.put("integrated/svc-order.json", '{"id": "svc-order"}')
+        gaps, out = self.gaps()
+        self.assertEqual([(g["rule"], g["bounce_to"]) for g in out["gaps"]], [("adr.checks", "architect")])
+        self.put("checks/port-exists.sh", "#!/bin/sh\n", base=self.repo)
+        self.run_tool("lint", self.feat, expect=0)
+
+    def test_pre_contract_defers_only_missing_openapi_contracts(self):
+        self.move("scaffold-app", "done")
+        self.assertIn(("contract.exists", "b-rm"), self.gaps()[0])
+        out = self.run_tool("lint", "--pre-contract", self.feat, expect=0)
+        self.assertEqual([(d["file"], d["until"]) for d in out["deferred"]],
+                         [("api/orders.openapi.yaml", "create-contract writes it")])
+
+    def test_adr_check_from_resolved_project_wide(self):
+        old = os.path.join(self.out, "features", "old")
+        self.put("building-blocks.yaml", "blocks:\n  - id: old-agg\n    type: aggregate\n  - id: old-rm\n"
+                 "    type: read-model\n", base=old)
+        self.put("integrated/old-agg.json", '{"id": "old-agg"}', base=old)
+        self.put("decisions/0001-money.md", "---\nenforced_by:\n  - { check: checks/a.sh, from: old-agg }\n"
+                 "  - { check: checks/b.sh, from: old-rm }\n  - { check: checks/c.sh, from: ghost }\n---\n"
+                 "# 0001\n\n## Decision\ncents\n", base=self.out)
+        self.put("checks/c.sh", "#!/bin/sh\n", base=self.repo)
+        md = self.run_tool("pack", self.feat, "agg-order", expect=0)
+        self.assertIn("`checks/a.sh` — applicable (from old-agg)", md)   # integrated by a previous feature
+        self.assertIn("`checks/b.sh` — not yet applicable", md)
+        self.assertIn("`checks/c.sh` — UNRESOLVED", md)
+        gaps, out = self.gaps()
+        texts = [g["gap"] for g in out["gaps"] if g["rule"] == "adr.checks"]
+        self.assertEqual(len(texts), 2, texts)
+        self.assertTrue(any("checks/a.sh not found" in t for t in texts))    # applicable → must exist
+        self.assertTrue(any("from ghost" in t for t in texts))               # unresolvable even if it exists
+        self.assertIn(("checks/b.sh", "old-rm is integrated"), [(d["file"], d["until"]) for d in out["deferred"]])
+
+    def test_block_named_as_from_gets_the_adr_in_its_pack(self):
+        self.put("decisions/0002-ports.md", "---\nenforced_by:\n  - { check: checks/port.sh, from: svc-report }\n"
+                 "---\n# 0002 — Ports\n\n## Decision\nports\n", base=self.out)  # in no related_adrs
+        h = self.spec_hash("svc-report")
+        self.assertIn("`checks/port.sh` — applicable: THIS block writes it",
+                      self.run_tool("pack", self.feat, "svc-report", expect=0))
+        self.put("decisions/0002-ports.md", "---\nenforced_by:\n  - { check: checks/port.sh, from: svc-report }\n"
+                 "---\n# 0002 — Ports\n\n## Decision\nports v2\n", base=self.out)
+        self.assertNotEqual(h, self.spec_hash("svc-report"))
+
+    def test_legacy_enforced_by_is_a_gap_never_run(self):
+        self.put("decisions/0001-money.md", "---\nenforced_by: \"! grep -rn 'float' src/\"\n---\n# 0001\n",
+                 base=self.out)
+        gaps, out = self.gaps()
+        self.assertIn(("adr.checks", "decisions/0001-money.md"), gaps)
+        self.assertIn("grep -rn", out["gaps"][0]["gap"])
+
     def test_unparseable_manifest_exits_2_with_line(self):
         self.write_feature(MANIFEST + "bad: [INV-1] unquoted\n")
         out = self.run_tool("lint", self.feat, expect=2)
@@ -484,6 +547,31 @@ class TestPack(Base):
             self.assertIn(s, md)
         for s in ("skip me", "always retry", "continuation of struck", "agg lesson"):
             self.assertNotIn(s, md)
+
+    def test_pack_carries_enforced_by_checks_with_applicability(self):
+        self.put("decisions/0001-money.md", "---\nstatus: accepted\nenforced_by:\n  - check: checks/no-float.sh\n"
+                 "  - check: checks/port-exists.sh\n    from: svc-order\n  - \"grep -rn legacy src/\"\n---\n"
+                 "# 0001 — Money\n\n## Decision\ncents\n", base=self.out)
+        own = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        self.assertIn("`checks/no-float.sh` — applicable", own)
+        self.assertIn("`checks/port-exists.sh` — applicable: THIS block writes it", own)
+        self.assertIn("LEGACY `grep -rn legacy src/`", own)
+        other = self.run_tool("pack", self.feat, "rm-orders", expect=0)
+        self.assertIn("`checks/port-exists.sh` — not yet applicable: from svc-order", other)
+        self.put("integrated/svc-order.json", '{"id": "svc-order"}')
+        self.assertIn("`checks/port-exists.sh` — applicable (from svc-order)",
+                      self.run_tool("pack", self.feat, "rm-orders", expect=0))
+        scaffold = self.run_tool("pack", self.feat, "scaffold-app", expect=0)  # it writes the no-`from` checks
+        self.assertIn("`checks/no-float.sh` — applicable", scaffold)
+
+    def test_lesson_written_as_harvest_prescribes_reaches_the_pack(self):
+        with open(os.path.join(PLUGIN, "skills", "harvest-dev-architecture", "SKILL.md"), encoding="utf-8") as f:
+            skill = f.read()
+        m = re.search(r"under \*\*`(#+) <type>`\*\*", skill)
+        self.assertIsNotNone(m, "harvest must prescribe the lessons heading as under **`## <type>`**")
+        self.put("architetture/lessons-by-block-type.md", "# Lessons by block type\n\n%s application-service\n"
+                 "- application-service: go through the root — see `src/x.txt`\n" % m.group(1), base=self.out)
+        self.assertIn("go through the root", self.run_tool("pack", self.feat, "svc-order", expect=0))
 
 
 class TestPromptInvocations(unittest.TestCase):

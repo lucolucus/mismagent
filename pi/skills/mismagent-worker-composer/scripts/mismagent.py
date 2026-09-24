@@ -441,7 +441,23 @@ def central_spikes(feat):
     return [e["id"] for e in out if e["open"] and re.search(own, e["text"]) and re.search(r"central:\s*true", e["text"])]
 
 
-def lint(feat):
+def from_status(feat, frm):
+    """A check's `from` block, resolved PROJECT-WIDE: "integrated" (any feature's integrated/<frm>.json
+    or blocks/*/done/<frm>.md) · "pending" (a block row of some feature's manifest) · None (no such block)."""
+    dirs = sorted(glob.glob(os.path.join(feat.odir, "features", "*")))
+    if any(os.path.isfile(os.path.join(d, "integrated", frm + ".json"))
+           or glob.glob(os.path.join(d, "blocks", "*", "done", frm + ".md")) for d in dirs):
+        return "integrated"
+    for d in dirs:
+        m = os.path.join(d, "building-blocks.yaml")
+        rows = feat.blocks if os.path.abspath(d) == feat.dir else \
+            (parse_yaml(read(m)).get("blocks") or []) if os.path.isfile(m) else []
+        if any(isinstance(r, dict) and str(r.get("id")) == frm for r in rows):
+            return "pending"
+    return None
+
+
+def lint(feat, pre_contract=False):
     gaps, deferred = [], []
 
     def gap(rule, where, text, to="build-manifest"):
@@ -522,6 +538,8 @@ def lint(feat):
             if not found:
                 if scaffold_open:  # a wave-0 scaffold output: checked once the scaffold is done
                     deferred.append({"where": i, "file": rel, "until": "the wave-0 scaffold is done"})
+                elif pre_contract and form == "openapi":  # create-contract writes it next
+                    deferred.append({"where": i, "file": rel, "until": "create-contract writes it"})
                 else:
                     gap("contract.exists", i, "contract file %s not found" % rel)
                 continue
@@ -567,6 +585,30 @@ def lint(feat):
         for cmd in b.get("commands") or []:
             if str(cmd) not in task_text:
                 gap("spec.commands", i, "command %s does not appear in ## Tasks" % cmd)
+    repo_root, seen_adrs = roots[0], set()
+    for b in feat.blocks:
+        for ref, path in deps(feat, str(b.get("id")))[1]:
+            if not path or path in seen_adrs:
+                continue
+            seen_adrs.add(path)
+            where = os.path.relpath(path, feat.odir)
+            for c in adr_checks(path):
+                if "legacy" in c:
+                    gap("adr.checks", where, "enforced_by entry %s is not {check: <repo path>, from: <block>}: "
+                        "migrate it with write-adr (a legacy rule is never executed)" % c["legacy"], "architect")
+                    continue
+                frm = c["from"]
+                st = from_status(feat, frm) if frm else None
+                if frm and not st:
+                    gap("adr.checks", where, "enforced_by check %s: from %s is no block of any feature's manifest"
+                        % (c["check"], frm), "architect")
+                elif not os.path.exists(os.path.join(repo_root, c["check"])):
+                    if st == "pending":
+                        deferred.append({"where": where, "file": c["check"], "until": "%s is integrated" % frm})
+                    elif not frm and scaffold_open:
+                        deferred.append({"where": where, "file": c["check"], "until": "the wave-0 scaffold is done"})
+                    else:
+                        gap("adr.checks", where, "enforced_by check %s not found in the repo" % c["check"], "architect")
     nodes = {n[0]: n for n in feat.nodes() if n[2].get("type") == "spike"}
     for sid in central_spikes(feat):
         if sid not in nodes:
@@ -650,14 +692,44 @@ def adr_files(odir, refs):
     return out
 
 
+def adr_checks(path):
+    """An ADR's `enforced_by` entries: {"check", "from"} per versioned check (a repo-relative path,
+    `from` optional), {"legacy": text} for anything else (a shell string, an old structured rule)."""
+    text = read(path)
+    end = text.find("\n---", 3) if text.startswith("---") else -1
+    if end == -1:
+        return []
+    try:
+        raw = parse_yaml(text[3:end]).get("enforced_by")
+    except YamlError as e:
+        return [{"legacy": "(unreadable frontmatter: %s)" % str(e).replace("building-blocks.yaml ", "")}]
+    out = []
+    for e in (raw if isinstance(raw, list) else [] if raw in (None, "") else [raw]):
+        chk = e.get("check") if isinstance(e, dict) else None
+        if isinstance(chk, str) and chk and set(e) <= {"check", "from"} and not os.path.isabs(chk) \
+                and ".." not in chk.replace("\\", "/").split("/"):
+            out.append({"check": chk, "from": None if e.get("from") in (None, "") else str(e["from"])})
+        else:
+            out.append({"legacy": e if isinstance(e, str) else json.dumps(e, ensure_ascii=False)})
+    return out
+
+
 def deps(feat, bid):
     """The boundaries a block touches and the ADRs it honours: its related_adrs ∪ those of the
-    owners of the boundaries it consumes."""
+    owners of the boundaries it consumes ∪ any ADR whose `enforced_by` check names it as `from` (it
+    writes that check). A scaffold honours every block's ADRs: it writes the checks with no `from`."""
     refs = [str(r) for r in feat.row.get(bid, {}).get("related_adrs") or []]
+    if feat.row.get(bid, {}).get("type") == "scaffold":
+        for b in feat.blocks:
+            refs += [str(r) for r in b.get("related_adrs") or [] if str(r) not in refs]
     for c in feat.consumes(bid):
         owner = feat.row.get(str((feat.bnd.get(c) or {}).get("owner")), {})
         refs += [str(r) for r in owner.get("related_adrs") or [] if str(r) not in refs]
-    return sorted(feat.touched(bid), key=lambda b: str(b.get("id"))), adr_files(feat.odir, refs)
+    adrs = adr_files(feat.odir, refs)
+    for p in sorted(glob.glob(os.path.join(feat.odir, "decisions", "*.md"))):  # the checks it must write
+        if p not in [x for _, x in adrs] and any(c.get("from") == bid for c in adr_checks(p)):
+            adrs.append((os.path.basename(p)[:-3], p))
+    return sorted(feat.touched(bid), key=lambda b: str(b.get("id"))), adrs
 
 
 def spec_hash(feat, bid):
@@ -739,7 +811,7 @@ def cmd_status(a):
 
 
 def cmd_lint(a):
-    gaps, deferred = lint(Feature(a.feature_dir))
+    gaps, deferred = lint(Feature(a.feature_dir), a.pre_contract)
     return emit({"ok": not gaps, "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
 
 
@@ -835,8 +907,26 @@ def pack_block(feat, bid, add, out):
             continue
         text = read(path)
         title = next((l[2:].strip() for l in text.splitlines() if l.startswith("# ")), ref)
-        add("ADR %s" % title, path, "## Decision\n%s\n\n%s" % (
-            board.section(text, "decision"), board.section(text, "rationale") or board.section(text, "consequences")))
+        body = "## Decision\n%s\n\n%s" % (
+            board.section(text, "decision"), board.section(text, "rationale") or board.section(text, "consequences"))
+        checks = []
+        for c in adr_checks(path):
+            if "legacy" in c:
+                checks.append("- LEGACY `%s` — not a versioned check: never executed; report it (migrate with "
+                              "write-adr)" % c["legacy"])
+            elif c["from"] == bid:
+                checks.append("- `%s` — applicable: THIS block writes it (violating + conforming fixture) and "
+                              "registers it in the gate" % c["check"])
+            elif not c["from"] or from_status(feat, c["from"]) == "integrated":
+                checks.append("- `%s` — applicable%s" % (c["check"], " (from %s)" % c["from"] if c["from"] else ""))
+            elif not from_status(feat, c["from"]):
+                checks.append("- `%s` — UNRESOLVED: from %s is no block of any feature; report it" % (
+                    c["check"], c["from"]))
+            else:
+                checks.append("- `%s` — not yet applicable: from %s, not integrated" % (c["check"], c["from"]))
+        if checks:
+            body += "\n\n**Checks (`enforced_by`)** — each must run in the gate, recognizably:\n" + "\n".join(checks)
+        add("ADR %s" % title, path, body)
     lpath, btype = os.path.join(feat.odir, "architetture", "lessons-by-block-type.md"), str(feat.row[bid].get("type"))
     if os.path.isfile(lpath):
         keep, struck, lines = False, False, []
@@ -988,7 +1078,8 @@ def build_parser():
         p.set_defaults(fn=fn)
         return p
     cmd("status", cmd_status, "anomalies (read-only)", "feature_dir").add_argument("--integration", required=True)
-    cmd("lint", cmd_lint, "exact structural checks", "feature_dir")
+    cmd("lint", cmd_lint, "exact structural checks", "feature_dir").add_argument(
+        "--pre-contract", action="store_true", help="defer the missing openapi contracts create-contract writes")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)

@@ -1,6 +1,6 @@
 ---
 name: mismagent-reviewer
-description: "GENERATED packaging glue (pi only) \u2014 fresh-context host for the mismagent-code-review skill. Spawned by the worker-composer at D1 after mismagent-verifier; loads the skill and applies it to the diff of ONE block. Read-only \u2014 finds and triages (HIGH|MED|LOW -> Decision|Patch|Defer), does not fix."
+description: "GENERATED packaging glue (pi only) \u2014 fresh-context host for the mismagent-code-review skill. Spawned by the worker-composer at review (step 5) after mismagent-verifier; loads the skill and applies it to the diff of ONE block. Read-only \u2014 finds and triages (HIGH|MED|LOW -> Decision|Patch|Defer), does not fix."
 tools: read, grep, find, ls, bash
 ---
 

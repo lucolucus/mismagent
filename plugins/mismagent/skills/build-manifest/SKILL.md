@@ -1,319 +1,133 @@
 ---
 name: build-manifest
-description: mismAgent model movement (successor of mism-build-dag for the architecture-driven build). EMITS the building-block manifest (building-blocks.yaml) — the model→build bridge that the worker-composer reads — as a CONSEQUENCE of the tactical model: aggregates→aggregate block, commands→application-service, Customer/Supplier relationship→port+adapter+boundary, events/views→read-model, screens→ui. Pins the TYPES at the boundaries (Published Language), picks the projection (in-process/cross-deploy) from the profile, attaches the user's tests_nl and the §14 gates. In greenfield it also emits a wave-0 scaffold block (the buildable skeleton owner). Besides the authoritative YAML it seeds the DERIVED, status-less rich block files (one self-contained <id>.md per block in blocks/<ctx>/todo/, no checkboxes) so opening a block shows the whole block; the human reads them live via the read-only /mismagent:board. Replaces the file-task dag.yaml. Use after the architecture, before the worker-composer.
+description: mismAgent model movement. Derives building-blocks.yaml and its status-less block files from the tactical model — pinned boundaries, user tests_nl, releases, scaffold, spikes. Use after the architect, before the worker-composer.
 ---
 
 # build-manifest — the model → build bridge
 
-Emits `<output_dir>/features/<feature>/building-blocks.yaml`: the **worker-composer's only input**. The manifest is
-a **consequence of the model** (anti-zombie: every row has a consumer = the worker-composer), not
-hand-written. Rationale: `redesign/composer-spec.md` §8.
+Emits `<output_dir>/features/<feature>/building-blocks.yaml` — the worker-composer's only input — and
+seeds one derived block file per row in `blocks/<context>/todo/<id>.md`. The manifest is a
+**consequence of the model**, never hand-written: every field has a reader.
+
+**Before writing or regenerating, read `references/manifest-schema.md`** (in this skill's folder):
+it is the normative shape of the YAML and of the block files, and the per-type standard each block
+must meet. Do not emit from memory.
 
 ## Input
-- `<output_dir>/features/<feature>/tactical-model.md` — the tactical model
-  (aggregates/invariants/commands/events); `<output_dir>/context-map.md` — the canonical names +
-  Customer/Supplier relationships;
-- `UI/ux-proposal.md` (if the feature has UI) — the screens/surfaces its `ui` blocks must land (rule 9);
-- `<output_dir>/architecture.md` (the project module map) + `architetture/` + ADRs (including the
-  §14 `enforced_by`);
-- the **active profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`) —
-  sides (→ projection), gate, identity/stack, **`capacity`** (who builds, with how many hours —
-  wave width and block granularity are sized to the TEAM, not to the idealized problem;
-  friction-log-4 #10).
+- `features/<feature>/tactical-model.md` (aggregates, invariants, commands, events);
+  `<output_dir>/context-map.md` (canonical names, Customer/Supplier relationships, open spikes);
+- `features/<feature>/UI/ux-proposal.md` when the feature has UI;
+- `<output_dir>/architecture.md`, `architetture/`, the ADRs in `<output_dir>/decisions/`;
+- the active profile (`<output_dir>/profile.md`): sides (→ projection), gate, `run`,
+  `ui_render_check`, **`capacity`** — wave width and block granularity are sized to the team.
 
-## Tactical → block map (§8.1)
-| source in the model | → manifest row |
-|----------------------|---------------------|
-| aggregate + invariants | `aggregate` block (+ `invariants`, `invariant_fields`, `identity`, `tables`) |
-| command(s) (per aggregate) | `application-service` block (`commands`, `consumes`) |
-| **Customer/Supplier** relationship | `port` block (consumer-owned) + `adapter` + an inter `boundary` |
-| domain event / view | `read-model` block (+ `view_shape`) |
-| UI screen | `ui` block (`consumes_rm`, `triggers`); its `tests_nl` cover the screen's **states** (empty/error/loading) too — the worker tests them on the presenter, and `realize-ui` + the side's `ui_render_check` prove the rendering |
+## Tactical → block map
+| in the model | → manifest row |
+|---|---|
+| aggregate + invariants | `aggregate` (+ `invariants`, `invariant_fields`, `identity`, `tables`) |
+| commands of an aggregate | `application-service` (`commands`, `consumes`) |
+| Customer/Supplier relationship | consumer-owned `port` + `adapter` + a `boundary` |
+| domain event / view | `read-model` (+ `view_shape`) |
+| UI screen | `ui` (`consumes_rm`, `triggers`) |
 
-## Rules — each is also an item of the worker-composer's Phase 1 readiness
-1. **PIN the types at the boundary = Published Language** (primitive or shared-kernel), **never** the
-   supplier's domain type: pinning `ProductId` (from Catalog) on a Sales port would recreate
-   Sales→Catalog. The `value class` lives **inside** the context; at the seam you speak primitives.
-   *(Wave-1 lesson: an unpinned boundary ⇒ the workers, built blind, do not compose.)*
-2. **projection** for every inter boundary: `in-process` if consumer and supplier are **the same side**
-   (profile), otherwise `cross-deploy` → the port projects into the **declared contract form**
-   (`contract_form`, from the profile/ADR): request/response → **OpenAPI** + generated types + CDC;
-   a replication/sync wire → a **versioned event-schema** (e.g. proto + event catalogue, additive
-   evolution) + CDC on the events (friction-log-4 #5/#16). The BE‖FE parallelism re-emerges as an
-   *effect*, not dogma.
-3. **contract_test**: `invariant-test` (aggregate boundary) · `consumer-driven` (port, read-model).
-4. **§14 gate** for every aggregate boundary (from the `invariant_fields`/`tables`): no writes outside
-   the adapter; the invariant field is **confined** → consumers use the **named predicate**. The
-   generated greps are **code-scoped** (imports/field-access, not prose) and target the
-   **package/dir or symbols**, never a guessed filename (#11/#12 — see §14).
-5. **tests_nl (§16):** for every high-value block/boundary, **ask the user, in natural
-   language, which tests they want** and attach them as `tests_nl` (the worker translates them into
-   tests). A boundary **without** `tests_nl` is not ready: ask. Each item must be **falsifiable on
-   the block's real path**: an AC the slice satisfies *by construction* (it cannot fail — e.g. "no
-   future date" where the date is always `now`) proves nothing; rework it into a failable test or
-   mark it `by-construction` so nobody counts it as coverage. For a **`ui` block** the `tests_nl`
-   must include the screen's **states** (empty/error/loading); the **rendering** itself (sizing/
-   overflow/contrast) is not a `tests_nl` item — it is owned by `realize-ui` + the side's
-   `ui_render_check` (profile).
-6. **build_order** derived: the wave-0 `scaffold` block (rule 7) precedes **all** owners; then the
-   boundary owners (aggregate, port); then the consumers in parallel (width sized to the profile's
-   `capacity`).
-7. **scaffold block (greenfield only) — wave 0.** If the side has **no buildable project yet** (the
-   profile's `gate` cannot even run: no wrapper / no module / no `src` tree), emit **one `scaffold`
-   block per such side** with `wave: 0`, `type: scaffold`, no boundary, no `tests_nl`. Its acceptance
-   is the negative space: **the side's `gate` runs GREEN on the empty skeleton**. The worker-composer
-   builds it **before** every owner block (its `realize-scaffold` skill creates wrapper + module
-   structure + plugins + sourceSets per the stack ADR / infra-notes). If the side renders UI and its
-   `ui_render_check` (profile) is an **automated** check, the scaffold also wires the **UI-test
-   dependency/config**, so the gate can execute the render proof from wave 0. If the side renders UI,
-   the scaffold also **honors the profile's `run` binding** (the launch task/entry + port the
-   profile pins *a priori* — the command must work on the empty skeleton; friction-log-4 #15). If a
-   cross-deploy boundary declares `contract_form: event-schema` whose `schema_paths` live in this
-   side's tree, the scaffold **creates that contract location** (the files are its output — Phase 1
-   defers their check, friction-log-4 #16). Without the scaffold, in greenfield the
-   owner blocks have nothing to compile against. *(If the project already builds, emit no scaffold.)*
-8. **Re-entrant by regeneration — INCREMENTAL once the build is running** (friction-log-4 #14/#28):
-   re-running refreshes the YAML + the derived block files **in place** from the current model — it
-   is never a re-deliberation. `tests_nl` already elicited **stay**; ask the user only for **new or
-   changed** blocks/boundaries, and report the delta (added/changed/unchanged) so a re-run is
-   reviewable. **With blocks already in `doing/`/`done/` the delta mode is the ONLY legal one:**
-   apply the change (a re-pinned boundary, a new owner block) to the YAML and re-seed **only the
-   impacted derived files** — never move a file between state folders (state is the
-   worker-composer's), never rewrite the files of unimpacted blocks, and list which files the delta
-   touched. A full regeneration that resets state or others' refinements is a bug; doing the delta
-   by hand outside this skill is exactly the manifest↔blocks divergence it exists to prevent.
-9. **Every ux-prescribed surface lands or is declared cut** (friction-log-4 #11): for each `ui`
-   block, check the ux-proposal's prescriptions against the manifest — every screen
-   surface/interaction it assigns to the block has a matching `triggers`/`consumes_rm` entry, **or**
-   an explicit cut (a `notes`/deferred line naming where it went — e.g. "writes node config, not
-   the versioned aggregate"). Never leave a surface implicit: ambiguity discovered at seeding time
-   is a model bug, not a worker's judgment call.
-10. **Every prescribed capability names its OWNER module** (friction-log-4 #20): if a spec
-    prescribes a concern (a local store, a sync engine, a ui-kit), the module that owns it must be
-    in the block's module list — or the spec says explicitly where it lives. A capability with no
-    named owner forces the worker to invent architecture; at wave 0 (`dev_architecture` inevitably
-    absent) that invention becomes the precedent the harvest later canonizes.
-11. **Shared artifact ⇒ DERIVED owner block** (friction-log-4 #25/#32): whenever an artifact is
-    consumed by **≥2 blocks of the same wave** — the shared-kernel types the `pinned_types` name,
-    the build/structure files of a module several blocks touch, a ui-kit (the design system's code
-    incarnation) — emit ONE owner block for it, built before the wave (an intermediate "wave 0.5"
-    is fine; no domain rules in it). Without an owner, N parallel workers write N divergent bodies
-    of the same file and the wave's parallelism is illusory. This is a **derivation** you compute
-    from the manifest (which types/files ≥2 same-wave blocks share), never a bespoke hand-fix.
-12. **Pin RECURSIVELY** (friction-log-4 #29/#36): a composite type cited inside a `pinned_types`
-    row (`biglietti:[BigliettoEmesso]`) must have its **own** `pinned_types` row — or be a
-    primitive / an already-pinned shared-kernel VO. On an `event-schema` wire, pin **all** the
-    events that cross it, not only those whose consumer is already modeled. A Published-Language
-    type cited-but-undefined forces the worker to invent the Published Language — the one thing
-    pinned boundaries exist to prevent.
-13. **A key pins its MINTING RULE, its owner — and it is the CONSUMER'S key** (friction-log-4
-    #34/#38/#41/#47): for every id/correlation key in a boundary's `pinned_types` or a
-    producer-driven event payload, pin in the boundary's `keys:` **who mints it and by what rule**,
-    including its **stability** (across catalogue versions / hot-changes / republications) — a bare
-    `:string` makes N workers mint N incompatible rules, and a divergent correlation key breaks the
-    domain downstream (the oversell class). The pinned type must carry **the key the consumer
-    operates with**: if the consumer keys its state by X and the type carries only a
-    transport/compact Y (a QR index) with no pinned Y→X map, the boundary is under-specified — fix
-    it here, don't let the consumer invent a port. A string key minted/decoded by **≥2 contexts**
-    is a candidate for a **typed shared-kernel VO** (one parse/format home) or for carrying the
-    correlating fields explicitly instead of an opaque string.
-14. **Seam granularity is a DECISION, never a worker default** (friction-log-4 #40): when an
-    entity crossing a seam carries a quantity (`righe:[{qta}]`) that downstream becomes a count of
-    units, and its identity is a correlation key or the quantity enters a **conserved invariant**
-    (Porzioni), the unit-vs-quantity granularity is ubiquitous language: it must arrive here
-    already decided (tactical model / user). FLAG any pinned type where it is implicit — two
-    workers assuming different granularities merge blocks that are mutually incoherent, a latent
-    seam mismatch that detonates only at the weld.
-15. **Read boundaries derive from the model's PRECONDITIONS too** (friction-log-4 #42): a command
-    whose precondition reads another context's state ("…and no item of the order is already
-    delivered — reads the Monitor") IS a boundary: project it into `consumes` (a pinned read
-    boundary, or an extension of an existing one). A cross-context read the context-map names but
-    the manifest doesn't pin leaves the worker to invent a consumer-owned port on the spot.
-16. **Every `view_shape` field has a SOURCE; a supplier's view_shape IS the pinned_type**
-    (friction-log-4 #44/#45/#48): lint each `view_shape` field against a declared source — a field
-    of an event the block `consumes`, a boundary's `pinned_types`, or the write-path input. No
-    source → **refuse at generation** (the same gap surfaces later and dearer as a readiness or
-    build bounce). A read-model that is the **supplier** of a boundary must have `view_shape` ≡
-    the boundary's `pinned_type` (they are ONE Published Language written twice; two copies
-    diverge). On a sync wire the events' fields are **consumer-driven** like any read: derive them
-    from the folds the consuming read-models declare, and materialize the JVM event types in the
-    shared kernel **together with** the schema forms (one PL, not two that diverge).
-17. **Consumption-shaped guarantees: ordering and commutativity** (friction-log-4 #46/#50): a
-    field a read-model/UI **orders by** requires the producer to pin an **orderable format**
-    (fixed-width zero-pad, or a dedicated Comparable + the cross-namespace rule) — a lexicographic
-    sort on an unpinned string is wrong at every digit boundary. A read-model folding events of
-    **>1 writer stream for the same key**, over a wire that guarantees order only per-stream, is
-    mechanically at risk under cross-node reordering: require **single-writer-per-key** (absolute
-    values from the owning authority) OR a **declaredly commutative fold** (tombstones / orphan
-    buffer) — and pin the wire's **`delivery:` guarantee** on the boundary (e.g. per-node in-order
-    + dedup(nodeId, seq) BEFORE the fold) so consumers design against it and the sync adapter
-    owes it.
-18. **The invariant tag is PRESCRIBED, greppable and JVM-safe** (friction-log-4 #24): the
-    manifest's `[INV-n]` form does not compile as a JVM test name (`[ ] . ; : / < >` are illegal
-    even in Kotlin backticks). Prescribe the convention the workers use: the test **name starts
-    with the tag `INV-n `** (no brackets). The verifier greps it per-block — never a global
-    presence `enforced_by` (it would be red for the whole wave; friction-log-4 #19).
-19. **Reconcile the manifest with profile · architecture · ADRs BEFORE emitting** (friction-log-4
-    #22): grep your own pins against the other authoritative artifacts — a pin that contradicts a
-    profile boundary rule ("VO at the seam" vs primitives pinned), an architecture-overview line,
-    or an ADR (a boundary pinned as a COMMAND where the model says FACT, implying a dependency
-    arrow the map forbids) is resolved **with the user** and the losing artifact amended in the
-    same pass. Two authoritative artifacts that disagree in silence are two sources of truth;
-    nothing downstream re-aligns them (methodology rule 7 applied to yourself).
-20. **Flag the blocks that need the deepest model — `model_hint: deep`** (worker-composer §2a
-    routes every dispatch by action; the hint is the one input only YOU can give it). The
-    base table already puts `aggregate`/`port` on `deep`, so set the hint on a **consumer** block
-    only when the model says it carries owner-grade judgment: it folds ≥ 2 boundaries, it mints or
-    re-keys an id the rule-13 key discipline governs, its fold depends on a rule-17 ordering /
-    commutativity guarantee, or its spec was reshaped by an answered `open-questions/` file. Never
-    set it for size alone — a long but pattern-shaped block is still `standard`. The hint is
-    derived like every other field: re-running build-manifest recomputes it.
-21. **Releases are STRUCTURE, decided here — R0 is a launchable vertical slice, early.** Every block
-    carries `release: R0 | R1 | …`, and the manifest's `releases:` section says what each one lets
-    the user DO. **R0** = the thinnest vertical slice that **starts the app and does one real thing
-    end to end** (a screen opens, a command runs through the root, a read-model shows the result)
-    and all its blocks must sit within the **first 3 build waves** (distinct `wave` values after
-    the scaffold, an intermediate rule-11 owner wave included; brownfield counts from the first
-    wave): size R0 down until they do. A
-    block goes to R0 only if R0's walk needs it; everything else is R1+. Present the R0 cut to the
-    user at the `tests_nl` checkpoint — it is what they will see first, so it is theirs to confirm.
-    A manifest whose first launchable build is only its last wave hides the whole build from the
-    human until the end; release labels bolted on mid-build are this rule, missing.
-22. **Central risks become spikes AT WAVE 0** — for every capability the product stands on whose
-    feasibility is **unproven** on this stack (an engine or library never exercised under the
-    product's real conditions, an unmeasured quality/performance target — the context-map's
-    `central: true` spikes and the architect's flagged risks), make sure a `type: spike` node
-    exists with `central: true`: the tactical-modeler normally materialized it already from the
-    context-map — then **set the flag on that node**, never emit a second one; only a risk with no
-    node yet gets one here, via `write-task`.
-    The worker-composer runs it **in parallel with the scaffold**, and the blocks it `Unblocks`
-    wait for its answer. A central risk opened after the domain waves means those waves were built
-    on a guess.
-23. **Granularity: group infrastructure by MODULE.** The `adapter` blocks of one infrastructure
-    module (the implementations of several ports in the same persistence/integration module) are
-    **one block**, not one per table/class/port-implementation: every extra block is one more
-    worker dispatch, verifier round and merge. The grouped block still `consumes` every boundary it
-    implements and D2 welds each of them. **Split** only where the pieces cannot travel together:
-    a **cross-deploy** wire (its own contract artifact and CDC), implementations whose owners land
-    in different waves, or pieces of different releases (rule 21). Two limits: files the module's
-    blocks **share** (the schema/migrations, DI wiring) stay a **rule-11 owner block** built before
-    them — grouping never hides a shared artifact; and domain blocks keep their own granularity
-    (one aggregate = one block).
+## Boundaries — what crosses a seam is PINNED, never invented in parallel
+1. **Pin the Published Language:** `pinned_types` are primitives or shared-kernel VOs, never the
+   supplier's domain type (it would recreate the dependency the port exists to cut).
+2. **Pin recursively:** a composite type cited in a `pinned_types` row has its own row (or is a
+   primitive / an already-pinned VO). On an `event-schema` wire pin **every** event that crosses it,
+   not only those whose consumer is modeled yet.
+3. **Keys:** for every id/correlation key, `keys:` pins who mints it, by what rule, and its stability
+   (across versions, hot changes, republication). The pinned type carries **the key the consumer
+   operates with**; a transport-only key with no pinned map to it is under-specified — fix it here.
+   A string key minted or decoded by ≥ 2 contexts is a candidate for a shared-kernel VO.
+4. **Granularity is a decision:** when a quantity crosses a seam and becomes units downstream, or
+   enters a conserved invariant, unit-vs-quantity must already be decided in the model. Implicit →
+   stop and ask (tactical-modeler or user).
+5. **Reads come from preconditions too:** a command whose precondition reads another context's state
+   is a boundary — project it into `consumes`.
+6. **Every `view_shape` field has a source** — a consumed event's field, a boundary's
+   `pinned_types`, or the write-path input. No source → refuse at generation. A read-model that
+   supplies a boundary has `view_shape` ≡ that boundary's pinned type (one Published Language). On a
+   sync wire the events' fields are consumer-driven: derive them from the consuming folds, and
+   materialize the event types in the shared kernel together with the schema files.
+7. **Consumption guarantees:** a field someone orders by is pinned in an orderable format. A fold
+   over > 1 writer stream for the same key needs single-writer-per-key **or** a declared commutative
+   fold; pin the wire's `delivery:` guarantee on the boundary.
+8. **Projection:** consumer and supplier on the same side → `in-process`; otherwise `cross-deploy`
+   with a `contract_form` from the profile/ADR (request/response → `openapi` + `contract_path` +
+   `operation_ids`; replication/sync → `event-schema` + `schema_paths` + `delivery`). A boundary an
+   earlier feature introduced keeps its contract file. `contract_test`: `invariant-test` on an
+   aggregate boundary, `consumer-driven` on port and read-model.
+9. **Confinement checks for every aggregate:** from `invariant_fields` and `tables` derive three
+   constraints — persistent writes to its tables only in its adapter; state mutated only through the
+   root; invariant fields read only inside the aggregate (consumers use the named predicate). Record
+   each as a check reference on the aggregate's ADR, via `write-adr`:
+   `enforced_by: [{check: <repo path>, from: <block-id>}]` — `from` only where the check can pass only
+   once that block exists (a prohibition applies at once). A check targets packages/modules or
+   symbols, never a guessed filename; the check file, its fixtures and its registration in the gate
+   follow `write-adr`.
+
+## Acceptance — tests_nl
+10. For every high-value block and every boundary, **ask the user in natural language which tests
+    they want** and attach them as `tests_nl`. A boundary without `tests_nl` is not ready: ask. Each
+    item is **falsifiable on the block's real path**; one the slice satisfies by construction is
+    reworded into a failable test or marked `by-construction` so nobody counts it as coverage. A `ui`
+    block's `tests_nl` cover its states (empty/error/loading); rendering itself is proven by
+    `realize-ui` and the side's `ui_render_check`.
+11. **The invariant tag is a verifiable convention:** prescribe that each invariant test's name
+    starts with `INV-n ` — no brackets, no character illegal in the stack's test names — so coverage
+    is matched per block. Never turn it into a project-wide presence check (red for the whole wave).
+
+## Structure — waves, owners, releases
+12. **Waves:** the scaffold at `0`; owners (aggregate, port) before their consumers; consumers of a
+    wave in parallel, width sized to `capacity`. Waves are integers — an extra wave is a renumbering.
+13. **Scaffold (greenfield only):** a side whose gate cannot run yet gets one `type: scaffold` block,
+    `wave: 0`, no boundary, no `tests_nl`; its acceptance is the side's gate green on the empty
+    skeleton. It also wires the UI-test setup when `ui_render_check` is automated, satisfies the
+    profile's `run` binding on a UI side, and creates the location of any `schema_paths` in its tree.
+    A project that already builds gets no scaffold.
+14. **Shared artifact ⇒ derived owner block:** an artifact ≥ 2 blocks of the same wave consume (the
+    shared-kernel types, a module's build files, a ui-kit, a schema/migration set, DI wiring) gets
+    ONE owner block in an earlier wave, with no domain rules. Compute it from the manifest.
+15. **Every prescribed capability names its owner module** (a local store, a sync engine, a ui-kit):
+    in the block's module list, or stated in the spec.
+16. **Group infrastructure by module:** the adapters of one infrastructure module are one block that
+    `consumes` every boundary it implements. Split only for a cross-deploy wire, owners in different
+    waves, or different releases. Domain blocks keep one aggregate = one block.
+17. **Every ux-prescribed surface lands or is declared cut:** each surface the ux-proposal assigns to
+    a `ui` block has a `triggers`/`consumes_rm` entry, or a `notes` line saying where it went.
+18. **`model_hint: deep`** on a consumer block only when it folds ≥ 2 boundaries, mints or re-keys a
+    pinned key, depends on an ordering/commutativity guarantee, or was reshaped by an answered
+    `open-questions/` file. Never for size alone.
+19. **Releases:** every non-scaffold block has `release:`; `releases:` says what each lets the user
+    do. **R0** is the thinnest launchable vertical slice (the app starts and does one real thing end
+    to end) within the first 3 build waves after the scaffold — size it down until it fits. Present
+    the R0 cut to the user at the `tests_nl` checkpoint.
+20. **Central risks are wave-0 spikes:** every `central: true` spike of the context-map (and every
+    risk the architect flagged) has a `type: spike` node with `central: true` — set the flag on the
+    tactical-modeler's node, never emit a second one; only a risk with no node gets one, via
+    `write-task`.
+
+## Coherence and regeneration
+21. **Reconcile before emitting:** check your pins against profile, `architecture.md` and the ADRs.
+    A contradiction is resolved **with the user** and the losing artifact amended in the same pass.
+22. **Regeneration is incremental.** Re-running refreshes the YAML and the block files in place from
+    the current model; elicited `tests_nl` stay; ask only about new or changed blocks; report the
+    delta (added / changed / unchanged). With blocks in `doing/` or `done/`, the delta is the only
+    legal mode: re-seed only the impacted files, list them, never rewrite an unimpacted file and
+    never move a file between state folders. Hand-editing a block file is a divergence bug.
+23. **Un-parking:** fold the user's answer to a parked block into its spec and delete its
+    `features/<feature>/open-questions/<block-id>.md` — regeneration is what clears it.
 
 ## Output
-1. `building-blocks.yaml` — the **authoritative** source (blocks + the `boundaries:` section with
-   `projection` + `tests_nl` + gates + `build_order` + any wave-0 `scaffold`). The **worker-composer's
-   Phase 1** reads it (pinned types, contract_test, projection, gates, tests_nl). Keep the `boundaries:`
-   as a first-class section (the architect's coherence + `create-contract`'s input depend on it).
+- `building-blocks.yaml` — authoritative; `boundaries:` stays a first-class section.
+- the block files — its per-block projection, status-less (the folder is the state).
+- no other task list: the human reads the blocks live with `/mismagent:board` (read-only).
 
-   ### The manifest's shape (NORMATIVE — Phase 1 reads exactly these fields)
-   ```yaml
-   blocks:
-     - id: <slug>                  # unique
-       type: aggregate | application-service | port | adapter | read-model | ui | scaffold
-       context: <bounded-context>
-       side: <side>                # from the profile
-       wave: 0 | 1 | 2 …           # 0 ONLY for scaffold; otherwise derived (owners before consumers)
-       consumes: [<boundary-id>…]  # boundaries this block consumes (empty for owners/scaffold)
-       tests_nl: [<falsifiable AC in natural language>…]   # rule 5; `by-construction` marked as such
-       related_adrs: [<NNNN>…]
-       # per-type fields:
-       invariants: [<INV-n rule>…]         # aggregate
-       invariant_fields: [<field>…]        # aggregate (the §14 gates derive from these)
-       identity: <id strategy>             # aggregate
-       tables: [<table>…]                  # aggregate
-       commands: [<Command>…]              # application-service
-       view_shape: { <field>: <type>… }    # read-model
-       consumes_rm: [<read-model id>…]     # ui
-       triggers: [<Command>…]              # ui
-       model_hint: deep                    # OPTIONAL, any type — rule 20; omit otherwise
-       release: R0 | R1 | …                # REQUIRED except scaffold — rule 21
-   boundaries:                     # FIRST-CLASS section
-     - id: <slug>
-       owner: <block-id>           # aggregate | port — built before its consumers
-       consumers: [<block-id>…]
-       projection: in-process | cross-deploy       # rule 2 (from the profile's sides)
-       contract_form: openapi | event-schema       # cross-deploy ONLY — the FORM the contract takes
-                                                   # (profile/ADR): request/response → openapi;
-                                                   # replication/sync wire → event-schema (versioned,
-                                                   # additive evolution)
-       pinned_types: { <Name>: <primitive or shared-kernel VO>… }   # rule 1, Published Language
-                                           # composite types cited here have their OWN row (rule 12)
-       keys: { <field>: "minted by <block-id> — <rule + stability>" }  # rule 13 — every id/
-                                           # correlation key: who mints it, how, across what it
-                                           # stays stable (versions/hot-change/republication)
-       contract_test: invariant-test | consumer-driven              # rule 3
-       operation_ids: [<operationId>…]     # contract_form: openapi ONLY — each must resolve in the OpenAPI
-       contract_path: <path>               # contract_form: openapi ONLY — WHICH OpenAPI holds them.
-                                           # A boundary introduced by an earlier feature keeps ITS
-                                           # file: never assume api/<this-feature>.openapi.yaml
-       schema_paths: [<path>…]             # contract_form: event-schema ONLY — the versioned schema
-                                           # files (proto/event catalogue); may be a wave-0 scaffold
-                                           # OUTPUT (Phase 1 defers their check until the first
-                                           # consuming block is ready)
-       delivery: "<guarantee>"             # contract_form: event-schema ONLY — the wire's delivery
-                                           # guarantee consumers design their folds against
-                                           # (rule 17), e.g. "per-node in-order +
-                                           # dedup(nodeId,seq) before the fold"
-   releases:                       # rule 21 — R0 first, the launchable vertical slice
-     R0: { goal: "<what the user can do>", launch: "<what opens: screen / command>", blocks: [<id>…] }
-   build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]          # derived, rule 6
-   ```
-   Anything a consumer needs that is not in this shape **does not exist**: extend THIS section
-   first, then the readers (worker-composer Phase 1, the block files, the board).
-2. **The rich block files** — a **DERIVED, status-less rendering** of the manifest, seeded one per
-   block into `blocks/<context>/todo/<id>.md`, so opening a block shows the *whole* block (no more
-   empty folder markers). Frontmatter mirrors the manifest row — `type`, `context`, `side`, `wave`,
-   `consumes`, `related_adrs`, `release`, `model_hint` (when set), **+ per-type fields** (aggregate → `invariants`/`invariant_fields`/
-   `tables`; port → `projection`/`pinned_types`/`contract_test`; read-model → `view_shape`). Body:
-   ```
-   # <id> — <title>
-   ## What to do     — what to build (from the model), 1–3 sentences
-   ## Tasks          — the tests_nl/ACs as READ-ONLY acceptance criteria (plain list, NOT checkboxes)
-   ## Dependencies   — the boundary owners it waits on
-   ```
-   The ADR set a block must read is **derived from the manifest** — its `related_adrs` ∪ those of
-   the boundaries it consumes — **never a hand-compiled list in a prompt** (a hand list diverges
-   from the manifest silently; friction-log-4 #12).
-   **No `status:` field, no `[ ]` checkboxes** — the block's state **is its folder** (`todo/doing/done`),
-   moved only by the worker-composer; the file's *content* is derived (re-running `build-manifest`
-   refreshes content **in place**, it never moves files). Re-running is also how a **parked bounce
-   un-parks**: fold the user's answer into the spec (`tests_nl`/criteria) and **delete that block's
-   `<output_dir>/features/<feature>/open-questions/<block-id>.md`** — the worker-composer wrote it when the
-   worker bounced, and regeneration is what clears it. The YAML stays the source of truth; these
-   files are its **per-block projection** (the way OpenAPI is the cross-deploy projection of a boundary).
-   No static `TASKS.md` — the rich block files + the board (below) replace it.
-
-   ### The block-spec standard — completeness is LINTED, not judged
-   The file is derived, so richness costs nothing: hold every block to this per-type standard.
-   You enforce it at generation; the **worker-composer's Phase 1 re-checks it** (a gap ⇒ the block
-   is **not ready**, gap named, BOUNCE back here — regenerate, never hand-patch the file):
-   - **every block:** `## What to do` non-empty; `## Tasks` ≥ 1 criterion; a closing `Sources:`
-     line pointing at the `related_adrs` + the tactical-model section it derives from;
-   - **aggregate:** every frontmatter `invariants` item is spelled out in the body AND covered by
-     ≥ 1 `## Tasks` criterion (an invariant nobody tests is a wish, not an invariant);
-   - **application-service:** every `commands` item has ≥ 1 happy-path criterion AND ≥ 1
-     rejection/failure criterion;
-   - **port / adapter — and ANY block at a boundary:** every boundary the block touches appears in
-     `## Dependencies` with the **pinned signature inlined** (the Published-Language types + the
-     `contract_test` name, **plus the boundary's `keys:` minting rules and — on a sync wire — its
-     `delivery:` guarantee**: the worker who mints a key or designs a fold must not open the YAML
-     to learn them) — the reader must not open another file to know the seam;
-   - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
-   - **ui:** the screen's states (empty/error/loading) are covered (rule 5).
-   The lint is structural and mechanical: it governs the **floor** of detail a human can rely on
-   when opening any block; the ceiling stays the user's `tests_nl`.
-
-## The live human view — the board (read-only)
-The human reads the work via **`/mismagent:board [feature]`**: a read-only server that scans the block
-files + their **folder position** (= block status) + (optionally) the **last test run** (per-AC
-green/red) → a live kanban with each block's `## What to do`/`## Tasks`. It **derives** progress, it
-**never writes** the block files (no checkbox mutation) — coherent with "only the worker-composer moves
-state". This is the visible surface that the hidden `.mismagent/.../blocks/` would otherwise bury.
+Run `MM lint --pre-contract <output_dir>/features/<feature>/` (`MM` = `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"`)
+and fix every gap before reporting (the flag defers only the OpenAPI files create-contract writes next).
 
 ## Outcome
-Summary: N blocks per type (+ any wave-0 scaffold), M boundaries (with projection), the releases
-(R0's blocks and the wave by which it launches), the central-risk spikes at wave 0, confirmation of
-pinned types, `tests_nl` elicited from the user, and what is missing before launching
-`/mismagent:worker-composer`. Tell the user the block files are seeded in
-`blocks/<context>/todo/` and that **`/mismagent:board`** shows them live.
+Blocks per type (and the scaffold), boundaries with projection, the releases (R0's blocks and its
+wave), the central spikes, pinned types confirmed, `tests_nl` elicited, the delta on a re-run, and
+what is missing before `/mismagent:worker-composer`.

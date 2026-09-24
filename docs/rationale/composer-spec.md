@@ -1,5 +1,9 @@
 # The build as *composition* — design rationale of the build movement
 
+> **NON-NORMATIVE HISTORY (since v0.17).** This document is archived design rationale, not shipped
+> to agents and not an authority. The operative rules live in the plugin's skills, agents and
+> commands; nothing there points here. Section numbers below are historical.
+
 > **What this is — and is NOT the authority.** This is the **rationale and derivation history** of the
 > architecture-driven build. The **authority is the live core** — the skills (`build-manifest`,
 > `realize-*`, `seam-*`), the agents (`mismagent-worker`, `mismagent-verifier`) and the command

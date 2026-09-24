@@ -1,122 +1,65 @@
 ---
 name: explore
-description: 'mismAgent explore movement. Turns a raw idea into an understood problem + domain model, before tasks/contract/code ("no premature coding"). You dialogue in session with the user (high presence) and invoke two subagents: mismagent-challenger (demolishes the idea cold) and mismagent-analyst (models the domain and fixes the ubiquitous language that downstream gives the contract its names). Produces product-brief + context-map + spikes. No contract, no tasks here. Use at the start of a new feature.'
+description: 'mismAgent explore movement. In dialogue with the user, turns a raw idea into an understood problem: bootstraps the profile, runs challenger and analyst, writes the product brief and amends the context-map. Use at the start of a feature.'
 ---
 
-# MismAgent — Explore
+# mismAgent — Explore
 
-mismAgent's **explore** movement: from raw idea to **understood problem** + **domain
-model**. Rule: **no premature coding** — first explore and model, then plan.
+From raw idea to **understood problem** and **domain model**. No contract, no tasks, no code here.
 Orientation: `methodology/mismagent.md`.
 
-**Your role (high presence):** *you* dialogue in session with the user. From there you wield two
-subagents as tools — they do not replace your presence, they sharpen it:
-- **`mismagent-challenger`** (fresh context): tries to *demolish* the idea before you model it.
-- **`mismagent-analyst`** (autonomous): models the domain and writes the `context-map.md`.
+You dialogue with the user in session (high presence) and use two subagents as tools:
+**`mismagent-challenger`** (fresh context, tries to demolish the idea) and **`mismagent-analyst`**
+(models the strategic domain). Write only what a downstream step reads.
 
-## Anti-zombie principle (what makes it mismAgent)
-Keep **only** what has a **downstream consumer** (survival test). If an output has no
-consumer, **do not write it**.
+**A feature is a unit of delivery** (one manifest, one build), not a unit of analysis. Depth lives in
+the tactical model, `research/`, the ADRs and the block files — when the user asks for "one feature
+per context", probe which depth they want before cutting. Variability across instances (tenants,
+seasons…) is modeled as language here; a generic engine with no second concrete instance is for the
+challenger to attack.
 
-**What a "feature" is — and is NOT** (friction-log-4, open notes): a feature is a unit of
-**delivery** (one manifest, one build) — not a unit of analysis, not a code module. Depth of
-analysis never lives in "more features": per-context depth lives in the **tactical model**
-(`features/<feature>/tactical-model.md`), technology/global depth in `research/` + the ADRs + the architecture overview,
-per-block depth in the manifest's **rich block files**. When the user asks for "one feature per
-bounded context", they are usually asking for **depth**, not for portfolio slices — probe which
-depth they want before cutting anything.
+## Output (each with its reader)
+1. `features/<feature>/product-brief.md` — problem, user, value, scope, outcome → the gate to model.
+2. `<output_dir>/context-map.md` — the **project** map (contexts, relationships, ubiquitous language,
+   open spikes), written by the analyst via `write-context-map`; amended on later features, never
+   re-forked.
+3. `features/<feature>/tactical-model.md` — the "Seeds for the tactical" (the analyst, via
+   `write-tactical-model`) → the tactical-modeler and build-manifest.
+4. Spikes for the unknowns, listed in the context-map (materialized as nodes in model).
+5. `<output_dir>/infra-notes.md` first draft, only if it does not exist (`write-infra-notes`).
+6. `research/<topic>.md` when a decision needs investigation (`mismagent-researcher`).
 
-**Variability without the zombie engine:** "the system must adapt to different <instances>"
-(fairs, tenants, seasons…) is legitimate **strategic** modeling — name what varies per instance
-and which context owns that configuration language. The zombie enters when the *generic engine*
-gets built before a **second concrete instance** exists as a consumer: model the variability's
-LANGUAGE here; let the challenger attack any meta-motor whose only consumer today is hypothetical.
+## Procedure
+0. **Profile — bootstrap only if missing.** On any later feature the profile and the whole trunk
+   exist: read them, never re-bootstrap. If `<output_dir>/profile.md` is missing, create it from
+   `PROFILE.md` with the bootstrap fields only: `output_dir` (default `.mismagent`),
+   `ubiquitous_language.lang`, known contexts, sides, **`validation_mode`**, **`materials`**,
+   **`capacity`**. The last three must come from the user: if the dialogue does not surface them,
+   **ask explicitly** — the mode decides whether a prior implementation may be treated as ground
+   truth, `materials` stops every skill from hunting for folders, `capacity` sizes the architecture.
+   Never invent `gate` or `dev_architecture`: the architect finalizes them.
+1. **Diverge** with the user: goals, users, constraints, alternatives.
+2. **Attack before modeling:** dispatch `mismagent-challenger`. `KILL` → stop and report; `RESHAPE`
+   → redesign with the user; `PROCEED` → close its `MUST_ANSWER_BEFORE_MODELING` items first.
+3. **Model:** dispatch `mismagent-analyst` on what survived, passing the existing context-map as
+   authoritative when there is one (it amends: adds this feature's contexts and terms, reuses the
+   rest verbatim). `NEEDS-INPUT` → bring the `AMBIGUITIES` to the user and re-dispatch. A needed
+   rename goes to the user and becomes an ADR.
+4. **Converge** on `product-brief.md`.
+5. **Infra draft** only if `infra-notes.md` does not exist; afterwards only the architect amends it.
+6. **Research on demand** via `mismagent-researcher`.
 
-## Output (each with its consumer)
-1. `product-brief.md` — problem, user, expected value, scope, outcome.
-   → consumed by the **gate towards model**; without it, model does not start.
-2. `<output_dir>/context-map.md` (**project trunk**) — bounded contexts + relationships +
-   **ubiquitous language** + open spikes. Written by **`mismagent-analyst`** (via
-   `write-context-map`), and **amended** on every later feature, never re-forked.
-2b. `<output_dir>/features/<feature>/tactical-model.md` — the **Seeds for the tactical** (persisted
-   handoff towards `mismagent-tactical-modeler`), written by the analyst via `write-tactical-model`.
-   → consumed by `mismagent-tactical-modeler` (the seeds → the tactical model in the same feature
-   file) and by **`build-manifest`** (bounded contexts → boundaries; aggregates/invariants, from
-   `tactical-model.md` → blocks; **canonical names** → types and, on cross-deploy boundaries, OpenAPI schemas via
-   `create-contract`); the `mismagent-verifier`'s anti-shadow check holds the diff's domain types
-   to those canonical names (cross-deploy: via the contract-generated types; in-process: a
-   synonym/rename of a canonical term → **FAIL**), and it demands a test for every invariant.
-   That is why it is not a zombie.
-3. **Spikes** for the unknowns → listed in `context-map.md`; in `model` the **tactical-modeler
-   materializes them** as `type: spike` nodes via `write-task`.
-4. (if needed) `infra-notes.md` (draft) via **`write-infra-notes`** → consumed in `model`.
-5. (optional) `research/<topic>.md` → cited by an ADR in `model`.
+## Read-only harness (e.g. plan mode)
+The dialogue continues and the challenger dispatches (it is read-only). Do **not** dispatch the
+researcher or the analyst: their handoffs are files, and a return message would evaporate. List the
+pending writes in the plan as files to materialize; when writes reopen, materializing them is the
+**first** action (profile → brief), then the analyst.
 
-## Procedure (you orchestrate the dialogue; the subagents do the autonomous work)
-0. **Profile bootstrap (ONLY if missing — it is the project's junction point, not a per-feature
-   artifact):** on any feature after the first, the profile already exists: **read it, never
-   re-bootstrap it**. The same holds for the whole project trunk (`context-map.md`,
-   `architecture.md`, `code-rules.md`, `infra-notes.md`, `decisions/`, `architetture/`) — a new feature adds a folder under
-   `<output_dir>/features/`, it does not restart the project. explore writes into `<output_dir>` and fixes canonical names,
-   so *at least* the bootstrap profile is needed. If `.mismagent/profile.md` does not exist, create it
-   NOW from the `PROFILE.md` template with only the bootstrap fields: `output_dir` (default
-   `.mismagent`), `ubiquitous_language.lang`, known bounded contexts, list of sides,
-   **`validation_mode`**, **`materials`** and **`capacity`**. The mode should surface from the dialogue itself (normal feature work, or
-   a *rebuild-from-the-stated-requirements* validation run?); **if it does not surface, ask the user
-   explicitly** — it decides whether challenger/analyst may treat a prior implementation of the
-   deliverable as ground truth (`greenfield_from_requirements` forbids it).
-   **`materials`** declares ONCE what source material exists — `sample:` (domain PDFs/screenshots)
-   and `ui:` (pre-existing mockups), path or `none`: every downstream skill that names those inputs
-   (analyst, researcher, challenger, ux-designer, architect) reads THIS field instead of hunting
-   for folders that don't exist (friction-log-4 #3/#8). **`capacity`** declares who builds and with
-   how many hours — the architect and build-manifest size stack and waves on it (friction-log-4
-   #10); like the mode, **ask explicitly if they don't surface**. The rest (`gate`,
-   `dev_architecture`) will be finalized by the architect in `model` after the stack ADR — do NOT
-   invent it. The bounded contexts here are the **seed** ones (those you already know); the
-   maintained map is the project's `<output_dir>/context-map.md` that `mismagent-analyst` writes at
-   step 3 and **amends** at every later feature. The profile stays the project's **junction point**
-   (output_dir, sides, gate, projections); the context-map is where the domain's names live.
-1. **Diverge:** brainstorm the idea with the user — goals, users, constraints, alternatives.
-2. **Attack the idea BEFORE modeling it:** invoke **`mismagent-challenger`** (fresh context).
-   `KILL` → stop and report back to the user; `RESHAPE` → redesign with them; `PROCEED` → close the
-   `MUST_ANSWER_BEFORE_MODELING` items before moving on.
-3. **Model the domain:** invoke **`mismagent-analyst`** on what survived. Fix with them the
-   **ubiquitous language** (one concept = one canonical name). `NEEDS-INPUT` → bring the
-   `AMBIGUITIES` to the user and re-invoke. **If `<output_dir>/context-map.md` already exists**
-   (any feature after the first), pass it to the analyst as authoritative: it **amends** the map —
-   adds the contexts and terms this feature introduces, reuses the rest verbatim. A second context
-   map, or a renamed term, forks the canonical names that everything downstream inherits; a rename
-   that is genuinely needed goes to the user and becomes an ADR.
-4. **Converge on the brief:** write `product-brief.md` (problem/user/value/scope/outcome).
-5. **Infra — only if `<output_dir>/infra-notes.md` does NOT exist yet:** invoke `write-infra-notes`
-   for the first draft. It is a **trunk** file: on any later feature it already exists and only the
-   **architect** amends it (at the infra checkpoint). Never redraft it per feature.
-6. **Research on-demand:** if a decision requires investigation → `research/<topic>.md`.
-
-## Harness read-only mode (e.g. plan mode)
-If the harness forbids writes until a plan is approved, explore does **not stall** and does **not
-bypass** — the conflict is only mechanical (plan mode and explore want the same thing: understand
-before acting):
-- the **dialogue proceeds** (it is the high-presence part) and **`mismagent-challenger` dispatches
-  normally** — it is read-only by design;
-- do **NOT** dispatch `mismagent-researcher` or `mismagent-analyst` while writes are forbidden:
-  their handoffs are **FILES** (rule #4) and a return message is not a valid substitute — the
-  work would evaporate with the context;
-- the pending writes (the bootstrap profile with the answers already collected, the brief draft)
-  go into the plan as an **explicit list of files to materialize**, never as replacement content;
-- when writes reopen, **materializing the files is the FIRST action** (profile → brief), then
-  dispatch the analyst for the context-map. The explore→model gate stays on the **files**: an
-  approved plan's text is not a handoff.
-`model` starts **only** if the feature's `product-brief.md` (problem/user/value) **and** the
-project's `<output_dir>/context-map.md` (at least the bounded contexts this feature touches, with
-their ubiquitous language) exist. Otherwise stay
-in explore.
-
-## Boundaries
-- **No contract, no tasks, no code** in explore.
-- No state artifacts. The journal is the conversation + the files produced.
+## Gate to model
+`model` starts only when the feature's `product-brief.md` (problem, user, value) **and** the
+project's `context-map.md` (at least the contexts this feature touches, with their language) exist
+as files. Otherwise stay in explore.
 
 ## Outcome
-Summary: bounded contexts (+ key ubiquitous language), problem/user/value from the brief,
-**challenger's verdict**, open spikes (future task nodes), any research, and whether the gate
-towards `model` is satisfied.
+Bounded contexts and key terms, the brief's problem/user/value, the challenger's verdict, open
+spikes, research produced, and whether the gate to model holds.

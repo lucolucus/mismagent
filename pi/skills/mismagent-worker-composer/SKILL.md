@@ -1,6 +1,6 @@
 ---
 name: mismagent-worker-composer
-description: "mismAgent's worker-composer (build movement). Reads the building-block manifest and builds it block by block \u2014 in parallel \u2014 then integrates in series (review \u2192 candidate merge \u2192 gate + contract tests \u2192 promote), boundary owners first. The ONLY one that composes and moves state; writes no code. Follows a short linear procedure and, in doubt, stops and asks. Design: tools/LOOP.md."
+description: "mismAgent build: builds the block manifest \u2014 blocks in parallel, integration in series (review, candidate merge, gate + contract tests, promote), owners first. The only one that moves state; writes no code; in doubt stops and asks."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -87,7 +87,7 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
    <head_sha> --spec-hash <spec_hash>` (refused: the spec changed → review again) → `MM compose
    start F <id> --integration B --branch block/<id>`. A merge conflict → rework with the conflicting
    files.
-5. **In the candidate** (`candidate_path`): the side's gate + the `contract_test` of every
+5. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair, on a boundary the block touches, whose both sides are in the candidate.
    **Green** → `MM compose promote F <id>`, then finish as in step 0. **Red** → `MM compose abort F
    <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.
@@ -167,23 +167,23 @@ long fallback interval; don't poll.
 
 ## pi execution notes (generated — how to run the waves on this harness)
 - **All subagent dispatch goes through the `subagent` tool** (pi's official example extension —
-  AGENTS.md §0), with the mismAgent agent definitions in `.pi/agents/`; always pass
+  AGENTS.md, Setup), with the mismAgent agent definitions in `.pi/agents/`; always pass
   `agentScope: "both"` so the project-local agents are visible. Every spawn is a fresh, isolated
-  context — exactly the fresh-context guarantee D1 relies on.
+  context — exactly the fresh-context guarantee the review relies on.
 - **Parallel consumers in a wave — use the tool's parallel mode**: one
   `{agent: "mismagent-worker", task: ...}` entry per ready block, each task carrying `block_id`,
   `block_type`, `context`, the `select(block-type × projection)` skill names (e.g.
   `mismagent-realize-aggregate` — the worker reads them from `.agents/skills/<name>/SKILL.md`),
   the path of the block's rich `<id>.md` spec and the side's gate commands. The extension caps a
   call at 8 tasks (4 concurrent) — size waves accordingly. Ask each worker to end with the RESULT
-  handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to §3 D1
+  handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to step 4
   as usual.
-- **D1 after the worker**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
+- **Review (step 5)**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
   (structural), then `{agent: "mismagent-reviewer", task: <block id + diff scope>}` — a generated
   glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
-- **Model routing (§2a) on pi:** bind the tiers to your pi models in the profile's
+- **Model routing on pi:** bind the tiers to your pi models in the profile's
   `build.model_routing.tiers`. Pass the routed model on each task when your `subagent` tool accepts
   a per-task model; when it does not, the `model:` of the agent definition in `.pi/agents/`
   applies — write `model=default` in the ledger line, never a tier binding you could not apply.

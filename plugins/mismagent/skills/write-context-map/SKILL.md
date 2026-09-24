@@ -11,9 +11,9 @@ Write or amend `<output_dir>/context-map.md` — the **project's** strategic map
 
 ## Readers
 - **Bounded contexts** → the manifest's boundaries.
-- **Ubiquitous language** → the canonical names of blocks, types and, on cross-deploy boundaries,
-  contract schemas; the verifier holds the diff to them.
-- **Relationships** → each boundary's direction and projection (architect).
+- **Ubiquitous language** → the canonical names of blocks, operations, events and types; the
+  verifier holds the diff to them.
+- **Relationships** → each boundary's direction (architect).
 - **Open spikes** → `type: spike` nodes (`write-task`); `central: true` ones run at wave 0.
 
 An element with no reader is not written.

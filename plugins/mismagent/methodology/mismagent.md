@@ -3,7 +3,7 @@
 A flow to invoke, not a methodology to read: the agents' and skills' instructions are the process.
 This file says who owns what and in which order. The core names no project; each project's
 **profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`; template `PROFILE.md`,
-example `profiles/example.md`) binds sides, paths, gates, projections and branching.
+example `profiles/example.md`) binds sides, paths, gates and branching.
 
 ## Where things live — trunk and features
 ```
@@ -24,12 +24,12 @@ example `profiles/example.md`) binds sides, paths, gates, projections and branch
 | movement | you | owners (in order) | handoff files |
 |---|---|---|---|
 | **explore** | in dialogue | `explore` skill (bootstraps the profile if missing) → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
-| **model** | confirm the boundaries | `/mismagent:model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` → `create-contract` (cross-deploy module, only for `openapi` boundaries) | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
+| **model** | confirm the boundaries | `/mismagent:model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
 | **build** | confirm each release | `/mismagent:worker-composer` → `mismagent-worker` ×N → `mismagent-verifier` (+ `code-review`) | code on the integration line, proofs |
 
 User entry points: the movement commands above, each agent's thin command (`/mismagent:<name>`),
 `readiness-gate`, `board`, `run-app-smoke`, `harvest-dev-architecture`. The other skills
-(`realize-*`, `seam-*`, `write-*`, `code-review`) are invoked by the agents mid-flow.
+(`realize-*`, `write-*`, `code-review`) are invoked by the agents mid-flow.
 
 ## Human checkpoints
 The challenger's verdict · `NEEDS-INPUT` ambiguities · the architect's stack/style/infra/code-rules
@@ -46,8 +46,8 @@ release. Nothing else stops for you.
    artifact that exists is stated and reopened only on request, never re-deliberated.
 4. **Reconciliation.** Two artifacts that disagree in silence are two sources of truth: the writer
    who notices amends the loser in the same pass, or asks.
-5. **What crosses a seam is pinned** in the manifest (types, keys, delivery, view sources, owners of
-   shared artifacts), never invented by parallel workers.
+5. **What crosses a seam is pinned** in the manifest (types, keys, view sources, owners of shared
+   artifacts) and the owner's ADRs (delivery guarantees), never invented by parallel workers.
 6. **No artifact without a reader**, except a view regenerated from its source (the block files, the
    board).
 7. **A gate that cannot go red is not a gate.** It executes the tests it guards; its red-green proof

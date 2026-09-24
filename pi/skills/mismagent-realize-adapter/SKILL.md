@@ -26,19 +26,14 @@ Plus the `enforced_by` checks of your block's ADRs (e.g. soft-delete, write-once
 ### READ adapter (towards another context)
 - Implements a read port by **delegating to the supplier root's predicate** (the port exposes it).
 - Knows **only the supplier's public API** (the signature), never its source or internal state.
-- Makes the port's **consumer-driven contract test** (from `realize-port`) pass — on the fake
-  first, then real-on-real when the composer runs it in the candidate.
+- Makes the port's **consumer-driven contract test** (from `realize-port`) pass — the same test
+  as on the fake, real-on-real when the composer runs it in the candidate (D2).
 
 ### PERSISTENCE adapter (repository)
 - Keeps the Aggregate **agnostic of the technology**: the domain stays pure, persistence lives here.
 - **Round-trip test:** save → reload → the reconstructed Aggregate is equivalent (identity, state,
   invariants).
 - The **only place** that touches the aggregate's storage schema (guarantee 1).
-
-## The projection (the composer chooses it)
-`seam-in-process` = the adapter as a code object + an in-process test. `seam-cross-deploy` =
-generated client + consumer-driven verification on the producer side. You write the
-implementation; the seam skill fixes the medium.
 
 ## TDD, green on its own
 Red-green-refactor; fix-loop on the **side's gate** until green, round-trip/contract green, the

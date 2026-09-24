@@ -1,6 +1,6 @@
 ---
 name: mismagent-write-adr
-description: "mismAgent model: writes <output_dir>/decisions/NNNN-<slug>.md (scope, status, supersedes, closes_spike) and, for mechanical constraints, enforced_by versioned checks run by the gate. Invoked by the architect, create-contract, write-infra-notes."
+description: "mismAgent model: writes <output_dir>/decisions/NNNN-<slug>.md (scope, status, supersedes, closes_spike) and, for mechanical constraints, enforced_by versioned checks run by the gate. Invoked by the architect, write-infra-notes."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -70,8 +70,8 @@ existence and `from`.
 - **Reconcile before finalizing:** a context-map line contradicting the decision is updated in the
   same pass; a mechanism colliding with a profile boundary rule is surfaced as a decision (scope an
   exception or drop the mechanism) — never left for a worker.
-- **Breaking contract change:** fix the versioning protocol first and create (via `write-task`) a
-  `type: cleanup` node with `ready_when: "no-consumer-uses:<operationId>"`.
+- **Breaking a published symbol:** fix the migration strategy first, then (via `write-task`) a
+  `type: cleanup` node with `ready_when: "no-consumer-uses:<symbol>"`.
 
 ## Outcome
 Path, number, scope; its checks (path, `from`) or "discursive → code-review".

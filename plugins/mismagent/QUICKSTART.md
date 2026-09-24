@@ -10,7 +10,6 @@ as a GitHub repo):
 ```
 /plugin marketplace add /absolute/path/to/the/mismagent/repo
 /plugin install mismagent@mismagent-method
-/plugin install mismagent-cross-deploy@mismagent-method   # ONLY if you have cross-deploy boundaries
 /reload-plugins
 ```
 (direct equivalent: `extraKnownMarketplaces` with `source: directory` + `enabledPlugins` in
@@ -42,8 +41,8 @@ after the **stack ADR** (which the architect **deliberates with you**, never alo
 ## 3. Launch the flow
 `/mismagent:explore` on the idea → `/mismagent:challenger` (demolishes) → `/mismagent:researcher` /
 `/mismagent:analyst` (model) → **model** (**`/mismagent:model <feature>`** — the conductor: it runs
-tactical-modeler → ux-designer if there is UI → architect → build-manifest →
-`create-contract` if a boundary is cross-deploy, stopping only where YOU decide; the single
+tactical-modeler → ux-designer if there is UI → architect → build-manifest, stopping only where
+YOU decide; the single
 commands stay invocable step-by-step) →
 **build** (`/mismagent:worker-composer <feature>` → `mismagent-worker` ×N → verifier (+ code-review on deep-review blocks) →
 you confirm each release → flag).
@@ -66,9 +65,8 @@ you confirm each release → flag).
 - **Boundaries pinned before the workers.** The worker-composer's readiness blocks a manifest with
   unpinned boundary types (Published Language): two workers blind on an under-specified boundary
   produce pieces that do NOT compose.
-- **Single-side is not a degraded case.** A single side ⇒ all boundaries `in-process`
-  (port = interface + contract test): no OpenAPI, and the `mismagent-cross-deploy` module
-  **simply doesn't get enabled** — the kernel is enough, and that's fine.
+- **One kind of boundary.** A port = interface + contract test, on one side or several. A boundary
+  that travels over a network (OpenAPI, event schemas) is your project's choice: an ADR + a gate check.
 - **Someone has to scaffold the buildable skeleton.** In greenfield there is no build project yet,
   so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
   worker-composer builds it **first** (via `realize-scaffold`) and only then the owner blocks have

@@ -1,6 +1,6 @@
 ---
 name: mismagent-write-infra-notes
-description: "mismAgent explore/model: writes the project-level <output_dir>/infra-notes.md (amended, never redrafted) in the form the profile's sides dictate; each need maps to a task, an enforced_by ADR or a gate. Drafted by explore, amended by the architect."
+description: "mismAgent explore/model: writes the project-level <output_dir>/infra-notes.md (amended, never redrafted) in the form the project's needs dictate; each need maps to a task, an enforced_by ADR or a gate. Drafted by explore, amended by the architect."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
@@ -18,7 +18,7 @@ that neither the PRD nor the contract cover, but that generate real work in the 
   listed here).
 - → **`enforced_by` ADRs** (`write-adr`): a mechanical infra constraint (e.g. workload identity,
   no embedded secrets; or: forward-only migrations) becomes a versioned check the gate runs.
-- → **CI gates**: pipeline per side, with the **contract test as a blocking job**
+- → **CI gates**: the pipeline runs the sides' gates, **contract tests as a blocking job**
   and the anti-state guards (no `status:` / state files committed).
 If an infra need generates neither a task nor an ADR nor a gate, **do not write it** (it is noise).
 
@@ -26,17 +26,16 @@ If an infra need generates neither a task nor an ADR nor a gate, **do not write 
 Distribution and updates · workstations and connectivity · destiny of the data · retention ·
 lifecycle and maintenance.
 
-## Choose the FORM from the profile (the declared sides decide the template)
-The cloud/cross-side template on a desktop app produces only zombies (and vice versa): use the form
-that matches the profile's sides. Sections that do not apply **are not written**.
+## Choose the FORM from the project's needs (the INFRA_QUESTIONS' answers)
+The cloud template on a desktop app produces only zombies (and vice versa). Sections that do not
+apply **are not written**.
 
-## Template A — cross-side / cloud (multiple sides, cross-deploy boundaries)
+## Template A — hosted / cloud
 ```markdown
 # Infra notes — <project>
 
-## Environments & deploy units
-- INDEPENDENT deploys: one unit per side (BE, FE, sync), path from the profile.
-- Environments: <dev | prod>; promotion constraints; produces-before-consumes at deploy.
+## Environments & deploy
+- Deploy units and environments: <dev | prod>; promotion constraints (as the architect's ADRs decide).
 
 ## Secrets & identity
 - <e.g. storage via the platform's workload identity, NEVER embedded secrets> → enforced_by ADR.
@@ -48,13 +47,13 @@ that matches the profile's sides. Sections that do not apply **are not written**
 - <structured logging, correlation-id, liveness/readiness health checks>.
 
 ## CI/CD
-- Two independent pipelines (one per side); contract test = BLOCKING job; anti-state guards.
+- Pipelines per the deploy units; contract tests = BLOCKING job; anti-state guards.
 
 ## Needs → work (what becomes a task/ADR/gate)
 - <need> → <task side:infra | enforced_by ADR | CI gate>
 ```
 
-## Template B — single-side / desktop / on-prem (a single side, in-process boundaries)
+## Template B — local / desktop / on-prem
 ```markdown
 # Infra notes — <project>
 

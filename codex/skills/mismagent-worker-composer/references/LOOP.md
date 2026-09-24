@@ -4,8 +4,8 @@
 No state engine, no automatic crash recovery: safety comes from refusing, not from guessing.
 
 ## Constraints
-- **One repository per project.** A side is a deploy unit **inside** it (a path), never a repo of
-  its own. The integration line is one branch of that repo; `F` is committed on it, in one checkout
+- **One repository per project.** A side is a code/verification scope **inside** it (a path),
+  never a repo of its own. The integration line is one branch of that repo; `F` is committed on it, in one checkout
   of it — state and code never land on different branches.
 - **Build in parallel, integrate in series.** Independent ready blocks build at once (each in its own
   worktree, up to the profile's cap); review → candidate merge → promote happen **one block at a

@@ -35,14 +35,13 @@ green → PASS, red → FAIL.
    check did not execute → not green: FAIL when the diff is the cause (unregistered, missing),
    `SKIP` naming the step when the gate strategy is.
 3. **AC coverage (you own it):** every `## Tasks` criterion has a test in the diff, else FAIL
-   listing them. A cross-deploy operation needs its shape test per `contract_form` (`openapi`: the
-   real response body of its `operationId`; `event-schema`: the generated event types). An AC
-   claiming **concurrency** needs a test that visibly creates contention (N threads/coroutines + a
-   start barrier); a sequential test leaves it uncovered.
-4. **Contract referenced, not duplicated:** cross-deploy types come from the contract-generated
-   types; in-process ports and shared-kernel values are imported, never re-declared → else FAIL.
+   listing them. An AC claiming **concurrency** needs a test that visibly creates contention (N
+   threads/coroutines + a start barrier); a fold needs its declared permutations and duplicates
+   tested — a barrier does not prove convergence.
+4. **Contract referenced, not duplicated:** ports, shared-kernel values and published types are
+   imported from their one source, never re-declared → else FAIL.
 5. **No shadow types:** a domain type the diff introduces that renames a canonical term (the
-   context-map's language) or hand-copies a generated type → FAIL.
+   context-map's language) or hand-copies an existing type → FAIL.
 6. **ADR checks (`enforced_by`) — the pack lists each with its applicability:**
    - every **applicable** check ran in step 2's gate with a recognizable PASS. Missing check file,
      a check that errors, one that did not run, or one whose scanned target is missing is **not
@@ -55,8 +54,7 @@ green → PASS, red → FAIL.
      red, NOTE "legacy enforced_by — migrate at write-adr";
    - discursive ADRs are the code-review's.
 7. **Invariants and errors (a block exposing a write):** each invariant AC has a test; the failure
-   side too — cross-deploy: the error responses the contract declares; in-process: the command's
-   rejection criteria. Missing → FAIL.
+   side too — the declared error cases and the command's rejection criteria. Missing → FAIL.
 8. **Render check (`ui` blocks):** per the side's `ui_render_check` — automated: it ran green in
    step 2; manual: `render-proof/<block-id>/` from `run-app-smoke` naming `HEAD_SHA`. Absent or
    another sha → FAIL. Other blocks: `n/a`.

@@ -32,18 +32,10 @@ boundaries:                     # FIRST-CLASS section
   - id: <slug>
     owner: <block-id>           # aggregate | port | read-model — built before its consumers
     consumers: [<block-id>…]    # agrees both ways with the blocks' `consumes`
-    projection: in-process | cross-deploy
-    contract_form: openapi | event-schema       # cross-deploy ONLY
     pinned_types: { <Name>: <primitive or shared-kernel VO>… }  # every composite has its OWN row;
                                 # a quantity's unit-vs-quantity granularity is explicit here
     keys: { <field>: "minted by <block-id> — <rule + stability>" }  # every id/correlation key
     contract_test: invariant-test | consumer-driven
-    operation_ids: [<operationId>…]     # openapi ONLY — each resolves in the contract
-    contract_path: <path>               # openapi ONLY — the file that holds them; a boundary an
-                                        # earlier feature introduced keeps ITS file
-    schema_paths: [<path>…]             # event-schema ONLY — may be a wave-0 scaffold output
-    delivery: "<guarantee>"             # event-schema ONLY — e.g. "per-node in-order +
-                                        # dedup(nodeId,seq) before the fold"
 releases:                       # R0 first
   R0: { goal: "<what the user can do>", launch: "<what opens: screen / command>", blocks: [<id>…] }
 build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]   # derived
@@ -55,7 +47,7 @@ A **derived, status-less** rendering of one manifest row, so opening a block sho
 
 **Frontmatter** mirrors the row: `type`, `context`, `side`, `wave`, `consumes`, `related_adrs`,
 `release`, `model_hint` (when set), plus the per-type fields (aggregate → `invariants`,
-`invariant_fields`, `tables`; port → `projection`, `pinned_types`, `contract_test`; read-model →
+`invariant_fields`, `tables`; port → `pinned_types`, `contract_test`; read-model →
 `view_shape`). **No `status:` field, no `[ ]` checkboxes**: the state is the folder, moved only by
 the worker-composer.
 
@@ -81,11 +73,11 @@ guarantee it, and the composer's readiness and the reviewers judge it:
   criterion;
 - **any block at a boundary:** every boundary it touches appears in `## Dependencies` with the
   **pinned signature inlined** — the Published-Language types, the `contract_test`, the `keys:`
-  minting rules, and on a sync wire the `delivery:` guarantee. The reader never
-  opens the YAML to learn the seam;
+  minting rules. Order/duplicate guarantees come with the owner's ADR in the pack. The reader
+  never opens the YAML to learn the seam;
 - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
 - **ui:** the screen's states (empty / error / loading) are covered.
 
-The ADR set a block reads is **derived** (`related_adrs` ∪ those of the boundaries it consumes ∪ those whose check names it as `from` —
+The ADR set a block reads is **derived** (`related_adrs` ∪ those of the owners of the boundaries it consumes ∪ those whose check names it as `from` —
 `MM pack` resolves it), never a hand-compiled list. A gap found downstream bounces back to
 `build-manifest`: regenerate, never hand-patch a block file.

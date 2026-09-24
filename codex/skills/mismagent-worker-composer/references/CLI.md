@@ -12,7 +12,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | Command | Output |
 |---|---|
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}]}` — exit 1 if any |
-| `MM lint F [--pre-contract]` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
+| `MM lint F` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{id, from, to, path, git}` or `{refused}` |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
@@ -90,9 +90,7 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `release.required` · `release.declared` | every non-scaffold block has `release:`; declared in `releases:` when that section exists |
 | `release.r0_waves` | an `R0` block's `wave` is among the first 3 distinct non-scaffold waves |
 | `boundary.pinned_types` | `pinned_types` present and non-empty → `architect` |
-| `boundary.contract_test` · `boundary.projection` | `invariant-test \| consumer-driven` · `in-process \| cross-deploy` |
-| `projection.contract_form` · `projection.openapi` · `projection.event_schema` | `cross-deploy` ⇒ `contract_form` ∈ openapi, event-schema; `openapi` ⇒ `contract_path` + `operation_ids`; `event-schema` ⇒ `schema_paths` |
-| `contract.exists` · `contract.operation_ids` | `contract_path` / `schema_paths` exist under the repo, the project root or `<output_dir>/architetture/`; each operation id appears as an `operationId: <id>` key (a comment line does not count). While a `scaffold` block is not in `done/` — or, with `--pre-contract`, for an `openapi` boundary (create-contract writes it) — a missing file is `deferred`, not a gap |
+| `boundary.contract_test` | `invariant-test \| consumer-driven` |
 | `blockfile.exists` · `blockfile.unique` · `blockfile.orphan` | exactly one `blocks/<ctx>/{todo,doing,done}/<id>.md` per row; no file without a row |
 | `blockfile.frontmatter` · `blockfile.context_dir` | frontmatter `type`/`context`/`wave` equal the row; the file sits under `blocks/<context>/` |
 | `blockfile.status_free` | no `status:` field, no checkbox |

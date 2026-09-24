@@ -1,7 +1,7 @@
 # Profile: example — "machinecare" (fictional, multi-side, one repo)
 
-> **Filled-in example** of `../PROFILE.md`: a fictional machine-maintenance SaaS with independent
-> BE/FE deploy units. On your project, write an analogous one in `<output_dir>/profile.md`.
+> **Filled-in example** of `../PROFILE.md`: a fictional machine-maintenance SaaS with BE and FE
+> sides. On your project, write an analogous one in `<output_dir>/profile.md`.
 
 ## Bootstrap (prerequisite of explore)
 
@@ -23,7 +23,7 @@ architecture: .mismagent/architecture.md   # chosen style + module map + allowed
 code_rules: .mismagent/code-rules.md       # the deliberated rules, each with its enforcement channel
 ```
 
-## Sides (independent deploy units)
+## Sides
 
 ```yaml
 sides:
@@ -35,7 +35,6 @@ sides:
     gate_verify: "dotnet build --no-incremental && dotnet test && dotnet test --filter Contract"
     gate_after_release: "dotnet test --filter MigrationFromReleased"   # on at the first release
     toolchain: ".NET SDK 8 (pinned by global.json)"
-    contract: "swagger.json compared against the YAML + response-shape tests on the real body"
   fe:
     path: fe                                # e.g. Next.js + TypeScript
     dev_architecture: fe-dev-architecture   # golden files in fe/docs/dev-architecture/
@@ -45,7 +44,6 @@ sides:
     toolchain: "Node 20 (pinned by .nvmrc)"
     ui_render_check: "Playwright smoke + screenshot on the key screens (npm run test:ui in the gate)"
     run: "npm run dev (http://localhost:3000)"
-    contract: "openapi-typescript → src/types/api.generated.ts + contract.test.ts per operationId"
   infra:
     path: infra
     dev_architecture: none
@@ -55,13 +53,9 @@ sides:
 ## Domain bounded contexts
 `Machines`, `Maintenance`, `Attachments`
 
-## Boundaries & projection
-- BE and FE are different sides ⇒ the `Maintenance` read/write boundaries consumed by the FE are
-  **`projection: cross-deploy`** → requires the **`mismagent-cross-deploy`** module.
-- **contract format/location:** a single OpenAPI YAML per boundary, in
-  `architetture/api/<introducing-feature>.openapi.yaml` (a later feature reusing the boundary
-  extends that file — the manifest's `contract_path` points at it);
-  stable `operationId`s; `components/schemas` with the **canonical domain name** (e.g. `InterventionType`).
+## Boundaries
+- The FE reaches the `Maintenance` boundaries over HTTP: a project choice (OpenAPI + generated
+  types, per an ADR), checked by `npm run test:contract` in the gate — not a harness concept.
 - **authorship:** reads **consumer-driven** (the views are defined by the FE), writes
   **producer-driven** (the commands by the BE/domain); the architect arbitrates feasibility/coherence.
 

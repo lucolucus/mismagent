@@ -36,8 +36,8 @@ worker (Patch) or is recorded as future work (Defer). Your output is a verdict +
    partial data, concurrency, volumes, the invariant and rejection paths. Which input breaks it?
 3. **Acceptance Auditor** — for **every** AC (`## Tasks` criterion) of the block: is it really
    satisfied, or is there a test that passes trivially? Is the invariant *enforced* or only declared?
-   Is the contract shape respected on the real body (cross-deploy)? Is an implicit AC missing
-   (e.g. the error the contract declares)? And do the profile's **discursive code rules**
+   Is an implicit AC missing (e.g. a declared error)? Does a fold hold under the permutations and
+   duplicates its ADR admits? And do the profile's **discursive code rules**
    (`code-rules.md`: error-handling policy, immutability stance, …) hold on this diff — citing the
    violated rule in the finding?
    **A concurrency-claim AC gets a dedicated audit:** does its test really

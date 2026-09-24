@@ -34,7 +34,7 @@ anecdote — too early → say so and stop); the profile names the side and path
 4. **The user confirms the summary before you write** — it binds every future worker.
 5. **Write** `<side>-dev-architecture/SKILL.md` in the harness's project-skill directory, with a
    GENERATED-BY banner (this skill + date). Keep it small: rules + golden-file paths. **One memory
-   per codebase**, not per deploy role: sides sharing one codebase share one memory.
+   per codebase**, not per side: sides sharing one codebase share one memory.
 6. **Point the profile at it:** `sides.<side>.dev_architecture`, the same value for every side
    sharing the codebase. Tell the user the next dispatch loads it.
 

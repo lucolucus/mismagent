@@ -2,7 +2,7 @@
 """prompt_budget.py — the prompt diet, enforced (Python 3 stdlib only).
 
 Reads budgets.json beside this file: a word cap per operative prompt file (every skill, agent,
-command, methodology file and PROFILE.md of both plugins), a cap on their total, a separate total
+command, methodology file and PROFILE.md of the plugin), a cap on their total, a separate total
 cap for the skills' references/, and a cap on every frontmatter `description` (characters).
 Words = whitespace-separated tokens of the whole file (as `wc -w`).
 Usage: python3 prompt_budget.py  → JSON report; exit 1 if any cap is exceeded.

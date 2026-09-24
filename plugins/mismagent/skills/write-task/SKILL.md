@@ -1,6 +1,6 @@
 ---
 name: write-task
-description: 'mismAgent model: writes the two node files that are not blocks — type: spike (an unknown, with its closure protocol) and type: cleanup (removing a deprecated operationId, gated by ready_when) — under features/<feature>/tasks/<side>/<state>/.'
+description: 'mismAgent model: writes the two node files that are not blocks — type: spike (an unknown, with its closure protocol) and type: cleanup (removing a deprecated published symbol, gated by ready_when) — under features/<feature>/tasks/<side>/<state>/.'
 user-invocable: false
 ---
 
@@ -51,27 +51,27 @@ An open spike **blocks** its consumers; close it like this, never by "deleting i
    `model`/`explore` — where no orchestrator exists — whoever leads the movement in session closes it,
    noting it in the outcome. (Not a violation of "state = the folder": the monopolist rule holds inside build.)
 
-## Template — `type: cleanup` node (removal of a deprecated cross-deploy operationId, post-migration)
+## Template — `type: cleanup` node (removal of a deprecated published symbol, post-migration)
 ```markdown
 ---
 id: <slug>-remove-v1
 type: cleanup
-side: <the side owning the operation>
+side: <the side owning the symbol>
 depends_on: []                          # NOT a task: readiness is a CONDITION, not an id
-ready_when: "no-consumer-uses:<deprecated-operationId>"
+ready_when: "no-consumer-uses:<deprecated-symbol>"
 ---
-# Cleanup / removal of <deprecated-operationId>
+# Cleanup / removal of <deprecated-symbol>
 
 ## What to remove
-<the old endpoint/operationId + its tests, after ALL consumers have migrated>
+<the old operation/type + its tests, after ALL consumers have migrated>
 
 ## Readiness condition (ready_when)
-No consumer references `<deprecated-operationId>` anymore — verifiable: grep the consumers' paths for the
-old `operationId` (zero matches) and/or a contract test asserting "no calls to v1". While the condition
+No consumer references `<deprecated-symbol>` anymore — verifiable: grep the consumers' paths for it
+(zero matches) and/or a contract test asserting "no calls to v1". While the condition
 is false the node stays in `backlog/` as an **explicit pending** (the worker-composer's readiness
 reports it), NEVER a deadlock.
 ```
 
 ## Outcome
 Path of the node, id, kind (`spike`/`cleanup`), side, and which blocks/tasks it unblocks (spike)
-or which deprecated operationId it retires under what `ready_when` (cleanup).
+or which deprecated symbol it retires under what `ready_when` (cleanup).

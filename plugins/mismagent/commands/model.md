@@ -1,5 +1,5 @@
 ---
-description: mismAgent model movement as one command — conducts tactical-modeler → ux-designer → architect → build-manifest → create-contract, stopping only at the human checkpoints. Writes nothing itself; resumes at the first missing artifact.
+description: mismAgent model movement as one command — conducts tactical-modeler → ux-designer → architect → build-manifest, stopping only at the human checkpoints. Writes nothing itself; resumes at the first missing artifact.
 argument-hint: "[feature | <output_dir>/features/<feature>/]"
 ---
 
@@ -36,17 +36,13 @@ means the trunk is missing.
      ADR; reopen a foundational decision only if they ask — then it is a superseding ADR.
 4. **Manifest** *(feature: no `building-blocks.yaml`, or the model changed)* — the `build-manifest`
    skill. **Checkpoint:** it elicits the `tests_nl` and the R0 cut from the user. Point the user at
-   `/mismagent:board`.
-5. **Contract** *(project: a cross-deploy boundary whose declared contract is missing)* —
-   `contract_form: openapi` → `/mismagent-cross-deploy:create-contract`. The module is not enabled →
-   report **BLOCKED** (enable it); never improvise the projection. An `event-schema` boundary has no
-   OpenAPI: its schema files may be a scaffold output. All boundaries in-process → no step.
-   Then `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py" lint <output_dir>/features/<feature>/` is the **blocking** check: zero gaps.
+   `/mismagent:board`. It closes with `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py" lint <output_dir>/features/<feature>/`,
+   the **blocking** check: zero gaps.
 
 An artifact that already exists is stated and reopened only on request, never re-deliberated —
 the single commands share this guard.
 
-## 6 · Handoff
+## 5 · Handoff
 Optionally preview readiness with `readiness-gate`. Report the artifacts (paths), the decisions
 deliberated with the user, open spikes and ambiguities, and the next command:
 `/mismagent:worker-composer <feature>`.

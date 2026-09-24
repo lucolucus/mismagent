@@ -21,7 +21,7 @@ must meet. Do not emit from memory.
   `<output_dir>/context-map.md` (canonical names, Customer/Supplier relationships, open spikes);
 - `features/<feature>/UI/ux-proposal.md` when the feature has UI;
 - `<output_dir>/architecture.md`, `architetture/`, the ADRs in `<output_dir>/decisions/`;
-- the active profile (`<output_dir>/profile.md`): sides (→ projection), gate, `run`,
+- the active profile (`<output_dir>/profile.md`): sides, gate, `run`,
   `ui_render_check`, **`capacity`** — wave width and block granularity are sized to the team.
 
 ## Tactical → block map
@@ -34,11 +34,11 @@ must meet. Do not emit from memory.
 | UI screen | `ui` (`consumes_rm`, `triggers`) |
 
 ## Boundaries — what crosses a seam is PINNED, never invented in parallel
-1. **Pin the Published Language:** `pinned_types` are primitives or shared-kernel VOs, never the
-   supplier's domain type (it would recreate the dependency the port exists to cut).
+1. **Pin the Published Language** under the context-map's canonical names: `pinned_types` are
+   primitives or shared-kernel VOs, never the supplier's domain type.
 2. **Pin recursively:** a composite type cited in a `pinned_types` row has its own row (or is a
-   primitive / an already-pinned VO). On an `event-schema` wire pin **every** event that crosses it,
-   not only those whose consumer is modeled yet.
+   primitive / an already-pinned VO). Pin **every** event that crosses a boundary, not only those
+   whose consumer is modeled yet.
 3. **Keys:** for every id/correlation key, `keys:` pins who mints it, by what rule, and its stability
    (across versions, hot changes, republication). The pinned type carries **the key the consumer
    operates with**; a transport-only key with no pinned map to it is under-specified — fix it here.
@@ -50,17 +50,16 @@ must meet. Do not emit from memory.
    is a boundary — project it into `consumes`.
 6. **Every `view_shape` field has a source** — a consumed event's field, a boundary's
    `pinned_types`, or the write-path input. No source → refuse at generation. A read-model that
-   supplies a boundary has `view_shape` ≡ that boundary's pinned type (one Published Language). On a
-   sync wire the events' fields are consumer-driven: derive them from the consuming folds, and
-   materialize the event types in the shared kernel together with the schema files.
+   supplies a boundary has `view_shape` ≡ that boundary's pinned type (one Published Language). Event
+   fields are consumer-driven: derive them from the consuming folds; the types live once, in the
+   shared kernel.
 7. **Consumption guarantees:** a field someone orders by is pinned in an orderable format. A fold
-   over > 1 writer stream for the same key needs single-writer-per-key **or** a declared commutative
-   fold; pin the wire's `delivery:` guarantee on the boundary.
-8. **Projection:** consumer and supplier on the same side → `in-process`; otherwise `cross-deploy`
-   with a `contract_form` from the profile/ADR (request/response → `openapi` + `contract_path` +
-   `operation_ids`; replication/sync → `event-schema` + `schema_paths` + `delivery`). A boundary an
-   earlier feature introduced keeps its contract file. `contract_test`: `invariant-test` on an
-   aggregate boundary, `consumer-driven` on port and read-model.
+   over > 1 writer stream for the same key needs single-writer-per-key **or** a commutative fold.
+   Order, duplicates/replay and the fold rule live in the **Decision** of the boundary owner's ADR
+   (the pack carries it to consumers); the fold's `tests_nl` cover the admitted permutations and
+   duplicates. No declared guarantee → bounce to the architect, never assume order.
+8. **`contract_test`:** `invariant-test` on an aggregate boundary, `consumer-driven` on port and
+   read-model. A boundary an earlier feature introduced is reused, never redeclared.
 9. **Confinement checks for every aggregate:** from `invariant_fields` and `tables` derive three
    constraints — persistent writes to its tables only in its adapter; state mutated only through the
    root; invariant fields read only inside the aggregate (consumers use the named predicate). Record
@@ -86,8 +85,8 @@ must meet. Do not emit from memory.
     wave in parallel, width sized to `capacity`. Waves are integers — an extra wave is a renumbering.
 13. **Scaffold (greenfield only):** a side whose gate cannot run yet gets one `type: scaffold` block,
     `wave: 0`, no boundary, no `tests_nl`; its acceptance is the side's gate green on the empty
-    skeleton. It also wires the UI-test setup when `ui_render_check` is automated, satisfies the
-    profile's `run` binding on a UI side, and creates the location of any `schema_paths` in its tree.
+    skeleton. It also wires the UI-test setup when `ui_render_check` is automated and satisfies the
+    profile's `run` binding on a UI side.
     A project that already builds gets no scaffold.
 14. **Shared artifact ⇒ derived owner block:** an artifact ≥ 2 blocks of the same wave consume (the
     shared-kernel types, a module's build files, a ui-kit, a schema/migration set, DI wiring) gets
@@ -95,8 +94,8 @@ must meet. Do not emit from memory.
 15. **Every prescribed capability names its owner module** (a local store, a sync engine, a ui-kit):
     in the block's module list, or stated in the spec.
 16. **Group infrastructure by module:** the adapters of one infrastructure module are one block that
-    `consumes` every boundary it implements. Split only for a cross-deploy wire, owners in different
-    waves, or different releases. Domain blocks keep one aggregate = one block.
+    `consumes` every boundary it implements. Split only for owners in different
+    waves or different releases. Domain blocks keep one aggregate = one block.
 17. **Every ux-prescribed surface lands or is declared cut:** each surface the ux-proposal assigns to
     a `ui` block has a `triggers`/`consumes_rm` entry, or a `notes` line saying where it went.
 18. **`model_hint: deep`** on a consumer block only when it folds ≥ 2 boundaries, mints or re-keys a
@@ -127,10 +126,10 @@ must meet. Do not emit from memory.
 - the block files — its per-block projection, status-less (the folder is the state).
 - no other task list: the human reads the blocks live with `$mismagent-board` (read-only).
 
-Run `MM lint --pre-contract <output_dir>/features/<feature>/` (`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`)
-and fix every gap before reporting (the flag defers only the OpenAPI files create-contract writes next).
+Close by running `MM lint <output_dir>/features/<feature>/` (`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`):
+it is blocking — fix every gap before reporting.
 
 ## Outcome
-Blocks per type (and the scaffold), boundaries with projection, the releases (R0's blocks and its
+Blocks per type (and the scaffold), boundaries, the releases (R0's blocks and its
 wave), the central spikes, pinned types confirmed, `tests_nl` elicited, the delta on a re-run, and
 what is missing before `$mismagent-worker-composer`.

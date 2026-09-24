@@ -12,7 +12,7 @@ Write or update `<output_dir>/features/<feature>/tactical-model.md`. Invoked by 
 ## Readers
 - **Aggregates + invariants** → `aggregate` blocks and their invariant tests.
 - **Domain events** → `read-model` blocks, side effects, write guards.
-- **Commands (+ actor)** → `application-service` blocks (and operation ids on cross-deploy boundaries).
+- **Commands (+ actor)** → `application-service` blocks.
 
 A row with no reader is not written.
 

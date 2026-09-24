@@ -40,9 +40,9 @@ architecture: .mismagent/architecture.md  # style + module map + allowed depende
 code_rules: .mismagent/code-rules.md      # the deliberated rules, each with its enforcement channel
 ```
 
-## Sides (independent deploy units)
+## Sides (code and verification scopes)
 
-A single side is legitimate: every boundary is then `in-process` and no contract file exists.
+A side is a path in the repository with its own gate; a single side is legitimate.
 
 ```yaml
 sides:
@@ -61,8 +61,8 @@ sides:
                                 # build, modules, tests and registered checks (repo-relative, `**`
                                 # allowed). They key the gate proof: a change to them makes it stale.
     gate_verify: "<commands>"   # optional: `gate` + the stack's re-run switch (no cached test phase); verifier and candidate run it
-    gate_after_release: "<steps>" # checks that protect RELEASED versions (e.g. against a released
-                                # schema). Kept out of `gate` until the side's first release, when
+    gate_after_release: "<steps>" # checks that protect RELEASED versions (e.g. migrations from
+                                # released data). Kept out of `gate` until the side's first release, when
                                 # the worker-composer appends them and records `switched@<tag>`.
                                 # none if every step matters from day one.
     toolchain: "<prerequisite>" # what the gate needs to START (e.g. a pinned runtime/SDK and how to
@@ -74,8 +74,6 @@ sides:
     run: "<command + port>"     # UI sides only: how to launch the side locally (run-app-smoke).
                                 # REQUIRED when ui_render_check is manual. Pinned by the architect
                                 # BEFORE any scaffold: a contract the wave-0 scaffold satisfies.
-    contract: "<mechanism>"     # sides with cross-deploy boundaries only: how the side verifies the
-                                # contract / generates its types. none otherwise.
 ```
 
 Keep every gate step cheap by strategy (standard migrations, faithful in-memory substrates,
@@ -97,23 +95,17 @@ build:
     read-model: standard
     aggregate: deep             # deep = verifier + separate code-review, both deep
     port: deep
-    application-service: deep   # a cross-deploy seam, model_hint: deep or a rework → deep
+    application-service: deep   # model_hint: deep or a rework → deep
 ```
 
 ## Domain bounded contexts
 - `<Context1>`, `<Context2>`, … — only contexts with a domain language of their own. A cross-cutting
   concern (sync, caching, auth) is an NFR or a spike, not a bounded context.
 
-## Boundaries & projection (build-manifest applies it)
-- `side(consumer) == side(supplier)` → **`in-process`**: a code interface + an in-process
-  consumer-driven contract test.
-- different sides → **`cross-deploy`**, in the `contract_form` the boundary declares:
-  request/response → **OpenAPI** + generated types + CDC; replication/sync → a **versioned
-  event-schema** with additive evolution + CDC on the events. Requires the `mismagent-cross-deploy`
-  module.
-- **contract location** (cross-deploy only): `<e.g. architetture/api/<introducing-feature>.openapi.yaml ·
-  contracts/<schema dir>/>` — one OpenAPI file per boundary for the project's life, named after the
-  feature that introduced it; later features extend it (`contract_path`).
+## Boundaries
+- Every boundary is a consumer-owned port + its consumer-driven contract test, on a fake then the
+  real adapter. How a boundary travels over a network (API specs, event schemas, generated types) is
+  a project decision: its ADRs, code rules and gate.
 - **authorship:** reads consumer-driven, writes producer-driven; the architect arbitrates.
 
 ## Branching
@@ -130,4 +122,4 @@ What an agent must NEVER do:
 
 ---
 Wherever an instruction says "the side's path", "the gate", "the dev-architecture memory", "the
-boundary rules", "the branching tool" or "the boundary's projection", the value comes from HERE.
+boundary rules" or "the branching tool", the value comes from HERE.

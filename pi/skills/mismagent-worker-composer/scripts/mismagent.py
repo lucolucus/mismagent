@@ -457,7 +457,7 @@ def from_status(feat, frm):
     return None
 
 
-def lint(feat, pre_contract=False):
+def lint(feat):
     gaps, deferred = [], []
 
     def gap(rule, where, text, to="build-manifest"):
@@ -500,13 +500,12 @@ def lint(feat, pre_contract=False):
             if str(rel) == "R0" and isinstance(w, int) and w not in first3:
                 gap("release.r0_waves", i, "R0 block at wave %s, outside the first 3 build waves %s" % (w, first3))
     scaffold_open = any(b.get("type") == "scaffold" and feat.state_of(str(b.get("id"))) != "done" for b in feat.blocks)
-    roots = [os.path.dirname(feat.odir), os.path.join(feat.odir, "architetture")]
     try:
-        roots.insert(0, feat.repo())
-    except UsageError:
-        pass  # lint needs no git: contracts then resolve against the project root
+        repo_root = feat.repo()
+    except UsageError:  # lint needs no git: ADR checks then resolve against the project root
+        repo_root = os.path.dirname(feat.odir)
     for bd in feat.boundaries:
-        i, proj, form = str(bd.get("id")), bd.get("projection"), bd.get("contract_form")
+        i = str(bd.get("id"))
         if str(bd.get("owner")) not in feat.row:
             gap("boundary.owner", i, "owner %r is not a block id" % bd.get("owner"))
         for c in feat.consumers(bd):
@@ -522,31 +521,6 @@ def lint(feat, pre_contract=False):
         if bd.get("contract_test") not in ("invariant-test", "consumer-driven"):
             gap("boundary.contract_test", i,
                 "contract_test %r is not invariant-test | consumer-driven" % bd.get("contract_test"))
-        if proj not in ("in-process", "cross-deploy"):
-            gap("boundary.projection", i, "projection %r is not in-process | cross-deploy" % proj)
-        if proj == "cross-deploy" and form not in ("openapi", "event-schema"):
-            gap("projection.contract_form", i, "cross-deploy without contract_form openapi | event-schema")
-        if form == "openapi" and not (bd.get("contract_path") and bd.get("operation_ids")):
-            gap("projection.openapi", i, "contract_form openapi needs contract_path and operation_ids")
-        if form == "event-schema" and not bd.get("schema_paths"):
-            gap("projection.event_schema", i, "contract_form event-schema needs schema_paths")
-        wanted = [(str(bd["contract_path"]), [str(o) for o in bd.get("operation_ids") or []])] \
-            if form == "openapi" and bd.get("contract_path") else []
-        wanted += [(str(x), []) for x in (bd.get("schema_paths") or [] if form == "event-schema" else [])]
-        for rel, ops in wanted:
-            found = next((os.path.join(r, rel) for r in roots if os.path.isfile(os.path.join(r, rel))), None)
-            if not found:
-                if scaffold_open:  # a wave-0 scaffold output: checked once the scaffold is done
-                    deferred.append({"where": i, "file": rel, "until": "the wave-0 scaffold is done"})
-                elif pre_contract and form == "openapi":  # create-contract writes it next
-                    deferred.append({"where": i, "file": rel, "until": "create-contract writes it"})
-                else:
-                    gap("contract.exists", i, "contract file %s not found" % rel)
-                continue
-            for op in ops:
-                key = r"^\s*[\"']?operationId[\"']?\s*:\s*[\"']?%s[\"']?\s*,?\s*(?:#.*)?$"  # a key, never a comment
-                if not re.search(key % re.escape(op), read(found), re.M):
-                    gap("contract.operation_ids", i, "operationId %s does not resolve in %s" % (op, rel))
     files = feat.files()
     for i, locs in files.items():
         if i not in feat.row:
@@ -585,7 +559,7 @@ def lint(feat, pre_contract=False):
         for cmd in b.get("commands") or []:
             if str(cmd) not in task_text:
                 gap("spec.commands", i, "command %s does not appear in ## Tasks" % cmd)
-    repo_root, seen_adrs = roots[0], set()
+    seen_adrs = set()
     for b in feat.blocks:
         for ref, path in deps(feat, str(b.get("id")))[1]:
             if not path or path in seen_adrs:
@@ -811,7 +785,7 @@ def cmd_status(a):
 
 
 def cmd_lint(a):
-    gaps, deferred = lint(Feature(a.feature_dir), a.pre_contract)
+    gaps, deferred = lint(Feature(a.feature_dir))
     return emit({"ok": not gaps, "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
 
 
@@ -1078,8 +1052,7 @@ def build_parser():
         p.set_defaults(fn=fn)
         return p
     cmd("status", cmd_status, "anomalies (read-only)", "feature_dir").add_argument("--integration", required=True)
-    cmd("lint", cmd_lint, "exact structural checks", "feature_dir").add_argument(
-        "--pre-contract", action="store_true", help="defer the missing openapi contracts create-contract writes")
+    cmd("lint", cmd_lint, "exact structural checks", "feature_dir")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)

@@ -58,11 +58,11 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
 **3 · Build.** `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, a worktree on
 `block/<id>` from `B`'s tip (an un-parked block reuses its existing branch and worktree), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
-(`--extra` the authored dev-architecture doc, if the profile points to one), the skills
-`block-type × projection`, the worktree and the side's gate. Never assemble context by hand.
+(`--extra` the authored dev-architecture doc, if the profile points to one), the
+block-type skill, the worktree and the side's gate. Never assemble context by hand.
 
 **4 · As each worker returns.**
-- `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, a signature, a key, a delivery) →
+- `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, a signature, a key, a declared guarantee) →
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
   `build-manifest` folds it in and deletes the file);
 - `BLOCKED` → report its cause; it stays in `doing/`;
@@ -104,7 +104,7 @@ tool's `model`; the profile's `build.model_routing` rebinds tiers and overrides 
 | worker · `aggregate`, `port` (the invariants and the Published Language live here) | deep |
 | reviewers | the review depth: `deep` → verifier + code-review both on deep · `standard` → the verifier on standard |
 
-Worker modifiers, in order, capped at `deep`: a `cross-deploy` boundary → +1; `model_hint: deep`
+Worker modifiers, in order, capped at `deep`: `model_hint: deep`
 → deep; **rework cycle 2** (the second `rework/<id>-*.md`) → +1 — already at `deep`, tell the worker
 it is the last cycle and to re-read both findings files. Cycle 1 keeps the tier.
 
@@ -113,8 +113,7 @@ it is the last cycle and to re-read both findings files. Cycle 1 keeps the tier.
 |---|---|---|
 | `ui` · `adapter` · `read-model` | standard | ONE `mismagent-verifier` with `REVIEW_DEPTH: standard` (it adds the code-review lenses, HIGH only; MED/LOW under `DEFERRED:`) |
 | `aggregate` · `port` · `application-service` | deep | `mismagent-verifier` + a separate `code-review` |
-Escalate to `deep` when the block touches a `cross-deploy` boundary, carries `model_hint: deep`, or
-is in rework. The profile's `build.review_depth_by_type` overrides a row.
+Escalate to `deep` when the block carries `model_hint: deep` or is in rework. The profile's `build.review_depth_by_type` overrides a row.
 
 ## Only HIGH reworks
 A rework carries the FAILs and the HIGH findings, **nothing else**. Every MED/LOW (code-review's or

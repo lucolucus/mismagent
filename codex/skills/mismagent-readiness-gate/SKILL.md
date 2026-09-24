@@ -20,5 +20,5 @@ gate's red-green proof, stale spikes) you only **name** as reminders.
 ## Outcome
 - **PASS** (`ok: true`) → say so and launch `$mismagent-worker-composer <feature>`.
 - **BLOCKED** → each gap with its `where` and `bounce_to`.
-- **PENDING** → `deferred` contract files (a scaffold output), parked blocks
+- **PENDING** → `deferred` ADR checks (not yet due), parked blocks
   (`open-questions/<block-id>.md`), open spike nodes — listed separately, not errors.

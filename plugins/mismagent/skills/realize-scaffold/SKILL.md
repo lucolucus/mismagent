@@ -26,10 +26,6 @@ against. Greenfield only — if the project already builds, this block does not 
   launch task/entry point and the pinned port), so the command launches on the empty skeleton. It
   is a **contract you satisfy**, not a value you choose — if the skeleton can't honor it, report
   it. *(Proving it renders stays `run-app-smoke`'s job, at the first `ui` block.)*
-- if a cross-deploy boundary declares **`contract_form: event-schema`** with `schema_paths` in this
-  side's tree: create that **contract location** (dirs + build wiring for schema
-  compilation/codegen the stack ADR names) — the contract files are an output of this scaffold,
-  which is why `MM lint` defers their check;
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
   lint**: wire its config so the **gate
   executes it from wave 0** — the lint config is the *executable projection of the module map*,

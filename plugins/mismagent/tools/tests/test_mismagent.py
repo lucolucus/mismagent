@@ -57,16 +57,11 @@ boundaries:
   - id: b-order
     owner: agg-order
     consumers: [svc-order, rm-orders]
-    projection: in-process
     pinned_types: { OrderPlaced: "orderId:string · lines:[OrderLine]", OrderLine: "sku:string · qty:int" }
     contract_test: invariant-test
   - id: b-rm
     owner: rm-orders
     consumers: [svc-report]
-    projection: cross-deploy
-    contract_form: openapi
-    contract_path: api/orders.openapi.yaml
-    operation_ids: [listOrders]
     pinned_types: { OrderRow: "orderId:string · total:int" }
     contract_test: consumer-driven
 releases:
@@ -223,14 +218,13 @@ class TestLint(Base):
 
     def test_structural_gaps(self):
         m = (MANIFEST.replace("    wave: 3\n    release: R1\n", "    wave: 3\n")
-             .replace("    operation_ids: [listOrders]\n", "")
              .replace("consumers: [svc-order, rm-orders]", "consumers: [svc-order]"))
         self.write_feature(m, skip=("rm-orders",), mutate={
             "agg-order": {"tasks": ["a total is checked"]},
             "svc-order": {"tasks": ["an order is created"], "sources": False}})
         self.put("blocks/orders/todo/stray.md", "---\nid: stray\n---\n")
         gaps, _ = self.gaps()
-        for g in [("release.required", "svc-report"), ("projection.openapi", "b-rm"), ("blockfile.exists", "rm-orders"),
+        for g in [("release.required", "svc-report"), ("blockfile.exists", "rm-orders"),
                   ("spec.invariants", "agg-order"), ("spec.commands", "svc-order"), ("spec.sources", "svc-order"),
                   ("boundary.consumers", "b-order")]:
             self.assertIn(g, gaps)
@@ -248,18 +242,6 @@ class TestLint(Base):
         self.assertIn(("wave.scaffold", "agg-order"), gaps)
         self.assertIn(("blockfile.frontmatter", "agg-order"), gaps)
 
-    def test_contract_files_deferred_then_checked(self):
-        out = self.run_tool("lint", self.feat, expect=0)
-        self.assertEqual([d["file"] for d in out["deferred"]], ["api/orders.openapi.yaml"])
-        self.move("scaffold-app", "done")
-        self.assertIn(("contract.exists", "b-rm"), self.gaps()[0])
-        self.put("api/orders.openapi.yaml", "paths:\n  /o:\n    get:\n      operationId: listOrdersV2\n", base=self.repo)
-        self.assertIn(("contract.operation_ids", "b-rm"), self.gaps()[0])
-        self.put("api/orders.openapi.yaml", "paths:\n  /o:\n    get:\n      # operationId: listOrders\n", base=self.repo)
-        self.assertIn(("contract.operation_ids", "b-rm"), self.gaps()[0])                 # a comment is not a key
-        self.put("api/orders.openapi.yaml", "paths:\n  /o:\n    get:\n      operationId: listOrders\n", base=self.repo)
-        self.run_tool("lint", self.feat, expect=0)
-
     def test_central_spike_needs_node(self):
         self.put("context-map.md", "# Map\n\n## Open spikes\n- [ ] sync-spike: does sync hold?\n"
                  "      — owner: shop — central: true\n- [ ] other: q — owner: another — central: true\n", base=self.out)
@@ -276,7 +258,6 @@ class TestLint(Base):
                          [("checks/no-float.sh", "the wave-0 scaffold is done"),
                           ("checks/port-exists.sh", "svc-order is integrated")])
         self.move("scaffold-app", "done")
-        self.put("api/orders.openapi.yaml", "paths:\n  /o:\n    get:\n      operationId: listOrders\n", base=self.repo)
         self.assertIn(("adr.checks", "decisions/0001-money.md"), self.gaps()[0])
         self.put("checks/no-float.sh", "#!/bin/sh\n", base=self.repo)
         self.run_tool("lint", self.feat, expect=0)
@@ -285,13 +266,6 @@ class TestLint(Base):
         self.assertEqual([(g["rule"], g["bounce_to"]) for g in out["gaps"]], [("adr.checks", "architect")])
         self.put("checks/port-exists.sh", "#!/bin/sh\n", base=self.repo)
         self.run_tool("lint", self.feat, expect=0)
-
-    def test_pre_contract_defers_only_missing_openapi_contracts(self):
-        self.move("scaffold-app", "done")
-        self.assertIn(("contract.exists", "b-rm"), self.gaps()[0])
-        out = self.run_tool("lint", "--pre-contract", self.feat, expect=0)
-        self.assertEqual([(d["file"], d["until"]) for d in out["deferred"]],
-                         [("api/orders.openapi.yaml", "create-contract writes it")])
 
     def test_adr_check_from_resolved_project_wide(self):
         old = os.path.join(self.out, "features", "old")
@@ -563,6 +537,17 @@ class TestPack(Base):
                       self.run_tool("pack", self.feat, "rm-orders", expect=0))
         scaffold = self.run_tool("pack", self.feat, "scaffold-app", expect=0)  # it writes the no-`from` checks
         self.assertIn("`checks/no-float.sh` — applicable", scaffold)
+
+    def test_consumer_pack_carries_the_owners_adr_guarantees_and_a_change_stales_its_review(self):
+        adr = "# 0001 — Order events\n\n## Context\nskip me\n\n## Decision\nOrderPlaced: %s, may repeat.\n"
+        self.put("decisions/0001-orders.md", adr % "at-least-once, unordered", base=self.out)
+        self.assertIn("at-least-once, unordered", self.run_tool("pack", self.feat, "rm-orders", expect=0))
+        s = self.commit(self.block_wt("rm-orders"), "src/rm.txt", "rm\n")
+        self.review("rm-orders")
+        self.assertTrue(self.run_tool("proof", "check", self.feat, "review", "rm-orders", "--sha", s, expect=0)["fresh"])
+        self.put("decisions/0001-orders.md", adr % "at-least-once, ordered per orderId", base=self.out)
+        out = self.run_tool("proof", "check", self.feat, "review", "rm-orders", "--sha", s, expect=1)
+        self.assertEqual(out["stale_because"], ["the spec changed after the review"])
 
     def test_lesson_written_as_harvest_prescribes_reaches_the_pack(self):
         with open(os.path.join(PLUGIN, "skills", "harvest-dev-architecture", "SKILL.md"), encoding="utf-8") as f:

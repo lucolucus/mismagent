@@ -1,20 +1,14 @@
 # Packaging and maintenance
 
-How mismAgent is split into a kernel and modules, how the same method is packaged for other agent
+How mismAgent is packaged as one plugin, how the same method is packaged for other agent
 runtimes, and what keeps those packagings from drifting. For the method itself, see the
 [README](../README.md).
 
-## Kernel + modules by necessity
+## One plugin
 
-The weight scales with the case: you load a module only when the project actually requires it.
-
-- **`plugins/mismagent`** — the **kernel**: explore, model, the worker-composer, and the worker's
-  skill-matrix (`realize-*` block types × `seam-in-process`). Enough on its own for a single-side
-  project.
-- **`plugins/mismagent-cross-deploy`** — enabled **only when** a boundary crosses a deploy unit. The
-  port projects into the declared contract form — OpenAPI for request/response, a versioned
-  event-schema for replication or sync wires — plus generated types and CDC
-  (`seam-cross-deploy`, `create-contract`).
+- **`plugins/mismagent`** — explore, model, the worker-composer, and the worker's `realize-*`
+  skills (one per block type). Sides are code/verification scopes inside the one repo; how a
+  boundary crosses a network is a project choice, kept in its ADRs and gate.
 - **`attic/`** — the superseded file-driven flow, kept out of the plugin registry on purpose.
 
 ## Supporting skills
@@ -25,16 +19,14 @@ and `run-app-smoke` stay user entry points too:
 
 | Skill | Movement | Role |
 |---|---|---|
-| `build-manifest` | model | Tactical model → building-block manifest (types pinned, projection, `tests_nl`). |
+| `build-manifest` | model | Tactical model → building-block manifest (types pinned, `tests_nl`). |
 | `readiness-gate` | model → build | Optional pre-flight survival test on the manifest. |
 | `ux-designer` | model | Imagines the UI → views, when the feature has one. |
 | `write-context-map`, `write-adr`, `write-code-rules`, `write-infra-notes`, `write-task` | explore/model | The writers — every cross-movement handoff is a file. |
-| `realize-{aggregate, application-service, port, adapter, read-model, ui, scaffold}` × `seam-in-process` | build | The worker's matrix: block type × boundary projection. `scaffold` is the greenfield wave-0 buildable skeleton. |
+| `realize-{aggregate, application-service, port, adapter, read-model, ui, scaffold}` | build | One skill per block type. `scaffold` is the greenfield wave-0 buildable skeleton. |
 | `code-review` | build | Adversarial semantic review in fresh context. |
 | `run-app-smoke` | build | The recorded render proof. |
 | `harvest-dev-architecture` | build | Turns the first green slice's real conventions into the side's memory. |
-
-The cross-deploy module adds `seam-cross-deploy` and `create-contract`.
 
 ## Other runtimes
 
@@ -50,8 +42,7 @@ each with its `references/`), subagents as TOML in `.codex/agents/`, the methodo
 `tools/generate-codex.py`.
 
 ```
-codex/install.sh /path/to/your/project                       # kernel
-codex/install.sh /path/to/your/project --with-cross-deploy   # + cross-deploy module
+codex/install.sh /path/to/your/project
 ```
 
 ### pi
@@ -65,9 +56,11 @@ extension (called with `agentScope: "both"`; `mismagent-reviewer` is generated g
 `tools/generate-pi.py`.
 
 ```
-pi/install.sh /path/to/your/project                       # kernel
-pi/install.sh /path/to/your/project --with-cross-deploy   # + cross-deploy module
+pi/install.sh /path/to/your/project
 ```
+
+Re-running an installer upgrades in place and removes the skills retired in v0.18.0; the old
+`--with-cross-deploy` flag is refused.
 
 `pi/` is also a pi package — `pi install <repo>/pi` covers skills and prompts globally, while agents
 and `AGENTS.md` still come from `install.sh`.

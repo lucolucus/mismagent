@@ -50,17 +50,17 @@ owner waves; it does not send a scaffold through the verifier.
 plant a trivially failing probe test in **each module the gate claims to guard** (at minimum the
 deepest domain module, not just the app module), run the gate → see it **RED**, remove/flip the
 probe → see it **GREEN**; record the proof as a **FILE** —
-`<output_dir>/features/<feature>/gate-proof/<side>/evidence.md`: modules probed, the red excerpt, the green rerun —
-never only in your return (handoffs are files) — then stamp it with
+`<output_dir>/features/<feature>/gate-proof/<side>/evidence.md`: modules probed, the red excerpt, the green rerun
+(handoffs are files) — then stamp it with
 `MM proof record <feature-dir> gate <side> --gate "<the side's gate>" --gate-files <the profile's sides.<side>.gate_files>`
 (`MM` = `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"`). A gate that stays green
-over a failing test (a per-app build task that compiles dependency modules but never runs their
-tests) is a **finding to report against the profile's gate string**:
+over a failing test (e.g. a build task that compiles modules but never runs their tests) is a
+**finding to report against the profile's gate string**:
 without this proof every future review is vacuously green, and readiness refuses the gate.
 
 ## TDD note
-There is no behavior to TDD here. The loop is: run the **side's gate** → fix the toolchain/config →
-green. Climb the frugality ladder (smallest skeleton that makes the gate pass), never adding scope.
+No behavior to TDD here (no `craft` loop): run the **side's gate** → fix the toolchain/config →
+green, with the worker's frugality — the smallest skeleton that passes the gate, no added scope.
 
 ## Return (to the worker)
 `SCAFFOLD_READY`: gate green on the empty skeleton? **gate seen RED on the probe, then green

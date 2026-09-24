@@ -3,7 +3,8 @@
 
 Reads budgets.json beside this file: a word cap per operative prompt file (every skill, agent,
 command, methodology file and PROFILE.md of the plugin), a cap on their total, a separate total
-cap for the skills' references/, and a cap on every frontmatter `description` (characters).
+cap for the skills' references/ plus a cap on each reference file, and a cap on every frontmatter
+`description` (characters).
 Words = whitespace-separated tokens of the whole file (as `wc -w`).
 Usage: python3 prompt_budget.py  → JSON report; exit 1 if any cap is exceeded.
 """
@@ -63,7 +64,15 @@ def report(b=None):
     total = sum(n for n, _ in out.values())
     if total > b["total"]:
         bad.append(("<total>", "%d words > total budget %d" % (total, b["total"])))
-    refs = sum(words(r) for r in files(REFERENCES))
+    ref_words = {r: words(r) for r in files(REFERENCES)}
+    exceptions = b.get("references_file_exceptions", {})
+    for rel, n in ref_words.items():
+        cap = exceptions.get(rel, b["references_file"])
+        if n > cap:
+            bad.append((rel, "%d words > per-reference budget %d" % (n, cap)))
+    for rel in sorted(set(exceptions) - set(ref_words)):
+        bad.append((rel, "reference exception but not found (update budgets.json)"))
+    refs = sum(ref_words.values())
     if refs > b["references_total"]:
         bad.append(("<references>", "%d words > references budget %d" % (refs, b["references_total"])))
     for rel in files(FRONTMATTER):

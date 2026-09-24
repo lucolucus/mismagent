@@ -123,7 +123,7 @@ Each is also invocable directly as **`/mismagent:<name>`**.
 | `analyst` | explore | The **strategic** level: bounded contexts, relationships, **ubiquitous language**. |
 | `tactical-modeler` | model | The **tactical** level per context: aggregates, invariants, domain events, commands. Unknowns become spike nodes. |
 | `architect` | model | Architecture + ADRs, **guarantor of the boundaries**. Stack, style, infra and the code-writing rules deliberated **with you** (two-pass); mechanical constraints point to a versioned check the gate runs (`enforced_by`). Leaves ADRs ↔ context-map reconciled. |
-| `worker` | build | Realizes **one building block** in its own worktree — skills = its block type, plus the side's memory — TDD until green. Returns `BOUNCED` on ambiguity instead of inventing. |
+| `worker` | build | Realizes **one building block** in its own worktree — skills = its block type, plus the side's memory — TDD until green through the `craft` loop (red → green → refactor, a craft reference only for the problem at hand). Returns `BOUNCED` on ambiguity instead of inventing. |
 | `verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, the ADRs' versioned checks, anti-shadow types, render check. Read-only. |
 
 ## The ideas that hold it together
@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.19.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.20.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -207,6 +207,11 @@ another feature's work for a gap in yours.
 >
 > **v0.19.0:** decision notes — each non-obvious choice (hypothesis, check, debate, who decided) lands in
 > `features/<feature>/decisions.md`, checked by `mismagent.py why check` and `lint`, summarized in the pack; features are archived, never deleted.
+>
+> **v0.20.0:** the internal `craft` skill — the worker's XP loop (red → green → refactor with an explicit
+> exit) plus six short references (TDD, frugality, simple design, clean code, SOLID, refactoring), each
+> read only for the concrete problem at hand; the code-review uses them as lenses (HIGH needs evidence
+> and consequence). `code-rules.md` narrows or overrides them.
 
 ## Going deeper
 

@@ -35,33 +35,20 @@ Write **only** in your block's package/dir. Never another context's source. If y
 cross the boundary, an AC is ambiguous, or the contract (a pinned type, a signature, a key, a
 declared guarantee) must deviate → **`BOUNCED <what's missing>`** before implementing it, don't invent.
 
-## Frugality ladder (before you write code)
-Climb DOWN; stop at the **first rung that works**. Less code is the goal — deletion beats addition,
-the boring solution beats the clever one.
-1. **YAGNI** — does an AC / invariant / `tests_nl` actually require it? If nothing downstream
-   mandates it, don't build it (no speculative abstraction, no "might need it later").
-2. **Already in the domain?** — reuse the root's method/predicate, an existing VO / shared-kernel
-   type. Don't duplicate the rule (you go through the root anyway).
-3. **Native / platform / persistence-native?** — a DB constraint over app-logic, a stdlib/framework
-   feature over a hand-roll, the framework's observable state over a manual hack (cf. `realize-ui`).
-4. **An installed dependency?** — reuse what's there; never add a new dependency for a few lines.
-5. **One line?** — then one line.
-6. **The minimum that works** — only now, and the smallest of it.
+## Frugality and non-negotiables (always on)
+Less code is the goal. Build only what an AC / invariant / `tests_nl` requires; reuse the owner's
+rule (the root, an existing VO, the shared kernel), then a native/platform feature, then an
+installed dependency, and only then the minimum that works (detail: `craft`'s `frugality.md`).
+**Frugality NEVER touches** the **boundary** (package confinement, pinned types, the port
+signature), the root's **invariants** + the ADRs' `enforced_by` checks, the contract/invariant
+tests and the `tests_nl`, the project's `code-rules.md`, input validation at trust boundaries,
+error handling that prevents data loss, security.
 
-**Non-negotiables — frugality NEVER touches these** (the architecture-required ceremony, legitimate
-by definition): the **boundary** (package confinement, pinned types, the port signature), the
-**invariants on the root** + the ADRs' `enforced_by` checks, the **contract/invariant tests** and the
-`tests_nl`, the **project code rules** (`code-rules.md` — the dependency rule and friends,
-mechanical or not), input
-validation at trust boundaries, error handling that prevents data loss, security.
-Leanness applies to the *implementation inside the block*, never to the boundary, the rule, or the
-tests.
+## The skill matrix
+One invocation composes **A (block-type) + B (codebase memory)**; the specialization lives in the
+skills — load and apply them, don't re-copy the pattern.
 
-## The skill matrix (load the skills, don't duplicate the pattern)
-One invocation composes **A (block-type) + B (codebase memory)**. All the specialization lives **in the skills**: you **load and apply** them,
-you don't re-copy the pattern here.
-
-**A — by `block.type`** (core skills):
+**A — by `block.type`:**
 | type | skill | owns |
 |------|-------|------|
 | aggregate | `realize-aggregate` | invariants + invariant-tests (the rule lives HERE) |
@@ -72,18 +59,17 @@ you don't re-copy the pattern here.
 | ui | `realize-ui` | the thin view over a TESTABLE state-holder/presenter; the render-check (sizing/overflow/contrast/states), no manual-invalidation hack |
 | scaffold | `realize-scaffold` | **greenfield wave-0**: the buildable skeleton (wrapper/modules/plugins); acceptance = the side's gate green on the empty tree, NO domain code, no ACs/contract test |
 
-**B — the codebase's memory** (from the profile, provided by the project): the dev-architecture
+**B — the codebase's memory** (from the profile): the dev-architecture
 (harvested skill, or the authored doc in the pack), the persistence and branching memories.
 
-**ui** — `realize-ui`: it consumes the read-models, triggers the use-cases; **the `tests_nl`
-are the screen's ACs**, tested on a plain **state-holder/presenter** (not on the view). Beyond
-presenter-green it needs the **render-check** — mechanism: the side's `ui_render_check` (automated
-UI smoke, or a recorded run-the-app check): presenter tests never prove the view **renders**.
+**ui:** the `tests_nl` are the screen's ACs, tested on the presenter; the render-check runs per
+the side's `ui_render_check` — presenter tests never prove the view **renders**.
 
 ## Tests
 **Translate the user's `tests_nl`** (natural language) into the formal tests (invariant/contract/AC).
-TDD red-green-refactor. **Self-review fix loop** until green: run the **side's gate commands** and
-re-read the diff against every AC, repeat until green and every AC covered.
+Load the **`craft`** skill once and run its loop per AC (red → green → refactor, a reference only
+for the concrete problem you see — don't reload it each iteration). **Self-review fix loop** until
+green: run the **side's gate commands** and re-read the diff against every AC.
 
 **ADR checks the pack marks "THIS block writes it":** write the check at its path with a
 violating fixture it fails and a conforming one it passes (code, not comments), register it in

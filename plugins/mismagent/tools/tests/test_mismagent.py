@@ -559,6 +559,91 @@ class TestPack(Base):
         self.assertIn("go through the root", self.run_tool("pack", self.feat, "svc-order", expect=0))
 
 
+def note(i, scope="feature", status="accepted", drop=(), **over):
+    f = {"Meta": "2026-09-24; scope: %s; status: %s" % (scope, status), "Question": "Which parser?",
+         "Options": "A split, fails on quotes; B standard parser.", "Hypothesis": "B reads every agreed format.",
+         "Check": "Run the 24 agreed fixtures; success = 24 matches.", "Result": "B 24/24; [run](https://ci.example.com/412).",
+         "Debate": "none", "Decision": "B %s; we accept one dialect." % i,
+         "By": "decided: mismagent-worker/agg-order (deep); recorded: worker-composer",
+         "Docs": "[spec](https://example.com/rfc4180)", "Revisit": "revisit-%s" % i}
+    f.update(over)
+    return "### %s · Parser choice\n%s\n" % (i, "".join("- %s: %s\n" % kv for kv in f.items() if kv[0] not in drop))
+
+
+class TestWhy(Base):
+    def why(self, text, expect):
+        path = self.put("decisions.md", "# Decision notes — shop\n\n" + text)
+        return self.run_tool("why", "check", path, expect=expect)
+
+    def rules(self, text):
+        return {(e["id"], e["rule"]) for e in self.why(text, 1)["errors"]}
+
+    def test_valid_file_before_any_manifest(self):
+        d = os.path.join(self.tmp, "early")
+        path = self.put("decisions.md", note("D-0001") + note("D-0002", Supersedes="D-0001"), base=d)
+        with open(path) as f:
+            text = f.read().replace("status: accepted", "status: superseded", 1)
+        with open(path, "w") as f:
+            f.write(text)
+        out = self.run_tool("why", "check", path, expect=0)
+        self.assertEqual((out["entries"], out["active"]), (2, 1))
+        self.assertIn("error", self.run_tool("why", "check", os.path.join(d, "none.md"), expect=2))
+
+    def test_invalid_entries(self):
+        long = " ".join(["word"] * 26)
+        got = self.rules(note("D-0001", drop=("Debate",)) + note("D-0002", Question=long) + note("D-0002")
+                         + note("D-0003", **{k: " ".join(["w"] * n) for k, n in mismagent.NOTE_FIELDS.items()
+                                             if n and k != "Confidence"})  # each at its cap, the sum over 220
+                         + note("D-0004", Result="untested") + note("D-0005", Docs="none", By="the composer")
+                         + note("D-0006", Supersedes="D-0009") + note("D-0007", status="superseded")
+                         + note("D-0008", Docs="[x](missing/file.md)", Meta="24/09/2026; scope: team"))
+        for want in [("D-0001", "field.missing"), ("D-0002", "field.cap"), ("D-0002", "id.duplicate"),
+                     ("D-0003", "entry.cap"), ("D-0004", "result.reason"), ("D-0005", "docs.links"),
+                     ("D-0005", "by.roles"), ("D-0006", "supersede.target"), ("D-0007", "supersede.link"),
+                     ("D-0008", "link.missing"), ("D-0008", "meta.date"), ("D-0008", "meta.scope"),
+                     ("D-0008", "meta.status")]:
+            self.assertIn(want, got)
+        self.assertNotIn(("D-0003", "field.cap"), got)
+        self.assertIn(("D-0001", "supersede.status"), self.rules(note("D-0001") + note("D-0002", Supersedes="D-0001")))
+        self.assertIn(("-", "id.order"), self.rules(note("D-0002") + note("D-0001")))
+
+    def test_lax_fields_and_malformed_headings_are_errors(self):
+        got = self.rules(note("D-0001", Result="B 24/24, all green.") + note("D-0002", By="decided: ; recorded: composer")
+                         + note("D-0003", Confidence="high") + note("D-0004", ADR="none"))
+        for want in [("D-0001", "result.link"), ("D-0002", "by.roles"), ("D-0003", "confidence.level"),
+                     ("D-0004", "adr.link")]:
+            self.assertIn(want, got)
+        for bad in ("  " + note("D-0001"), note("D-0001").replace("### ", "## ", 1)):
+            out = self.why(bad, 1)
+            self.assertTrue(any(e["rule"] == "entry.header" for e in out["errors"]), out)
+
+    def test_post_close_edits_status_and_adr_backlink_stay_valid(self):
+        self.put("adr.md", "# ADR\n")
+        self.why(note("D-0001", status="superseded", ADR="[ADR 0003](adr.md)", Confidence="high — measured")
+                 + note("D-0002", Supersedes="D-0001", Result="untested — no corpus yet"), 0)
+
+    def test_lint_runs_the_validator_and_checks_scopes(self):
+        self.assertTrue(self.gaps()[1]["ok"])  # no decisions.md: nothing to check
+        self.put("decisions.md", note("D-0001", drop=("Revisit",)) + note("D-0002", scope="block:nope"))
+        gaps = self.gaps()[0]
+        self.assertIn(("why.field.missing", "decisions.md D-0001"), gaps)
+        self.assertIn(("why.scope", "decisions.md D-0002"), gaps)
+
+    def test_pack_selects_active_notes_and_spec_hash_ignores_them(self):
+        before = self.spec_hash("svc-order")
+        self.put("decisions.md", note("D-0001", scope="block:agg-order", status="superseded")
+                 + note("D-0002", scope="block:agg-order", Supersedes="D-0001") + note("D-0003", scope="block:svc-report")
+                 + note("D-0004", scope="boundary:b-order") + note("D-0005") + note("D-0006", scope="boundary:b-rm")
+                 + note("D-0007", scope="block:svc-order"))
+        md = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        for i in ("D-0002", "D-0004", "D-0005", "D-0007"):  # owner, touched boundary, feature, itself
+            self.assertIn("revisit-" + i, md)
+        for i in ("D-0001", "D-0003", "D-0006"):  # superseded, unrelated block, untouched boundary
+            self.assertNotIn("revisit-" + i, md)
+        self.assertIn("(decisions.md#d-0007--parser-choice)", md)  # the GitHub anchor of the full heading
+        self.assertEqual(self.spec_hash("svc-order"), before)
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 

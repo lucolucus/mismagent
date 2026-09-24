@@ -18,11 +18,12 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 | file | meaning | written by |
 |---|---|---|
 | `blocks/<ctx>/{todo,doing,done}/<id>.md` | the block's phase | `MM move` |
-| `open-questions/<id>.md` | parked: a question for the user | composer; deleted by `build-manifest` when answered |
+| `open-questions/<id>.md` | parked: a question for the user | composer; deleted by `build-manifest` when answered, after it records the answer in `decisions.md` |
 | `rework/<id>-<n>.md` | the findings of rework cycle n (the cap counts these files) | composer |
 | `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM proof record F review <id> --sha S --spec-hash H` |
 | `integrated/<id>.json` | promoted: the block's sha is on the integration line | `MM compose promote F <id>` |
 | `gate-proof/<side>/proof.json` | the gate's red-green proof (project fact) | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` |
+| `decisions.md` | the why: non-obvious choices, debates, deciders (history, not state; out of `spec_hash`; format in `CLI.md`) | composer when a worker returns and during review/rework; explore/model at the checkpoints; checked by `MM why check F/decisions.md` and `MM lint` |
 
 ## The tool (`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`) — stateless commands
 The repository is the git toplevel of `F` (`diff-range`: of the working directory). A block's
@@ -59,7 +60,8 @@ branch is `block/<id>`.
 3. **Build:** for each block of `MM ready` up to the cap: `move --to doing`, worktree from the line
    tip (an un-parked block reuses its branch and worktree), dispatch the worker with `MM pack`.
 4. **As each worker returns:** `BOUNCED` → park (`move --to todo` + `open-questions/`).
-   `BLOCKED` → report. `READY-FOR-REVIEW` → queue it for integration.
+   `BLOCKED` → report. `READY-FOR-REVIEW` → record its `DECISIONS` in `decisions.md`, queue it for
+   integration. An entry is `accepted` when the choice is made — integration is `integrated/`'s fact.
 5. **Integrate, one at a time:** reviewers on `diff-range` + one pack → FAIL/HIGH: write
    `rework/<id>-<n+1>.md`, re-dispatch the worker on its existing worktree with it (no `ready`, no
    `move`; after cycle 2 → park) · PASS: `proof record review --spec-hash <the pack's>` →

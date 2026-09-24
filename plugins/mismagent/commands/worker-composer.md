@@ -31,7 +31,7 @@ share one line. The project is not a git repository → **ask the user** before
 with its `detail` and **ask the user; end the firing.** Never clean up on your own.
 
 **1 · Readiness.** `MM lint F` (every firing): every gap → bounce to its `bounce_to`
-with the gap named (regenerate, never hand-patch). Then the judgment items, yours:
+with the gap named (regenerate, never hand-patch; `recorder` below). Then the judgment items, yours:
 - a **high-value block with no `tests_nl`** → ask the user;
 - the gate is **executable and discriminating**: `MM proof check F gate <side> --gate "<gate>"
   --gate-files <gate_files>` fresh → accept. Stale or absent on a built
@@ -47,8 +47,9 @@ with the gap named (regenerate, never hand-patch). Then the judgment items, your
 - greenfield with no `scaffold` block and a non-runnable gate → `/mismagent:build-manifest`; a UI
   side with a manual `ui_render_check` and no `run` binding → the profile.
 
-Bounce targets: `/mismagent:build-manifest`, `/mismagent:architect`, or **the profile** (a targeted
-field edit with the user).
+Bounce targets: `/mismagent:build-manifest`, `/mismagent:architect`, **the profile** (a targeted
+field edit with the user), or `recorder` (`why.*`: the entry's recorder — in the build, you — fixes
+`F/decisions.md`, then re-lints).
 
 **2 · Scaffold** (greenfield, before any owner). `MM move F <id> --to doing`, a worktree on
 `block/<id>` from `B`, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
@@ -66,7 +67,8 @@ block-type skill, the worktree and the side's gate. Never assemble context by ha
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
   `build-manifest` folds it in and deletes the file);
 - `BLOCKED` → report its cause; it stays in `doing/`;
-- `READY-FOR-REVIEW` → queue it for step 5 with its `DECISIONS` / `DEVIATIONS`.
+- `READY-FOR-REVIEW` → record its `DECISIONS` (below), queue it for step 5 with its `DECISIONS` /
+  `DEVIATIONS`.
 
 **5 · Integrate, one block at a time.**
 1. `MM diff-range --base B --head block/<id>` (run in the repo) → `range`, `head_sha`. A `ui` block on
@@ -94,6 +96,10 @@ block-type skill, the worktree and the side's gate. Never assemble context by ha
 
 Commit `F`'s changes at the end of the firing — never between `compose start` and `compose promote`.
 
+## Decision notes — `F/decisions.md`
+You are the **recorder**, not the decider (format, rules: `CLI.md`): the workers' `DECISIONS`, a reviewer's objection or a rework's evidence into `Debate`/`Result`, your
+own non-obvious calls; a reversed choice `Supersedes`. Before committing `F`, if it exists: `MM why check F/decisions.md`.
+
 ## Model routing — the model follows the action
 Tiers: `light` · `standard` · `deep` (Claude Code default: `haiku` · `sonnet` · `opus`, via the Agent
 tool's `model`; the profile's `build.model_routing` rebinds tiers and overrides rows).
@@ -118,7 +124,7 @@ Escalate to `deep` when the block carries `model_hint: deep` or is in rework. Th
 ## Only HIGH reworks
 A rework carries the FAILs and the HIGH findings, **nothing else**. Every MED/LOW (code-review's or
 the verifier's `DEFERRED:`) goes to **`F/pre-release.md`**, one line each: `- [ ] <release> · <id> ·
-<sev> · <file:line> · <issue> · <reviewer> · <date>` — never into a rework, however cheap.
+<sev> · <file:line> · <issue> · <reviewer> · <date>`.
 
 ## Spikes — wave 0
 An open `type: spike` node with `central: true` (`MM ready F` → `open_spikes`) runs **at wave 0,
@@ -144,9 +150,8 @@ the gate proof.
 ## Lessons by block type
 When the first block of a type passes review — or a rework fixed a defect class the next block of
 that type could repeat — dispatch `harvest-dev-architecture` in lessons mode (tier standard) with
-the block's `rework/` files and findings. It writes
-`<output_dir>/architetture/lessons-by-block-type.md`; `MM pack` carries the type's section to every
-worker and reviewer. Never paste lessons into prompts by hand.
+the block's `rework/` files and findings; `MM pack` carries the type's lessons to every worker and
+reviewer. Never paste lessons into prompts by hand.
 
 ## Report (~30 lines)
 Blocks integrated and done, parked (with their `open-questions/<id>.md`), blocked and why; this

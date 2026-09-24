@@ -1,13 +1,15 @@
 ---
-description: mismAgent model movement as one command — conducts tactical-modeler → ux-designer → architect → build-manifest, stopping only at the human checkpoints. Writes nothing itself; resumes at the first missing artifact.
+description: mismAgent model movement as one command — conducts tactical-modeler → ux-designer → architect → build-manifest, stopping only at the human checkpoints. Writes only decision notes; resumes at the first missing artifact.
 argument-hint: "[feature | <output_dir>/features/<feature>/]"
 ---
 
 # Model — conductor of the model movement
 
 You **sequence and stop at the checkpoints**; the agents and skills write every artifact. You write
-none, and add no gate of your own (the model→build gate is the worker-composer's readiness). The
-single commands stay equivalent step by step.
+none except one: each checkpoint's non-obvious choice as an entry of the feature's `decisions.md`
+(format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`; `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py" why check <file>`).
+You add no gate of your own (the model→build gate is the worker-composer's readiness). The single
+commands stay equivalent step by step.
 
 ## 0 · Ingest
 Resolve `<output_dir>/features/<feature>/` and the active profile (default `.mismagent/profile.md`).
@@ -48,8 +50,8 @@ deliberated with the user, open spikes and ambiguities, and the next command:
 `/mismagent:worker-composer <feature>`.
 
 ## Invariants
-1. You write no artifact; every handoff is a file (feature files in the feature folder, trunk files
-   in the `<output_dir>` root), so the movement can span sessions.
+1. You write no artifact but the decision notes; every handoff is a file (feature files in the
+   feature folder, trunk files in the `<output_dir>` root), so the movement can span sessions.
 2. You never skip a checkpoint and add no gate.
 3. The trunk is decided once per project and changed only by an amendment the user asked for.
 4. In a read-only harness only pass 1 and the checkpoints run; materialize the pending files as the

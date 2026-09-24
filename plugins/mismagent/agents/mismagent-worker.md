@@ -106,7 +106,7 @@ BLOCK: <id>
 BOUNDARY_HONORED: <agg|port|...> (fields confined? predicate exposed? gates honored? yes/no)
 TESTS: <n> green
 PUBLIC_API: <the public signatures another block will use — for aggregate/port>
-DECISIONS: <choices the spec left open, one line each | none>
+DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md` "Decision notes"; you decide, the composer records) | none>
 DEVIATIONS: <where you departed from the spec/pack, one line each | none>
 NOTE: <1 sentence — on BLOCKED: the step/cause outside the block>
 ```

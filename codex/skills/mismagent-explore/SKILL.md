@@ -44,6 +44,8 @@ challenger to attack.
 1. **Diverge** with the user: goals, users, constraints, alternatives.
 2. **Attack before modeling:** dispatch `mismagent-challenger`. `KILL` → stop and report; `RESHAPE`
    → redesign with the user; `PROCEED` → close its `MUST_ANSWER_BEFORE_MODELING` items first.
+   Record the challenger's debate and the user's non-obvious choice (a `KILL` too) in
+   `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`, scope `feature`); `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py why check <file>`.
 3. **Model:** dispatch `mismagent-analyst` on what survived, passing the existing context-map as
    authoritative when there is one (it amends: adds this feature's contexts and terms, reuses the
    rest verbatim). `NEEDS-INPUT` → bring the `AMBIGUITIES` to the user and re-dispatch. A needed
@@ -55,7 +57,7 @@ challenger to attack.
 ## Read-only harness (e.g. plan mode)
 The dialogue continues and the challenger dispatches (it is read-only). Do **not** dispatch the
 researcher or the analyst: their handoffs are files, and a return message would evaporate. List the
-pending writes in the plan as files to materialize; when writes reopen, materializing them is the
+pending writes (decision notes included) in the plan as files to materialize; when writes reopen, materializing them is the
 **first** action (profile → brief), then the analyst.
 
 ## Gate to model

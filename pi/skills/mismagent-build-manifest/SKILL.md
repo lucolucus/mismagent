@@ -118,8 +118,10 @@ must meet. Do not emit from memory.
     delta (added / changed / unchanged). With blocks in `doing/` or `done/`, the delta is the only
     legal mode: re-seed only the impacted files, list them, never rewrite an unimpacted file and
     never move a file between state folders. Hand-editing a block file is a divergence bug.
-23. **Un-parking:** fold the user's answer to a parked block into its spec and delete its
-    `features/<feature>/open-questions/<block-id>.md` — regeneration is what clears it.
+23. **Un-parking:** fold the user's answer to a parked block into its spec, record the answer and
+    why in `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`; decider: the user), then delete its
+    `open-questions/<block-id>.md` — regeneration is what clears it. A non-obvious R0 cut or
+    `tests_nl` choice is recorded the same way.
 
 ## Output
 - `building-blocks.yaml` — authoritative; `boundaries:` stays a first-class section.

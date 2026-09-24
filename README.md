@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.18.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.19.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -204,6 +204,9 @@ another feature's work for a gap in yours.
 > `projection`, `contract_*`, `operation_ids`, `schema_paths`, `delivery`). Such contracts stay project
 > files: rules in ADRs, `code-rules.md`, dev-architecture; checks in the gate. Uninstall
 > `mismagent-cross-deploy`, drop retired fields; `install.sh` removes retired skills.
+>
+> **v0.19.0:** decision notes — each non-obvious choice (hypothesis, check, debate, who decided) lands in
+> `features/<feature>/decisions.md`, checked by `mismagent.py why check` and `lint`, summarized in the pack; features are archived, never deleted.
 
 ## Going deeper
 

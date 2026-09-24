@@ -98,6 +98,12 @@ build:
     application-service: deep   # model_hint: deep or a rework → deep
 ```
 
+## People (optional)
+
+```yaml
+people: ["<name> — <role>"]   # names for decision notes' `By:`; never proof of approval
+```
+
 ## Domain bounded contexts
 - `<Context1>`, `<Context2>`, … — only contexts with a domain language of their own. A cross-cutting
   concern (sync, caching, auth) is an NFR or a spike, not a bounded context.

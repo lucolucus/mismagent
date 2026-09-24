@@ -427,6 +427,152 @@ class Feature:
         return out
 
 
+# ---- decision notes (F/decisions.md; the format is CLI.md's) -----------------------------------
+NOTE_FIELDS = {  # field: word cap (None = only the entry cap); required unless in NOTE_OPTIONAL
+    "Meta": None, "Question": 25, "Options": 40, "Hypothesis": 25, "Check": 30, "Result": 30,
+    "Debate": 40, "Decision": 35, "By": None, "Docs": None, "Revisit": 20,
+    "Confidence": 12, "Supersedes": None, "ADR": None}
+NOTE_OPTIONAL = ("Confidence", "Supersedes", "ADR")
+NOTE_CAP, TITLE_CAP = 220, 8
+NOTE_HEAD = re.compile(r"^###\s+(D-\d{4})\s+·\s+(.*\S)\s*$")
+MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+URL = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+")
+
+
+def _words(text):
+    """Words excluding URLs: a markdown link counts its text, never its target."""
+    return len(URL.sub(" ", MD_LINK.sub(lambda m: m.group(0)[:m.group(0).rfind("](") + 1], text)).split())
+
+
+def parse_notes(path):
+    """([entry], [error]) — an entry: {id, title, line, fields, text}; an error: {id, rule, error}."""
+    entries, errors, cur = [], [], None
+
+    def err(i, rule, msg):
+        errors.append({"id": i, "rule": rule, "error": msg})
+    for n, line in enumerate(read(path).splitlines(), 1):
+        if line.startswith("###") or re.match(r"^\s+#|^#+\s*D-\d", line):  # malformed: an error, never skipped
+            m = NOTE_HEAD.match(line)
+            if not m:
+                err("line %d" % n, "entry.header", "heading %r is not `### D-NNNN · <title>`" % line[:60])
+                cur = None
+                continue
+            cur = {"id": m.group(1), "title": m.group(2), "line": n, "fields": {}, "text": m.group(2)}
+            entries.append(cur)
+            continue
+        if cur is None and re.match(r"^\s*- [A-Za-z]+:", line):
+            err("line %d" % n, "entry.header", "field line before any `### D-NNNN · <title>` heading")
+        if cur is None or not line.strip():
+            continue  # a title or intro before the first entry
+        m = re.match(r"^- ([A-Za-z]+):\s*(.*?)\s*$", line)
+        if not m or m.group(1) not in NOTE_FIELDS:
+            err(cur["id"], "field.line", "line %d is not `- <Field>: <one line>` of a known field" % n)
+        elif m.group(1) in cur["fields"]:
+            err(cur["id"], "field.duplicate", "%s given twice" % m.group(1))
+        else:
+            cur["fields"][m.group(1)] = m.group(2)
+            cur["text"] += " " + m.group(2)
+    return entries, errors
+
+
+def check_notes(path):
+    """{ok, file, entries, active, errors} — exact checks of the decision-note format."""
+    if not os.path.isfile(path):
+        raise UsageError("%s not found" % path)
+    entries, errors = parse_notes(path)
+    base, ids, by = os.path.dirname(os.path.abspath(path)), [e["id"] for e in entries], {}
+
+    def err(i, rule, msg):
+        errors.append({"id": i, "rule": rule, "error": msg})
+    for e in entries:
+        i, f = e["id"], e["fields"]
+        by.setdefault(i, e)
+        if ids.count(i) > 1 and by[i] is not e:
+            err(i, "id.duplicate", "id used by more than one entry")
+        if len(e["title"].split()) > TITLE_CAP:
+            err(i, "field.cap", "title > %d words" % TITLE_CAP)
+        for k, cap in NOTE_FIELDS.items():
+            if k not in f:
+                if k not in NOTE_OPTIONAL:
+                    err(i, "field.missing", "no %s" % k)
+            elif not f[k]:
+                err(i, "field.empty", "%s is empty" % k)
+            elif cap and _words(f[k]) > cap:
+                err(i, "field.cap", "%s: %d words > %d" % (k, _words(f[k]), cap))
+        if _words(e["text"]) > NOTE_CAP:
+            err(i, "entry.cap", "%d words > %d (URLs excluded)" % (_words(e["text"]), NOTE_CAP))
+        meta = [p.strip() for p in f.get("Meta", "").split(";") if p.strip()]
+        kv = dict(p.split(":", 1) for p in meta[1:] if ":" in p)
+        kv = {k.strip(): v.strip() for k, v in kv.items()}
+        try:
+            datetime.date.fromisoformat(meta[0] if meta else "")
+        except ValueError:
+            err(i, "meta.date", "Meta must start with an ISO date (YYYY-MM-DD)")
+        if not re.match(r"^(feature|(block|boundary):[A-Za-z0-9_.-]+)$", kv.get("scope", "")):
+            err(i, "meta.scope", "scope %r is not feature | block:<id> | boundary:<id>" % kv.get("scope"))
+        if kv.get("status") not in ("accepted", "superseded"):
+            err(i, "meta.status", "status %r is not accepted | superseded" % kv.get("status"))
+        if "sha" in kv and not re.match(r"^[0-9a-f]{7,40}$", kv["sha"]):
+            err(i, "meta.sha", "sha %r is not a 7-40 hex commit id" % kv["sha"])
+        if set(kv) - {"scope", "status", "sha"} or len(kv) != len(meta) - 1:
+            err(i, "meta.keys", "Meta = <date>; scope: …; status: …[; sha: …] and nothing else")
+        e["scope"], e["status"] = kv.get("scope"), kv.get("status")
+        r = re.match(r"^(untested|inconclusive)\b[\s—:,.;-]*(.*)$", f.get("Result", ""), re.I)
+        if r and not r.group(2).strip():
+            err(i, "result.reason", "%s needs its reason" % r.group(1))
+        if f.get("Result") and not r and not (MD_LINK.search(f["Result"]) or URL.search(f["Result"])):
+            err(i, "result.link", "Result carries a link to its evidence, or is `untested`/`inconclusive` — <reason>")
+        if f.get("ADR") and not (MD_LINK.search(f["ADR"]) or URL.search(f["ADR"])):
+            err(i, "adr.link", "ADR is the ADR's link (omit the field when there is none)")
+        if f.get("By") and not all(re.search(r"(?:^|;)\s*%s:[ \t]*[^;\s]" % k, f["By"]) for k in ("decided", "recorded")):
+            err(i, "by.roles", "By names `decided: <who>` and `recorded: <who>`, both non-empty")
+        n_docs = len(MD_LINK.findall(f.get("Docs", ""))) + len(URL.findall(MD_LINK.sub("", f.get("Docs", ""))))
+        if f.get("Docs") and not 1 <= n_docs <= 3:
+            err(i, "docs.links", "Docs holds %d links, not 1-3" % n_docs)
+        if f.get("Confidence") and not re.match(r"^(low|medium|high)\b[\s—:,.;-]*\w", f["Confidence"]):
+            err(i, "confidence.level", "Confidence is `low|medium|high — <why>`")
+        for t in MD_LINK.findall(e["text"]):
+            local = t.split("#", 1)[0]
+            if local and not re.match(r"^[a-z][a-z0-9+.-]*:", t) and \
+                    not os.path.exists(os.path.normpath(os.path.join(base, local))):
+                err(i, "link.missing", "local link %s does not exist (relative to %s)" % (t, os.path.basename(path)))
+    superseded_by = {}
+    for e in entries:
+        if "Supersedes" not in e["fields"]:
+            continue
+        t = re.findall(r"D-\d{4}", e["fields"]["Supersedes"])
+        if len(t) != 1 or t[0] == e["id"] or t[0] not in by or ids.index(t[0]) > ids.index(e["id"]):
+            err(e["id"], "supersede.target", "Supersedes names one earlier entry id")
+            continue
+        superseded_by.setdefault(t[0], []).append(e["id"])
+        if by[t[0]].get("status") != "superseded":
+            err(t[0], "supersede.status", "superseded by %s but its status is not superseded" % e["id"])
+    for e in entries:
+        n = len(superseded_by.get(e["id"], []))
+        if e.get("status") == "superseded" and n != 1:
+            err(e["id"], "supersede.link", "status superseded needs exactly one entry that Supersedes it (%d)" % n)
+    nums = [int(i[2:]) for i in ids]
+    if nums != sorted(nums):
+        err("-", "id.order", "ids are not in ascending order: append new entries at the end")
+    active = [e["id"] for e in entries if e.get("status") == "accepted"]
+    return {"ok": not errors, "file": path, "entries": len(entries), "active": len(active), "errors": errors}
+
+
+def active_notes(path):
+    """The accepted entries of a notes file (lenient: the validator is `why check`)."""
+    out = []
+    for e in parse_notes(path)[0] if os.path.isfile(path) else []:
+        m = re.search(r"\bscope:\s*([^;]+?)\s*(?:;|$)", e["fields"].get("Meta", ""))
+        if re.search(r"\bstatus:\s*accepted\b", e["fields"].get("Meta", "")) and m:
+            out.append(dict(e, scope=m.group(1)))
+    return out
+
+
+def cmd_why(a):
+    r = check_notes(a.file)
+    return emit(r, 0 if r["ok"] else 1)
+
+
 # ---- lint (exact checks only; the list is CLI.md's) -----------------------------------------------
 def central_spikes(feat):
     """Open `[ ]` entries of the context-map's `## Open spikes` with `owner: <feature>` + `central: true`."""
@@ -589,6 +735,15 @@ def lint(feat):
             gap("spikes.central_node", sid, "central context-map spike owned by this feature has no spike node")
         elif str(nodes[sid][2].get("central", "")).lower() != "true":
             gap("spikes.central_flag", sid, "spike node lacks central: true")
+    notes = os.path.join(feat.dir, "decisions.md")
+    if os.path.isfile(notes):  # optional: absent when nothing non-obvious was decided
+        for e in check_notes(notes)["errors"]:
+            gap("why." + e["rule"], "decisions.md " + e["id"], e["error"], "recorder")
+        for e in active_notes(notes):
+            kind, _, i = e["scope"].partition(":")
+            if i and i not in (feat.row if kind == "block" else feat.bnd):
+                gap("why.scope", "decisions.md " + e["id"], "scope %s: no such %s in the manifest" % (e["scope"], kind),
+                    "recorder")
     return gaps, deferred
 
 
@@ -860,6 +1015,7 @@ def cmd_pack(a):
     else:  # a pre-release group: its spec is its rework files
         for p in sorted(glob.glob(os.path.join(feat.dir, "rework", a.id + "-*.md"))):
             add("Rework %s" % os.path.basename(p)[:-3], p, read(p))
+    pack_notes(feat, a.id, add)
     for x in a.extra or []:
         if not os.path.isfile(x):
             raise UsageError("--extra %s not found" % x)
@@ -916,6 +1072,26 @@ def pack_block(feat, bid, add, out):
                 lines.append(line)
         if "\n".join(lines).strip():
             add("Lessons for %s blocks" % btype, lpath, "\n".join(lines))
+
+
+def note_anchor(e):
+    """The GitHub-style anchor of an entry's full heading (`D-0007 · A b` → `d-0007--a-b`)."""
+    return re.sub(r"[^\w\- ]", "", ("%s · %s" % (e["id"], e["title"])).lower()).replace(" ", "-")
+
+
+def pack_notes(feat, bid, add):
+    """Active decision notes scoped to the feature, the block, the owners of the boundaries it
+    consumes and the boundaries it touches: ID + Decision + Revisit + link. Never in spec_hash."""
+    path = os.path.join(feat.dir, "decisions.md")
+    scopes = {"feature"}
+    if bid in feat.row:
+        scopes |= {"block:" + bid} | {"boundary:%s" % b.get("id") for b in feat.touched(bid)}
+        scopes |= {"block:%s" % (feat.bnd.get(c) or {}).get("owner") for c in feat.consumes(bid)}
+    rows = ["- [%s](decisions.md#%s) (%s) — %s · Revisit: %s" % (
+        e["id"], note_anchor(e), e["scope"], e["fields"].get("Decision", ""), e["fields"].get("Revisit", ""))
+        for e in active_notes(path) if e["scope"] in scopes]
+    if rows:
+        add("Decision notes (active; the full entries in the source)", path, "\n".join(rows))
 
 
 def cmd_diff_range(a):
@@ -1053,6 +1229,7 @@ def build_parser():
         return p
     cmd("status", cmd_status, "anomalies (read-only)", "feature_dir").add_argument("--integration", required=True)
     cmd("lint", cmd_lint, "exact structural checks", "feature_dir")
+    cmd("why", cmd_why, "validate a decision-notes file (read-only)", ("op", ("check",)), "file")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)

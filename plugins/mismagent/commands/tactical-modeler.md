@@ -10,4 +10,5 @@ with that named scope.
 Otherwise dispatch the **`mismagent-tactical-modeler`** subagent (Agent tool) on `$ARGUMENTS`. It starts from the
 "Seeds for the tactical" of `features/<feature>/tactical-model.md` and writes the **Tactical model**
 sections there (every line with a reader). On `NEEDS-INPUT` it brings you
-the ambiguities — you decide. See `agents/mismagent-tactical-modeler.md`.
+the ambiguities — you decide; record a non-obvious answer in the feature's `decisions.md` (format:
+`$CLAUDE_PLUGIN_ROOT/tools/CLI.md`). See `agents/mismagent-tactical-modeler.md`.

@@ -17,6 +17,8 @@ scope: global | <side> | infra
 status: proposed | accepted | superseded
 supersedes: <NNNN-slug>          # only when it replaces one
 closes_spike: <spike-slug>       # only when it answers one
+decided: <date> · <who>
+from_note: <feature> D-NNNN      # only when it promotes a decision note
 enforced_by:                     # only for mechanical constraints
   - check: <path of the check, relative to the repo>
     from: <block-id>             # optional: the block that makes it applicable
@@ -63,6 +65,8 @@ existence and `from`.
   the uniqueness invariant (`[INV-n]` + its test) on the aggregate publishing it, or states why it
   holds by construction.
 - **Supersede:** set `status: superseded` on the old ADR and link it.
+- **Promoting a decision note:** `from_note` here, the ADR link in the note's `ADR:` (allowed after close); the ADR
+  prescribes, the note points to it.
 - **Closing a spike, both directions:** `closes_spike` here **and** `[x]` on the context-map entry
   (and its node to `done/`) in the same pass.
 - **Reconcile before finalizing:** a context-map line contradicting the decision is updated in the

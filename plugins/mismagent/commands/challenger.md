@@ -6,4 +6,5 @@ argument-hint: "[the idea / what to attack]"
 Dispatch the **`mismagent-challenger`** subagent (Agent tool, **fresh context**) on `$ARGUMENTS` (or the
 current idea/model). It is read-only and returns a **`KILL | RESHAPE | PROCEED`** verdict: on `KILL`
 stop and report to me; on `RESHAPE` redesign with me; on `PROCEED` close the
-`MUST_ANSWER_BEFORE_MODELING` items before going on. See `agents/mismagent-challenger.md`.
+`MUST_ANSWER_BEFORE_MODELING` items before going on. Record the verdict's debate and my choice in the
+feature's `decisions.md` (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`). See `agents/mismagent-challenger.md`.

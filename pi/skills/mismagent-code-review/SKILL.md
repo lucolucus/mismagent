@@ -66,7 +66,7 @@ BLOCK_ID: <id>
 HEAD_SHA: <the sha judged>
 FINDINGS: [{lens: blind|edge|acceptance, sev: HIGH|MED|LOW, at: <file:line>, issue: <1 sentence>, fix: Patch|Defer|Decision}, ...]
 HIGH_COUNT: <n>
-NOTES: <1-2 sentences>
+NOTES: <1-2 sentences; cite the D-NNNN an objection or evidence concerns>
 ```
 - `APPROVE` — no `HIGH` finding and every AC satisfied in spirit.
 - `CHANGES` — ≥1 `HIGH` (or an AC not truly satisfied): the worker reworks the HIGH `Patch`

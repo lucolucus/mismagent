@@ -19,7 +19,8 @@ existing `architetture/*`.
 - **Trunk absent** (`architecture.md` or `code-rules.md` missing, or `gate` still
   `manual — TBD after the stack ADR`) → dispatch the **`mismagent-architect`** subagent for
   `$ARGUMENTS` with `DISPATCH: foundational`. Pass 1 returns `STACK_PROPOSAL` / `ARCH_PROPOSAL` /
-  `INFRA_QUESTIONS`: bring them to me to decide, then re-dispatch pass 2 to write the trunk and
+  `INFRA_QUESTIONS`: bring them to me to decide, record my choice in the feature's `decisions.md` (format:
+  `.agents/skills/mismagent-worker-composer/references/CLI.md`), then re-dispatch pass 2 to write the trunk and
   finalize the gate fields and the UI sides' `run` binding.
 - **Trunk present** → dispatch with `DISPATCH: feature`, the trunk and the model inputs; no pass 1.
   Tell me what is fixed and by which ADR. A foundational decision is reopened only if I ask — then

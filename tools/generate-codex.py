@@ -261,6 +261,13 @@ CODEX_LEGEND = (
     "their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto "
     "`spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config "
     "(`max_threads`, default 6) is the concurrency cap.\n"
+    "\n> **Recording duty (the caller's).** Whoever spawns a subagent is the **recorder**: the "
+    "challenger's debate and the user's `KILL`/`RESHAPE`/`PROCEED` choice, the user's answer to the "
+    "architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's "
+    "`NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — "
+    "each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: "
+    "`.agents/skills/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). "
+    "Subagents never write that file: they cite `D-NNNN` in their notes.\n"
 )
 
 

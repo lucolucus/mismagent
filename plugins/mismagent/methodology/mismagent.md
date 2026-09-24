@@ -10,8 +10,8 @@ example `profiles/example.md`) binds sides, paths, gates and branching.
 <output_dir>/
   profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
   decisions/ · architetture/        # the PROJECT trunk — decided once, amended explicitly
-  features/<feature>/               # born and thrown away with the feature
-    product-brief.md · tactical-model.md · building-blocks.yaml · UI/ · research/
+  features/<feature>/               # born with the feature; archived, never deleted
+    product-brief.md · tactical-model.md · building-blocks.yaml · decisions.md · UI/ · research/
     blocks/<ctx>/{todo,doing,done}/ · tasks/ · open-questions/ · proofs
 ```
 - **Only the architect writes the trunk**, except `context-map.md`, which the analyst amends (one map,
@@ -39,7 +39,8 @@ release. Nothing else stops for you.
 ## The rules the flow enforces
 1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. In a
    read-only harness mode, dispatch only read-only agents and materialize the pending files as the
-   first action once writes reopen.
+   first action once writes reopen. A non-obvious choice, its debate and who decided it →
+   `features/<feature>/decisions.md` (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`).
 2. **State = folder.** A block's state is its folder (`todo/doing/done`); only the worker-composer
    moves it and merges.
 3. **Re-entrance.** Every command re-reads the files and resumes at the first missing artifact; an

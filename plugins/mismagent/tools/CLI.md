@@ -13,6 +13,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 |---|---|
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}]}` — exit 1 if any |
 | `MM lint F` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
+| `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{id, from, to, path, git}` or `{refused}` |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
@@ -51,6 +52,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   integrated = any feature's `integrated/<from>.json` or `blocks/*/done/<from>.md`; an entry that is not `{check: <repo-relative path>, from: <block>}`
   is listed `LEGACY` (never executed). Then the block type's `## <type>` section of
   `<output_dir>/architetture/lessons-by-block-type.md` (struck `~~…~~` lessons skipped), and each
+  active decision notes (below), and each
   `--extra` file, under a first line `spec_hash: <h>`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
   never makes a proof stale. An id that is not a block (a pre-release group) has its
   `F/rework/<id>-*.md` files as its spec, and its pack is those files.
@@ -98,8 +100,81 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `spec.invariants` | each `INV-n` tag of the row's `invariants` appears in `## Tasks`; with untagged invariants, criteria ≥ invariants |
 | `spec.commands` | each `commands` entry appears in `## Tasks` |
 | `adr.checks` | every `enforced_by` entry of the ADRs the blocks resolve (as `pack`) is `{check: <repo-relative path>, from: <block>?}`, its `from` is a block of some feature's manifest, and the check exists in the repo → `architect`. A missing check is `deferred` while its `from` block is not integrated (project-wide), or — with no `from` — while a `scaffold` block is not in `done/` |
+| `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:` scope names a row of the manifest → `recorder` (who wrote the entry) |
 | `spikes.central_node` · `spikes.central_flag` | each open `[ ]` entry of the context map's `## Open spikes` with `owner: <this feature>` and `central: true` has a `type: spike` node carrying `central: true` |
 
 Not linted (judgment — the composer's readiness and the reviewers): whether a criterion is
 meaningful, whether pinned types are complete, the gate's discrimination, whether an ADR check is
 registered in the gate and discriminates (the verifier), the profile's bindings.
+
+## Decision notes — `F/decisions.md`
+
+The **why** of the feature: one entry per **non-obvious** choice (not per commit, finding or block),
+kept as the project's history. Not a gate, not state: `spec_hash` never reads it; a rule that must bind
+lives in the spec, manifest or an ADR. `F/decisions.md` is optional until a first such choice.
+
+**Who writes.** The **recorder** writes the entry when the choice is made — a writer never becomes
+the decider by writing. Build: the composer records a worker's `DECISIONS` on its return and
+completes `Debate`/`Result` during review/rework. Explore/model: the conductor records the
+challenger's debate and the user's choice at each checkpoint (`KILL`/`RESHAPE` included);
+`build-manifest` records an open question's answer before deleting `open-questions/<id>.md`.
+Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`.
+
+**Rules.** Ids `D-0001`… per feature, appended in order; a resumed return adds no duplicate. Once its
+block is integrated or its checkpoint closed an entry is closed. Exactly two edits are then allowed:
+`status: accepted` → `superseded` (when a **new** entry `Supersedes` it — a changed choice is always
+a new entry) and adding the `ADR:` backlink when the architect promotes it. Nothing else is edited. Nothing invented to fill a field:
+an incomplete choice stays an open question. Humans are named as declared in the session — never
+inferred from git (the profile's optional `people:` is an address book, not proof of approval); ask
+at the checkpoint if unknown. Agents: role + block (or attempt) + tier/model when known. A choice
+that changes structure, a contract, an invariant, a cross-cutting quality or is costly to reverse
+→ the **architect** promotes it to an ADR (`ADR:` link; the ADR cites `<feature> D-NNNN`). Features
+are archived, never deleted: so is this file. Out: transcripts, reasoning, attempt history, test
+dumps, ordinary findings, backlog, open questions, progress, approvals.
+
+**Format** — one physical line per field, ≤220 words per entry (URLs excluded), title ≤8 words:
+| field | required content (word cap) |
+|---|---|
+| `Meta` | `<ISO date>; scope: feature\|block:<id>\|boundary:<id>; status: accepted\|superseded[; sha: <commit>]` — sha when the choice concerns reviewed code |
+| `Question` | the problem and its decisive constraint (25) |
+| `Options` | 2–3 real alternatives and why each loses (40) |
+| `Hypothesis` | a testable prediction, stated before the check (25) |
+| `Check` | method, conditions, success criterion (30) |
+| `Result` | observation + a link to the evidence, or `untested`/`inconclusive` — <reason> (30) |
+| `Debate` | who argued what, the objection, the outcome; `none` (40) |
+| `Decision` | the choice, why, the **cost accepted** (35) |
+| `By` | `decided: <who>; recorded: <who>[; consulted: <who>]` |
+| `Docs` | 1–3 links (internal files, ADRs and tests count) |
+| `Revisit` | the observation that reopens it (20) |
+| `Confidence` · `Supersedes` · `ADR` | optional: `low\|medium\|high — <why>`, the why required (12) · the replaced `D-NNNN` · the ADR link (omit the field when none) |
+
+**Checked by `why check`** (exit 1, each error an `{id, rule}`; `MM lint` → `why.<rule>` → the
+recorder): heading `### D-NNNN · <title>` at column 0 (an indented or other-level `D-NNNN` heading,
+or a field line outside an entry, is an error, never skipped); known fields, one line each, none
+empty or missing; word caps; ids unique and ascending; `Meta` date, scope, status, keys; `Result`
+has a link unless `untested`/`inconclusive` with a reason; `By` has non-empty `decided:` and
+`recorded:`; `Docs` 1–3 links; `Confidence` level + reason; `ADR` is a link; local links exist;
+`Supersedes`/`superseded` pair up. **Judged by humans and reviewers** (never by the tool): whether
+the options are real, the hypothesis testable and stated first, the check discriminating, the
+evidence supports the result, the cost accepted honest, and the choice non-obvious enough to record.
+
+A green gate or a review supports a hypothesis; it does not prove the choice was the better one.
+`MM pack` carries, per block, `ID + Decision + Revisit + link` (`decisions.md#<GitHub anchor of the
+full heading>`, e.g. `#d-0007--standard-csv-parser`) of the accepted entries scoped to the
+feature, the block, the owners of the boundaries it consumes and the boundaries it touches — no
+transitive ones (more via `--extra`). Example (fictional):
+```markdown
+### D-0007 · Standard CSV parser
+- Meta: 2026-09-24; scope: block:import-csv; status: accepted; sha: a13b9c2
+- Question: How to read CSV fields that contain separators and line breaks?
+- Options: A split, fails on quoted fields; B standard parser; C extra library, unneeded features.
+- Hypothesis: The standard parser reads every required format without a new dependency.
+- Check: Run the agreed corpus, 24 fixtures incl. quoted separators and multiline fields; success = 24 exact matches.
+- Result: A 18/24; B 24/24; [CI run](https://ci.example.com/run/412).
+- Debate: worker/import-csv proposed B; code-review/import-csv objected on multiline; fixtures added, resolved.
+- Decision: B, it covers the agreed corpus; we accept supporting only the agreed dialect.
+- By: decided: mismagent-worker/import-csv (standard); recorded: worker-composer; consulted: Ada Example
+- Docs: [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180)
+- Revisit: A valid product file the parser cannot read.
+- Confidence: medium — the corpus is representative, not exhaustive.
+```

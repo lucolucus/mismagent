@@ -70,7 +70,7 @@ HEAD_SHA: <the sha judged>
 CHECKS: gate=✓/✗ ac-coverage=✓/✗ invariants=✓/✗ no-dup-contract=✓/✗ no-shadow=✓/✗ adr-enforced=✓/✗ filelist-match=✓/✗ render-check=✓/✗/n-a semantic-high=✓/✗/n-a
 FAILURES: [<check>: <command/excerpt/uncovered AC/ADR>, ...]
 DEFERRED: [<sev> <file:line> <issue>, ...]   # standard depth only
-NOTES: <1-2 sentences>
+NOTES: <1-2 sentences; cite the D-NNNN an objection or evidence concerns>
 ```
 `PASS` — all green. `FAIL` — any red, listed precisely (max 2 rework cycles). `SKIP` — cannot
 verify (empty diff, moved head, unattributable work, a gate step that does not finish) or a

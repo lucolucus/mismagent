@@ -32,3 +32,37 @@ It never guesses: a friction entry whose class is neither core nor profile is `u
 - The **gate is not run** (`gate` row is always `n/a`): running `./gradlew …` would write build
   output into the runs. Future work: copy the run to a temp dir and execute the profile's `gate`
   there, recording pass/fail and duration.
+
+# run.py — the headless build runner
+
+`run.py` re-invokes the worker-composer headless until the **tool** says the feature is finished,
+or a dollar cap is reached. Runner-side only: the core never depends on it. Stdlib only.
+
+```sh
+python3 bench/run.py --project ~/projects/mismagent-test/RegistratoreCassa6 --feature cassa \
+  --plugin-dir plugins/mismagent --total-usd 40 --per-firing-usd 8 [--model opus] \
+  [--prompt-file sim-user.md] [--integration integration/cassa] [--feature-dir <F>]
+python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated claude CLI, never the real one
+```
+
+- **Firings, serial.** `claude -p --plugin-dir <plugin> --output-format json --max-budget-usd
+  <min(per-firing, remaining)> "/mismagent:worker-composer <feature>"` in `--project`, the later ones
+  with `--resume <session_id>`, always with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`.
+  `--prompt-file` text is appended to the command (e.g. simulated-user rules).
+- **Cost** = the deltas of `total_cost_usd` (cumulative on resume). Missing, invalid or decreasing →
+  stop `cost-invalid`, never a silent zero. The cap follows the CLI's accounting, not the invoice.
+- **Minimum Claude Code: 2.1.277** — earlier versions report each invocation's own cost, not the
+  cumulative one, so the deltas would be wrong. `claude --version` is read at start; older or
+  unreadable → stop `cli-version` before any firing.
+- **When to stop** — after each firing it reads `mismagent.py status F --integration B` (`outcome`),
+  never the report text (also once before the first firing): `done` · `idle` (only work waiting on a
+  decision or an external condition) · `anomaly` · `no-progress` (two consecutive firings changed no
+  structural state: state folders, block files and manifest, `integrated/`, review proofs, `rework/`,
+  open questions, `pre-release.md`, spike evidence (content), the trees of the `block/*`/`spike/*` branch tips,
+  the uncommitted changes (`git status --porcelain` + content) of their worktrees — timestamps,
+  reports, logs, ledgers, `decisions.md` and bookkeeping commits ignored) · `budget` (total spent) ·
+  `cli-error` / `cli-version` / `status-error` (diagnostic, with the tail of the output). A firing that exhausted its
+  own budget continues while the total lasts.
+- **Output**: one JSON summary `{outcome, reason, firings, total_cost_usd, session_id, log:[{n,
+  cap_usd, cost_usd, subtype, is_error, status, progress}]}`; exit 0 on `done`/`idle`, else 1.
+- No timeout, no polling, no sleep, no automatic recovery: every doubt is a stop with its reason.

@@ -13,8 +13,7 @@ almost always `backlog/`). State **IS the folder** — no `status:` in the file.
 `methodology/mismagent.md`.
 
 > **Not the implementation-task writer:** the units of work are the **blocks**
-> (`blocks/<ctx>/<state>/<id>.md`). This skill writes only the two node kinds that are *not*
-> blocks.
+> (`blocks/<ctx>/<state>/<id>.md`).
 
 ## Template — `type: spike` node (unknown/research; from the context-map or a Defer)
 ```markdown
@@ -35,8 +34,10 @@ central: false          # true = an unproven capability the product stands on: t
 <what must exist to call it resolved: a decision in an ADR, a prototype, a measurement>
 
 ## Unblocks
-<ids of the blocks/tasks that depend on this spike>
+- <block-id>
 ```
+`## Unblocks` holds only `- <block-id>` lines (prose is ignored); empty until those blocks exist —
+`build-manifest` fills it.
 
 ### Closing a spike (protocol)
 An open spike **blocks** its consumers; close it like this, never by "deleting it":

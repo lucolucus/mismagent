@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.21.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.22.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -219,6 +219,11 @@ another feature's work for a gap in yours.
 > `what:`/`sources:`), `why append`, `lint --adrs`, a short form for requirement-derived decision notes.
 > No 3-wave cap on R0; the scaffold carries no domain; the profile no longer lists bounded contexts
 > (the context map is the only source); explicit base and integration branches.
+>
+> **v0.22.0:** the composer dispatches in the foreground and ends a firing only after every return is
+> handled (a headless run no longer loses a worker); per-block `after:` replaces `build_order` (tolerated
+> on legacy manifests); the pack carries open MED/LOW findings; `status` reports done/idle/work/anomaly;
+> `bench/run.py` re-invokes the composer headless until done or idle, with a cost cap.
 
 ## Going deeper
 

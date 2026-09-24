@@ -8,8 +8,7 @@ description: "mismAgent build: builds the block manifest \u2014 blocks in parall
 
 # Worker-Composer — the build loop
 
-You are a **thin coordinator**: you write **no code and no tests** (`mismagent-worker` does). You
-are the **only one that composes and moves state**. The design is `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/LOOP.md`;
+You are a **thin coordinator**: you write **no code and no tests** (`mismagent-worker` does). The design is `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/LOOP.md`;
 follow its procedure **literally**. **Build in parallel, integrate in series. In doubt, stop and
 ask** — never guess, never repair state by hand.
 
@@ -27,7 +26,7 @@ absolute paths.
 ## Inputs
 `F/building-blocks.yaml` (authoritative), the block files
 `F/blocks/<context>/{todo,doing,done}/<id>.md` (read-only spec; the folder is the state), and the
-profile (`<output_dir>/profile.md`: sides, gates, branching, `build:`). Work in **one
+profile (`<output_dir>/profile.md`). Work in **one
 checkout of `B`** and commit `F` there: state and code
 share one line. The project is not a git repository → **ask the user** before
 `git init`.
@@ -43,8 +42,8 @@ with the gap named (regenerate, never hand-patch; `recorder` below). Then the ju
 - a **high-value block with no `tests_nl`** → ask the user;
 - the gate is **executable and discriminating**: `MM proof check F gate <side> --gate "<gate>"
   --gate-files <gate_files>` fresh → accept. Stale or absent on a built
-  side → a worker re-runs the red-green probe and records it with `MM proof record F gate <side>
-  --gate "<gate>" --gate-files <gate_files>`; a greenfield side owes it at the scaffold. No
+  side → a worker re-runs the red-green probe and records it with `MM proof record`, same
+  arguments; a greenfield side owes it at the scaffold. No
   `gate_files` in the profile → ask the user for them (a profile edit);
 - a gate step guarding only released versions, on a side not yet released → the profile's
   `gate_after_release`; a slow or hanging step → `/mismagent-architect` (a strategy, never a wait);
@@ -55,8 +54,8 @@ with the gap named (regenerate, never hand-patch; `recorder` below). Then the ju
 - greenfield with no `scaffold` block and a non-runnable gate → `/skill:mismagent-build-manifest`; a UI
   side with a manual `ui_render_check` and no `run` binding → the profile.
 
-Bounce targets: `/skill:mismagent-build-manifest`, `/mismagent-architect`, **the profile** (a targeted
-field edit with the user), or `recorder` (`why.*`: in the build, you fix `F/decisions.md` and re-lint).
+Bounce targets: `/skill:mismagent-build-manifest`, `/mismagent-architect`, **the profile** (a field edit
+with the user), or `recorder` (`why.*`: in the build, you fix `F/decisions.md` and re-lint).
 
 **2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is integrated and done).
 `MM move F <id> --to doing`, its worktree, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
@@ -66,16 +65,17 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
 **3 · Build.** `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
-(`--extra` the authored dev-architecture doc, if the profile points to one), the
-block-type skill, the worktree and the side's gate. Never assemble context by hand.
+(it carries open MED/LOW findings as advisory notes; `--extra` the authored dev-architecture doc, if
+any), the block-type skill, the worktree and the side's gate. Never assemble context by hand.
+**Every dispatch** (worker, rework, reviewer) runs in the **foreground** (never background), parallel ones in one message.
 
 **4 · As each worker returns.**
 - `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, a signature, a key, a declared guarantee) →
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
-  `build-manifest` folds it in and deletes the file);
+  `build-manifest` folds it in and deletes the file). An answer needing no code → `MM move F <id>
+  --to doing`, then step 5 on its branch and worktree, reviewed against the current spec;
 - `BLOCKED` → report its cause; it stays in `doing/`;
-- `READY-FOR-REVIEW` → record its `DECISIONS` (below), queue it for step 5 with its `DECISIONS` /
-  `DEVIATIONS`.
+- `READY-FOR-REVIEW` → queue it for step 5 with its `DECISIONS`/`DEVIATIONS`.
 
 **5 · Integrate, one block at a time.**
 1. `MM diff-range --base B --head block/<id>` (run in the repo) → `range`, `head_sha`. A `ui` block on
@@ -95,11 +95,11 @@ block-type skill, the worktree and the side's gate. Never assemble context by ha
    files.
 5. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair, on a boundary the block touches, whose both sides are in the candidate.
-   **Green** → `MM compose promote F <id>`, then finish as in step 0. **Red** → `MM compose abort F
-   <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.
+   **Green** → `MM compose promote F <id>`, record every cycle's `DECISIONS` (links now resolve),
+   finish as in step 0. **Red** → `MM compose abort F <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.
    A refused promote → `MM compose abort F <id>` and start step 5 again from the new tip.
 
-**6 · Report and end.** The next firing starts again from 0.
+**6 · Report and end** — once every dispatch has returned and been handled.
 
 Commit `F`'s changes at the end of the firing — never between `compose start` and `compose promote`.
 
@@ -120,7 +120,7 @@ binds them and overrides rows).
 
 Worker modifiers, in order, capped at `deep`: `model_hint: deep`
 → deep; **rework cycle 2** (the second `rework/<id>-*.md`) → +1 — already at `deep`, tell the worker
-it is the last cycle and to re-read both findings files. Cycle 1 keeps the tier.
+it is the last cycle and to re-read both findings files.
 
 ## Review depth by block type
 | block type | depth | review |
@@ -164,13 +164,11 @@ reviewer.
 ## Report (~30 lines)
 Blocks integrated and done, parked, blocked and why; this
 firing's dispatches with tier and depth; spikes; the next release and what is left on its path; open
-`pre-release.md` lines; the next action. Point the user to `/skill:mismagent-board`. Under `/loop`, use a
-long fallback interval; don't poll.
+`pre-release.md` lines; the next action. Point the user to `/skill:mismagent-board`.
 
 ## Invariants
 1. Only you compose (`MM compose`) and move state (`MM move`; `ok: false` = nothing moved, read
-   `refused`). Workers write code in their worktrees:
-   never state, never merges, never another side.
+   `refused`).
 2. **No merge or push onto the base branch** without the user's explicit request.
 
 ## pi execution notes (generated — how to run the waves on this harness)

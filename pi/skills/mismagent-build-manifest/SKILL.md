@@ -10,12 +10,11 @@ description: "mismAgent model movement. Derives building-blocks.yaml and its sta
 
 Emits `<output_dir>/features/<feature>/building-blocks.yaml` — the worker-composer's only input. You
 author only the YAML; `MM manifest render F` (`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`,
-`F` = the feature folder) renders one block file per row — never write or patch one by hand. The
+`F` = the feature folder) renders one block file per row — never hand-patch one (a legacy manifest: rule 22). The
 manifest is a **consequence of the model**: every field has a reader.
 
-**Before writing or regenerating, read `references/manifest-schema.md`** (in this skill's folder):
-it is the normative shape of the YAML and of the block files, and the per-type standard each block
-must meet.
+**First read `references/manifest-schema.md`** (this skill's folder): the normative YAML, block
+files and per-type standard.
 
 ## Input
 - `features/<feature>/tactical-model.md` (aggregates, invariants, commands, events);
@@ -83,7 +82,8 @@ must meet.
 
 ## Structure — waves, owners, releases
 12. **Waves:** the scaffold at `0`; boundary owners before their consumers; consumers of a
-    wave in parallel, width sized to `capacity`.
+    wave in parallel, width sized to `capacity`. Other order (e.g. the composition-root owner before
+    the UIs) → `after:` on the later block.
 13. **Scaffold (greenfield only):** a side whose gate cannot run yet gets one `type: scaffold` block,
     `wave: 0`, no boundary, no `tests_nl`, **no domain** (no invariant, no shared type); its acceptance is the side's gate green on the empty
     skeleton. It also wires the UI-test setup when `ui_render_check` is automated and satisfies the
@@ -111,25 +111,25 @@ must meet.
 20. **Central risks are wave-0 spikes:** every `central: true` spike of the context-map (and every
     risk the architect flagged) has a `type: spike` node with `central: true` — set the flag on the
     tactical-modeler's node, never emit a second one; only a risk with no node gets one, via
-    `write-task`.
+    `write-task`. Fill each spike's `## Unblocks` with `- <block-id>` lines.
 
 ## Coherence and regeneration
 21. **Reconcile before emitting:** check your pins against profile, `architecture.md` and the ADRs.
     A contradiction is resolved **with the user** and the losing artifact amended in the same pass.
-22. **Regeneration is incremental.** Re-running refreshes the YAML from the current model, then
+22. **Regeneration is incremental.** Refresh the YAML from the current model, then
     `MM manifest render F` (it keeps state folders and unchanged files); elicited `tests_nl` stay; ask
-    only about new or changed blocks; report the delta (added / changed / unchanged).
-23. **Un-parking:** fold the user's answer to a parked block into its spec, record the answer and
+    only about new or changed blocks; report the delta. A **legacy**
+    manifest (`MM lint` → `mode: legacy`) is never force-rendered: update the YAML and only the
+    affected block files.
+23. **Un-parking:** fold the user's answer into the parked block's spec (22), record answer and
     why in `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`; decider: the user), then delete its
-    `open-questions/<block-id>.md` — regeneration is what clears it. A non-obvious R0 cut or
-    `tests_nl` choice is recorded the same way.
+    `open-questions/<block-id>.md`. A non-obvious R0 cut or `tests_nl` choice is recorded the same way.
 
 ## Output
-- `building-blocks.yaml` — authoritative; `boundaries:` stays a first-class section.
-- the block files — rendered by the tool, status-less (the folder is the state).
-- no other task list: the human reads the blocks live with `/skill:mismagent-board` (read-only).
+`building-blocks.yaml` (authoritative; `boundaries:` first-class) and the rendered, status-less
+block files — no other task list (the human reads them with `/skill:mismagent-board`).
 
-Close with `MM manifest render F` then `MM lint F`: blocking — fix every gap in the YAML, re-render.
+Close with `MM manifest render F` (rendered mode only) then `MM lint F`: blocking — fix every gap in the YAML.
 
 ## Outcome
 Blocks per type (and the scaffold), boundaries, the releases (R0's blocks and its

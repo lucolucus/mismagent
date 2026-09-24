@@ -692,6 +692,7 @@ def coverage(row, tasks):
 
 # ---- manifest render: the block files are a projection of building-blocks.yaml ---------------------
 BODY_FIELDS = ("what", "sources", "tests_nl", "notes")  # rendered in the body, not the frontmatter
+ORDER_FIELDS = ("after",)  # build order, not spec: out of the block file and of spec_hash
 SLUG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 
 
@@ -746,7 +747,7 @@ def render_block(feat, b):
         missing += [m for _, m in coverage(b, [str(x) for x in tests])]
     fm = ["---", "id: %s" % yaml_scalar(i)]
     for k, v in b.items():
-        if k in BODY_FIELDS or k == "id" or v is None:
+        if k in BODY_FIELDS or k in ORDER_FIELDS or k == "id" or v is None:
             continue
         if isinstance(v, list) and v and not any(isinstance(x, (dict, list)) for x in v):
             fm += ["%s:" % k] + ["  - %s" % yaml_scalar(x) for x in v]
@@ -846,6 +847,37 @@ def from_status(feat, frm):
     return None
 
 
+def manifest_mode(feat):
+    """"rendered" when any row has `what:` (its block files are `manifest render`'s projection);
+    else "legacy" (hand-written block files: render checks off, never forced to render)."""
+    return "rendered" if any("what" in b for b in feat.blocks) else "legacy"
+
+
+def dep_cycles(feat):
+    """[[id, …, id]] — cycles of the "waits for" graph: a block waits for the owners of the
+    boundaries it consumes and for its `after:` blocks."""
+    edges = {}
+    for i in feat.row:
+        waits = {str((feat.bnd.get(c) or {}).get("owner")) for c in feat.consumes(i)} | set(after_of(feat, i))
+        edges[i] = sorted(x for x in waits if x in feat.row and x != i)
+    color, stack, out = {}, [], []
+
+    def visit(i):
+        color[i] = 1
+        stack.append(i)
+        for x in edges[i]:
+            if color.get(x) == 1:
+                out.append(stack[stack.index(x):] + [x])
+            elif not color.get(x):
+                visit(x)
+        stack.pop()
+        color[i] = 2
+    for i in sorted(edges):
+        if not color.get(i):
+            visit(i)
+    return out
+
+
 def lint(feat):
     gaps, deferred = [], []
 
@@ -914,7 +946,25 @@ def lint(feat):
         if bd.get("contract_test") not in ("invariant-test", "consumer-driven"):
             gap("boundary.contract_test", i,
                 "contract_test %r is not invariant-test | consumer-driven" % bd.get("contract_test"))
-    files, rendered = feat.files(), any("what" in b for b in feat.blocks)
+    if "build_order" in feat.manifest:  # read by nothing; tolerated (deferred) on a legacy manifest
+        msg = "build_order is read by nothing: order a block with `after: [block-id]`"
+        if manifest_mode(feat) == "rendered":
+            gap("manifest.build_order", "build_order", msg)
+        else:
+            deferred.append({"rule": "manifest.build_order", "where": "build_order", "until": "the manifest is rendered", "note": msg})
+    for b in feat.blocks:
+        i, v = str(b.get("id")), b.get("after")
+        if v is None:
+            continue
+        if not isinstance(v, list):
+            gap("after.block", i, "after %r is not a list of block ids" % (v,))
+            continue
+        for x in v:
+            if str(x) == i or str(x) not in feat.row:
+                gap("after.block", i, "after %r is not another block id" % (x,))
+    for cyc in dep_cycles(feat):
+        gap("after.cycle", " → ".join(cyc), "a cycle of after/boundary dependencies: nothing in it can ever be ready")
+    files, rendered = feat.files(), manifest_mode(feat) == "rendered"
     for i, locs in files.items():
         if i not in feat.row:
             gap("blockfile.orphan", locs[0][2], "block file with no manifest row")
@@ -1119,7 +1169,7 @@ def spec_hash(feat, bid):
         return h.hexdigest()
     locs = feat.files().get(bid) or _raise(UsageError("block %s has no block file" % bid))
     h.update(read(locs[0][2]).encode())
-    h.update(json.dumps(feat.row[bid], sort_keys=True).encode())
+    h.update(json.dumps({k: v for k, v in feat.row[bid].items() if k not in ORDER_FIELDS}, sort_keys=True).encode())
     touched, adrs = deps(feat, bid)
     for bd in touched:
         h.update(json.dumps(bd, sort_keys=True).encode())
@@ -1189,6 +1239,10 @@ def cmd_status(a):
             add("doing_without_worktree", bid, "in doing/, not integrated, no worktree on %s%s" % (PREFIX, bid))
         if locs[0][0] == "done" and not feat.finishable(bid):
             add("done_unwelded", bid, "in done/ but not integrated or a boundary it touches is not welded")
+    for i, st, fm, _, _ in feat.nodes():
+        if fm.get("type") == "spike" and str(fm.get("central")).lower() == "true" and st == "doing" \
+                and not spike_dir_state(feat, repo, i):
+            add("doing_without_worktree", i, "spike in doing/, no spikes/%s.md, no worktree on spike/%s" % (i, i))
     for br, p in sorted(worktrees(repo).items()):
         if not valid_worktree(p):
             add("missing_worktree", br, "worktree %s of %s is registered but its directory is gone" % (p, br))
@@ -1206,7 +1260,8 @@ def cmd_status(a):
             stale = True
         if stale:
             add("stale_review_proof", i, "the spec changed after the review of %s" % rec.get("sha"))
-    return emit({"ok": not out, "anomalies": out}, 1 if out else 0)
+    res, work, waiting = outcome(feat, out, repo)
+    return emit({"ok": not out, "anomalies": out, "outcome": res, "work": work, "waiting": waiting}, 1 if out else 0)
 
 
 def lint_adrs(adir):
@@ -1247,17 +1302,34 @@ def lint_adrs(adir):
 def cmd_lint(a):
     if bool(a.adrs) == bool(a.feature_dir):
         raise UsageError("lint takes F, or --adrs <dir> alone")
-    gaps, deferred = lint_adrs(a.adrs) if a.adrs else lint(Feature(a.feature_dir))
-    return emit({"ok": not gaps, "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
-
-
-def cmd_ready(a):
+    if a.adrs:
+        gaps, deferred = lint_adrs(a.adrs)
+        return emit({"ok": not gaps, "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
     feat = Feature(a.feature_dir)
+    gaps, deferred = lint(feat)
+    return emit({"ok": not gaps, "manifest": manifest_mode(feat), "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
+
+
+UNBLOCKS_LINE = re.compile(r"^-[ \t]+([A-Za-z0-9_][A-Za-z0-9_.-]*)[ \t]*$")  # a full `- <id>` line; prose ignored
+
+
+def spike_unblocks(body):
+    return {m.group(1) for m in (UNBLOCKS_LINE.match(l) for l in board.section(body, "unblocks").splitlines()) if m}
+
+
+def after_of(feat, bid):
+    """The row's `after:` ids (a malformed value is lint's `after.block`, read here as none)."""
+    v = feat.row.get(bid, {}).get("after") or []
+    return [str(x) for x in v] if isinstance(v, list) else []
+
+
+def ready_state(feat):
+    """ONE computation, shared by `ready` and `status`'s outcome."""
     rel = feat.manifest.get("releases")
     names = list(rel) if isinstance(rel, dict) else []
     names += sorted({str(b.get("release")) for b in feat.blocks if b.get("release")} - set(names),
                     key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)])
-    spikes = [(i, set(re.findall(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", board.section(body, "unblocks"))), st, fm)
+    spikes = [(i, spike_unblocks(body), st, fm)
               for i, st, fm, body, _ in feat.nodes() if fm.get("type") == "spike" and st != "done"]
     ready, excluded = [], []
     scaffolds = [str(b.get("id")) for b in feat.blocks if b.get("type") == "scaffold"
@@ -1271,23 +1343,103 @@ def cmd_ready(a):
             continue
         waiting = [str((feat.bnd.get(c) or {}).get("owner")) for c in feat.consumes(bid)]
         waiting = [o for o in waiting if not feat.integrated(o)]
+        before = [x for x in after_of(feat, bid) if not feat.integrated(x)]
         blocking = [s[0] for s in spikes if bid in s[1]]
         if os.path.isfile(os.path.join(feat.dir, "open-questions", bid + ".md")):
             excluded.append({"id": bid, "reason": "parked: open-questions/%s.md" % bid})
             continue
-        if blocking or waiting:
+        if blocking or waiting or before:
             excluded.append({"id": bid, "reason": "open spike: " + ", ".join(blocking) if blocking
-                             else "owner not integrated: " + ", ".join(waiting)})
+                             else "owner not integrated: " + ", ".join(waiting) if waiting
+                             else "after, not integrated: " + ", ".join(before)})
             continue
         r = str(b.get("release")) if b.get("release") else None
         ready.append(((b.get("wave") or 0, names.index(r) if r in names else -1, n),
                       {"id": bid, "type": b.get("type"), "wave": b.get("wave"), "release": r}))
     finishable = [str(b.get("id")) for b in feat.blocks
                   if feat.state_of(str(b.get("id"))) == "doing" and feat.finishable(str(b.get("id")))]
-    return emit({"ready": [r for _, r in sorted(ready, key=lambda x: x[0])], "excluded": excluded,
-                 "finishable": finishable,
-                 "open_spikes": [{"id": i, "state": st, "central": str(fm.get("central")).lower() == "true",
-                                  "unblocks": sorted(u)} for i, u, st, fm in spikes]})
+    return {"ready": [r for _, r in sorted(ready, key=lambda x: x[0])], "excluded": excluded,
+            "finishable": finishable,
+            "open_spikes": [{"id": i, "state": st, "central": str(fm.get("central")).lower() == "true",
+                             "unblocks": sorted(u)} for i, u, st, fm in spikes]}
+
+
+def cmd_ready(a):
+    return emit(ready_state(Feature(a.feature_dir)))
+
+
+PRE_LINE = re.compile(r"^\s*[-*]\s+\[([ xX~])\]\s+(.*\S)\s*$")
+
+
+def open_findings(feat):
+    """[(line number, text)] — the open `- [ ]` lines of F/pre-release.md (`[x]` fixed, `[~]` waived)."""
+    path = os.path.join(feat.dir, "pre-release.md")
+    lines = read(path).splitlines() if os.path.isfile(path) else []
+    return [(n, m.group(2)) for n, m in ((n, PRE_LINE.match(l)) for n, l in enumerate(lines, 1)) if m and m.group(1) == " "]
+
+
+# lint rules whose gap makes a terminal outcome false (nothing can become ready, or work is unseen)
+TERMINAL_LINT = ("ids.present", "ids.unique", "consumes.boundary", "boundary.owner", "after.block", "after.cycle",
+                 "blockfile.exists", "blockfile.unique", "blockfile.orphan", "spikes.central_node",
+                 "spikes.central_flag")
+
+
+def spike_dir_state(feat, repo, sid):
+    """A spike node in doing/: "evidence" (F/spikes/<id>.md: waits on the user's closure) ·
+    "running" (its spike/<id> worktree exists) · None (neither: an anomaly)."""
+    if os.path.isfile(os.path.join(feat.dir, "spikes", sid + ".md")):
+        return "evidence"
+    return "running" if worktree_of(repo, "spike/" + sid) else None
+
+
+def outcome(feat, anomalies, repo=None):
+    """(outcome, work, waiting) for a runner: anomaly · done · work (something the composer can do
+    now) · idle (only work waiting on a decision or an external condition). Never guesses `done`:
+    before `done`/`idle`, the TERMINAL_LINT gaps are appended to `anomalies` as `lint_gap`."""
+    if anomalies:
+        return "anomaly", [], []
+    r, work, waiting = ready_state(feat), [], []
+    work += ["ready: " + x["id"] for x in r["ready"]] + ["finishable: " + x for x in r["finishable"]]
+    for b in feat.blocks:
+        bid = str(b.get("id"))
+        if feat.state_of(bid) == "doing" and not feat.integrated(bid):
+            work.append("in progress: %s (doing, not integrated)" % bid)
+    waiting += ["%s: %s" % (x["id"], x["reason"]) for x in r["excluded"]]
+    for p in sorted(glob.glob(os.path.join(feat.dir, "open-questions", "*.md"))):
+        if os.path.basename(p)[:-3] not in feat.row or feat.state_of(os.path.basename(p)[:-3]) != "todo":
+            waiting.append("open question: open-questions/%s" % os.path.basename(p))
+    for i, st, fm, _, _ in feat.nodes():
+        if st == "done":
+            continue
+        kind = fm.get("type")
+        central = kind == "spike" and str(fm.get("central")).lower() == "true"
+        if central and st in ("backlog", "todo"):
+            work.append("central spike to run: %s" % i)
+        elif central and st == "doing" and spike_dir_state(feat, repo, i) != "evidence":
+            work.append("central spike running: %s (no spikes/%s.md yet)" % (i, i))
+        elif kind == "cleanup" and st in ("todo", "doing"):
+            work.append("cleanup: %s (%s)" % (i, st))
+        else:
+            waiting.append("%s %s in %s: waits on %s" % (kind or "node", i, st, "the user's closure decision"
+                                                         if kind == "spike" else "its ready_when condition"))
+    blocks_of = {}
+    for b in feat.blocks:
+        blocks_of.setdefault(str(b.get("release")), []).append(str(b.get("id")))
+    for n, text in open_findings(feat):
+        rel = text.split("·", 1)[0].strip()
+        if all(feat.state_of(x) == "done" for x in blocks_of.get(rel, [])):
+            work.append("pre-release.md line %d (%s blocks done)" % (n, rel))
+        else:
+            waiting.append("pre-release.md line %d: %s has blocks not done" % (n, rel))
+    if work:
+        return "work", work, waiting
+    anomalies += [{"kind": "lint_gap", "id": g["rule"], "detail": "%s: %s" % (g["where"], g["gap"])}
+                  for g in lint(feat)[0] if g["rule"] in TERMINAL_LINT]
+    if anomalies:
+        return "anomaly", [], []
+    if waiting or any(feat.state_of(str(b.get("id"))) != "done" for b in feat.blocks):
+        return "idle", [], waiting or ["blocks not done and nothing actionable"]
+    return "done", [], []
 
 
 def cmd_move(a):
@@ -1328,6 +1480,10 @@ def cmd_pack(a):
         for p in sorted(glob.glob(os.path.join(feat.dir, "rework", a.id + "-*.md"))):
             add("Rework %s" % os.path.basename(p)[:-3], p, read(p))
     pack_notes(feat, a.id, add)
+    found = open_findings(feat) if a.id in feat.row else []
+    if found:  # advisory: never in spec_hash, never a contract change
+        add("Open findings (advisory: deferred MED/LOW of the feature; they change no contract)",
+            os.path.join(feat.dir, "pre-release.md"), "\n".join("- line %d: %s" % (n, t) for n, t in found))
     for x in a.extra or []:
         if not os.path.isfile(x):
             raise UsageError("--extra %s not found" % x)

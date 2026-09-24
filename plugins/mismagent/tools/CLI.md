@@ -13,8 +13,8 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 
 | Command | Output |
 |---|---|
-| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}]}` — exit 1 if any |
-| `MM lint F` · `MM lint --adrs <dir>` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
+| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…]}` — exit 1 if any anomaly |
+| `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
 | `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
@@ -34,16 +34,27 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   **welded** when its owner and every consumer are integrated. A block is **finishable** when it is
   integrated and every boundary it touches (consumed, owned, or listed as consumer) is welded.
 - **status** anomalies: `doing_without_worktree` (in `doing/`, not integrated, no worktree on
-  `block/<id>` — a worktree whose directory is gone does not count) · `missing_worktree` (a
+  `block/<id>` — a worktree whose directory is gone does not count; a `central` spike node in `doing/`
+  with neither `F/spikes/<id>.md` nor a worktree on `spike/<id>`) · `missing_worktree` (a
   registered worktree whose directory is gone; `id` = its branch) · `leftover_candidate` (any candidate metadata, half-written metadata, candidate
   directory or `candidate/*` worktree — a kept `candidate/<id>` branch alone is evidence, not an
   anomaly) · `integrated_not_on_line` (the recorded `sha` is not an ancestor of `B`) ·
   `stale_review_proof` (its `spec_hash` differs from the current one) · `done_unwelded` (in `done/`,
-  not finishable). Read-only.
+  not finishable) · `lint_gap` (checked only before `done`/`idle`: a `lint` gap of rule `ids.*`,
+  `consumes.boundary`, `boundary.owner`, `after.*`, `blockfile.exists|unique|orphan`, `spikes.*` —
+  `id` = the rule). Read-only. **outcome** (for a runner; computed with `ready`'s rules): `anomaly`
+  (any of the above) · `work` — something to do now (`work` lists it): a `ready` or `finishable`
+  block, a block in `doing/` not integrated, a `central` spike in `backlog/`/`todo/`, or in `doing/` with its worktree but no evidence yet, a cleanup node
+  in `todo/`/`doing/`, an open `pre-release.md` line whose release has every block in `done/` ·
+  `idle` — only work waiting on a decision or an external condition (`waiting` lists it: parked
+  blocks and what they hold up, an open question, a spike not yet closed — a `central` one only once its evidence exists —, a cleanup's `ready_when`)
+  · `done` — every block in `done/`, no open `pre-release.md` line, no spike/cleanup node outside
+  `done/`, no open question. `ready: []` alone is never `idle`.
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
-  `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done`,
-  every consumed boundary's owner integrated. Order: `wave`, then release (the `releases:` keys in
+  `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
+  only full `- <block-id>` lines count, prose is ignored —, every consumed boundary's owner and every
+  `after:` block **integrated** (not necessarily `done`). Order: `wave`, then release (the `releases:` keys in
   order, then undeclared labels in natural order), then manifest order. The cap is the composer's.
 - **move**: blocks `todo→doing`, `doing→todo`, `doing→done` (only if finishable); spike/cleanup
   nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`. A
@@ -75,8 +86,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   is listed `LEGACY` (never executed). Then the block type's `## <type>` section of
   `<output_dir>/architetture/lessons-by-block-type.md` (struck `~~…~~` lessons skipped), and each
   active decision notes (below), and each
+  **open finding** of `F/pre-release.md` (each `- [ ]` line with its line number; `[x]` fixed and
+  `[~]` waived left out; advisory, a block's pack only), and each
   `--extra` file, under a first line `spec_hash: <h>`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
-  never makes a proof stale. An id that is not a block (a pre-release group) has its
+  never makes a proof stale; `after:` is build order, not spec: out of the row's hash and of the rendered file. An id that is not a block (a pre-release group) has its
   `F/rework/<id>-*.md` files as its spec, and its pack is those files.
 - **diff-range**: `range` = `<merge_base>..<head_sha>` (≡ `B...X`): files the line gained after the
   branch was cut never show as deleted by the block.
@@ -125,7 +138,9 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `spec.invariants` | each `INV-n` of the row's `invariants` is named in `## Tasks`, matched by number: `INV[-_ ]?n` (case-insensitive; `INV-1` ≠ `INV-12`), so `test_INV_12_…` counts; with untagged invariants, criteria ≥ invariants |
 | `spec.commands` | each `commands` entry appears in `## Tasks` |
 | `adr.checks` | every `enforced_by` entry of the ADRs the blocks resolve (as `pack`) is `{check: <repo-relative path>, from: <block>?}`, its `from` is a block of some feature's manifest, and the check exists in the repo → `architect`. A missing check is `deferred` while its `from` block is not integrated (project-wide), or — with no `from` — while a `scaffold` block is not in `done/` |
-| `render.input` · `blockfile.render` | when any row has `what:` (a rendered manifest), for every row: its render inputs are complete and its file equals `manifest render`'s output |
+| `render.input` · `blockfile.render` | `manifest: rendered` (some row has `what:`), for every row: its render inputs are complete and its file equals `manifest render`'s output. `legacy` (no row has `what:`): hand-written files, no render check — never forced to render |
+| `after.block` · `after.cycle` | `after` is a list of other block ids; no cycle in the "waits for" graph (`after` ∪ the owners of consumed boundaries) |
+| `manifest.build_order` | no `build_order:` (read by nothing; order with `after:`) |
 | `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:` scope names a row of the manifest → `recorder` (who wrote the entry) |
 | `spikes.central_node` · `spikes.central_flag` | each open `[ ]` entry of the context map's `## Open spikes` with `owner: <this feature>` and `central: true` has a `type: spike` node carrying `central: true` |
 
@@ -144,8 +159,9 @@ kept as the project's history. Not a gate, not state: `spec_hash` never reads it
 lives in the spec, manifest or an ADR. `F/decisions.md` is optional until a first such choice.
 
 **Who writes.** The **recorder** writes the entry when the choice is made — a writer never becomes
-the decider by writing. Build: the composer records a worker's `DECISIONS` on its return and
-completes `Debate`/`Result` during review/rework. Explore/model: the conductor records the
+the decider by writing. Build: during review/rework the composer only **collects** a worker's `DECISIONS`, the reviewers'
+objections and the rework's evidence; it **records** them once the block is promoted (its links then
+resolve on the line), `Debate`/`Result` already filled from what it collected. Explore/model: the conductor records the
 challenger's debate and the user's choice at each checkpoint (`KILL`/`RESHAPE` included);
 `build-manifest` records an open question's answer before deleting `open-questions/<id>.md`.
 Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`. The recorder
@@ -153,9 +169,10 @@ writes each returned entry to a file and adds it with `MM why append F/decisions
 (never a hand edit of the file); an allowed edit below is the same command with the whole updated
 entry under its own id.
 
-**Rules.** Ids `D-0001`… per feature, appended in order; a resumed return adds no duplicate. Once its
-block is integrated or its checkpoint closed an entry is closed; until then the recorder may complete
-its `Debate`/`Result`. Exactly two edits are then allowed:
+**Rules.** Ids `D-0001`… per feature, appended in order; a resumed return adds no duplicate. After
+it is appended (build: after the promote; explore/model: at the checkpoint), new evidence on the same
+choice — a later rework, a pre-release fix — only completes its `Debate`/`Result` (same command, same
+id). Exactly two other edits are allowed:
 `status: accepted` → `superseded` (when a **new** entry `Supersedes` it — a changed choice is always
 a new entry) and adding the `ADR:` backlink when the architect promotes it. Nothing else is edited. Nothing invented to fill a field:
 an incomplete choice stays an open question. Humans are named as declared in the session — never

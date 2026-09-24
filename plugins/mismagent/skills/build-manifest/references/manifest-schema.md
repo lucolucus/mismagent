@@ -1,6 +1,6 @@
 # The manifest schema and the block-file standard (NORMATIVE)
 
-Read by `build-manifest` before writing or regenerating. `MM lint` and the worker-composer read
+Read by `build-manifest`. `MM lint` and the worker-composer read
 exactly these fields: anything a consumer needs that is not here **does not exist** — extend this
 file first, then its readers.
 
@@ -28,6 +28,7 @@ blocks:
     consumes_rm: [<read-model id>…]     # ui
     triggers: [<Command>…]              # ui
     model_hint: deep                    # OPTIONAL, any type; omit otherwise
+    after: [<block-id>…]                # OPTIONAL: waits for these to be integrated
     release: R0 | R1 | …                # REQUIRED except scaffold
     notes: "<explicit cut / where a prescribed surface went>"   # OPTIONAL
 boundaries:                     # FIRST-CLASS section
@@ -40,7 +41,6 @@ boundaries:                     # FIRST-CLASS section
     contract_test: invariant-test | consumer-driven
 releases:                       # R0 first
   R0: { goal: "<what the user can do>", launch: "<what opens: screen / command>", blocks: [<id>…] }
-build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]   # derived
 ```
 
 ## The block files — `blocks/<context>/todo/<id>.md`

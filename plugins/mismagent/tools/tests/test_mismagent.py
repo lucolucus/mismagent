@@ -961,6 +961,164 @@ class TestBoard(Base):
         self.assertIn("integrated, closing pending", board.PAGE)
 
 
+class TestV022(Base):
+    """v0.22: manifest mode, `Unblocks` lines, `after:`, open findings in the pack, status outcome."""
+
+    def ready(self):
+        return self.run_tool("ready", self.feat, expect=0)
+
+    def status(self, expect=0):
+        return self.run_tool("status", self.feat, "--integration", "feature/shop", expect=expect)
+
+    def finish(self, bid):
+        self.run_tool("move", self.feat, bid, "--to", "doing", expect=0)
+        self.integrate(bid)
+        return self.run_tool("move", self.feat, bid, "--to", "done")
+
+    def test_legacy_manifest_is_linted_as_legacy_and_a_real_pin_change_stales_only_its_blocks(self):
+        out = self.run_tool("lint", self.feat, expect=0)
+        self.assertEqual(out["manifest"], "legacy")          # hand-written files: never forced to render
+        self.review("agg-order", "feature/shop")
+        self.review("svc-report", "feature/shop")
+        self.write_feature(MANIFEST.replace("sku:string · qty:int", "sku:string · qty:int · note:string"))
+        self.assertEqual(self.run_tool("lint", self.feat, expect=0)["manifest"], "legacy")
+        stale = {(x["kind"], x["id"]) for x in self.status(expect=1)["anomalies"]}
+        self.assertEqual(stale, {("stale_review_proof", "agg-order")})   # svc-report touches no b-order
+        shutil.rmtree(os.path.join(self.feat, "blocks"))
+        self.put("building-blocks.yaml", RENDERED)
+        self.run_tool("manifest", "render", self.feat, expect=0)
+        self.assertEqual(self.run_tool("lint", self.feat, expect=0)["manifest"], "rendered")
+
+    def test_unblocks_reads_only_full_id_lines(self):
+        self.put("tasks/be/backlog/s.md", "---\nid: s\ntype: spike\n---\n# S\n\n## Unblocks\n"
+                 "Blocks derived from the R1 rows; ids are assigned by build-manifest.\n- agg-order\n"
+                 "- rm-orders because it reads the view\n  - `svc-order`\n")
+        self.assertEqual(self.ready()["open_spikes"][0]["unblocks"], ["agg-order"])
+
+    def test_after_waits_for_integration_not_done(self):
+        self.write_feature(MANIFEST.replace("    consumes: [b-rm]\n", "    consumes: [b-rm]\n    after: [svc-order]\n"))
+        self.run_tool("lint", self.feat, expect=0)
+        self.finish("scaffold-app")
+        for bid in ("agg-order", "rm-orders"):
+            self.finish(bid)
+        excl = {e["id"]: e["reason"] for e in self.ready()["excluded"]}
+        self.assertEqual(excl["svc-report"], "after, not integrated: svc-order")
+        self.run_tool("move", self.feat, "svc-order", "--to", "doing", expect=0)
+        self.integrate("svc-order")                   # integrated, still in doing: enough
+        self.assertIn("svc-report", [r["id"] for r in self.ready()["ready"]])
+
+    def test_after_refs_and_cycles_with_boundary_dependencies(self):
+        m = (MANIFEST.replace("    related_adrs: [0001]\n", "    related_adrs: [0001]\n    after: [svc-order]\n")
+             .replace("    commands: [BuildReport]\n", "    commands: [BuildReport]\n    after: [ghost, svc-report]\n"))
+        self.write_feature(m + "build_order: [[scaffold-app], [agg-order]]\n")
+        gaps, out = self.gaps()
+        self.assertEqual(out["manifest"], "legacy")
+        rules = [(g["rule"], g["where"]) for g in out["gaps"]]
+        self.assertIn(("after.block", "svc-report"), rules)
+        self.assertEqual(sum(1 for g in out["gaps"] if g["rule"] == "after.block"), 2)   # ghost + itself
+        self.assertIn(("after.cycle", "agg-order → svc-order → agg-order"), rules)   # after + consumes
+        self.assertNotIn(("manifest.build_order", "build_order"), rules)       # legacy: tolerated
+        self.assertIn("manifest.build_order", [d["rule"] for d in out["deferred"]])
+
+    def test_after_is_order_not_spec(self):
+        h = self.spec_hash("svc-report")
+        self.write_feature(MANIFEST.replace("    consumes: [b-rm]\n", "    consumes: [b-rm]\n    after: [svc-order]\n"))
+        self.assertEqual(self.spec_hash("svc-report"), h)
+
+    def test_pack_carries_open_findings_only(self):
+        h = self.spec_hash("svc-order")
+        self.put("pre-release.md", "# Pre-release\n\n- [ ] R1 · agg-order · MED · a.py:3 · share one TurnoCorrente · v · d\n"
+                 "- [x] R0 · agg-order · LOW · a.py:9 · fixed naming · v · d\n"
+                 "- [~] R0 · agg-order · LOW · a.py:1 · waived thing · v · d · waived: ok\n")
+        md = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        self.assertIn("## Open findings (advisory", md)
+        self.assertIn("source: `.mismagent/features/shop/pre-release.md`", md)
+        self.assertIn("- line 3: R1 · agg-order · MED · a.py:3 · share one TurnoCorrente", md)
+        for gone in ("fixed naming", "waived thing"):
+            self.assertNotIn(gone, md)
+        self.assertEqual(self.spec_hash("svc-order"), h)
+
+    def test_status_outcome_never_a_false_done_or_idle(self):
+        self.assertEqual(self.status()["outcome"], "work")                    # the scaffold is ready
+        self.finish("scaffold-app")
+        self.run_tool("move", self.feat, "agg-order", "--to", "doing", expect=0)
+        self.block_wt("agg-order")
+        out = self.status()
+        self.assertEqual((self.ready()["ready"], out["outcome"]), ([], "work"))   # ready=[] is not idle
+        self.run_tool("move", self.feat, "agg-order", "--to", "todo", expect=0)
+        self.put("open-questions/agg-order.md", "which currency?\n")
+        out = self.status()
+        self.assertEqual(out["outcome"], "idle")                               # only a user answer is left
+        self.assertTrue(any("parked" in w for w in out["waiting"]))
+        os.remove(os.path.join(self.feat, "open-questions", "agg-order.md"))
+        self.run_tool("move", self.feat, "agg-order", "--to", "doing", expect=0)   # un-parked: reuses its worktree
+        self.commit(os.path.join(self.tmp, "wt", "agg-order"), "src/a.txt", "a\n")
+        self.review("agg-order")
+        self.compose("start", "agg-order", expect=0)
+        self.compose("promote", "agg-order", expect=0)
+        for bid in ("svc-order", "rm-orders", "svc-report"):
+            self.run_tool("move", self.feat, bid, "--to", "doing", expect=0)
+            self.integrate(bid)
+        for bid in ("agg-order", "svc-order", "rm-orders", "svc-report"):
+            self.run_tool("move", self.feat, bid, "--to", "done", expect=0)
+        self.assertEqual(self.status()["outcome"], "done")
+        self.put("pre-release.md", "- [ ] R1 · rm-orders · MED · a.py:1 · x · v · d\n")
+        self.assertEqual(self.status()["outcome"], "work")                     # R1 is done: its group runs
+        self.put("pre-release.md", "- [~] R1 · rm-orders · MED · a.py:1 · x · v · d · waived: ok\n")
+        self.put("tasks/be/backlog/s.md", "---\nid: s\ntype: spike\n---\n# S\n")
+        self.assertEqual(self.status()["outcome"], "idle")                     # a spike waits on a decision
+        self.put("tasks/be/backlog/s.md", "---\nid: s\ntype: spike\ncentral: true\n---\n# S\n")
+        self.assertEqual(self.status()["outcome"], "work")
+        os.remove(os.path.join(self.feat, "tasks", "be", "backlog", "s.md"))
+        self.put("tasks/be/backlog/c.md", "---\nid: c\ntype: cleanup\nready_when: \"no-consumer-uses:X\"\n---\n")
+        self.assertEqual(self.status()["outcome"], "idle")                     # waits on its condition
+        os.remove(os.path.join(self.feat, "tasks", "be", "backlog", "c.md"))
+        self.assertEqual(self.status()["outcome"], "done")
+        self.put("integrated/ghost.json", json.dumps({"sha": "0" * 40}))
+        self.assertEqual(self.status(expect=1)["outcome"], "anomaly")
+
+
+    def all_done(self):
+        self.finish("scaffold-app")
+        blocks = ("agg-order", "svc-order", "rm-orders", "svc-report")
+        for bid in blocks:
+            self.run_tool("move", self.feat, bid, "--to", "doing", expect=0)
+            self.integrate(bid)
+        for bid in blocks:
+            self.run_tool("move", self.feat, bid, "--to", "done", expect=0)
+        self.assertEqual(self.status()["outcome"], "done")
+
+    def test_terminal_outcome_runs_lint_first(self):
+        self.all_done()
+        self.put("context-map.md", "# Map\n\n## Open spikes\n- [ ] sync: q — owner: shop — central: true\n",
+                 base=self.out)                                                  # a central spike, no node
+        out = self.status(expect=1)
+        self.assertEqual(out["outcome"], "anomaly")
+        self.assertIn(("lint_gap", "spikes.central_node"), {(x["kind"], x["id"]) for x in out["anomalies"]})
+
+    def test_cycle_or_missing_scaffold_file_is_an_anomaly_not_idle(self):
+        self.write_feature(MANIFEST.replace("    related_adrs: [0001]\n", "    related_adrs: [0001]\n    after: [svc-order]\n"))
+        self.finish("scaffold-app")
+        out = self.status(expect=1)
+        self.assertEqual((out["outcome"], out["anomalies"][0]["id"]), ("anomaly", "after.cycle"))
+        self.write_feature(MANIFEST, skip=("scaffold-app",))
+        shutil.rmtree(os.path.join(self.feat, "integrated"))
+        out = self.status(expect=1)
+        self.assertIn(("lint_gap", "blockfile.exists"), {(x["kind"], x["id"]) for x in out["anomalies"]})
+
+    def test_central_spike_in_doing_is_idle_only_with_evidence(self):
+        self.all_done()
+        self.put("tasks/be/doing/s.md", "---\nid: s\ntype: spike\ncentral: true\n---\n# S\n")
+        out = self.status(expect=1)                                            # no evidence, no worktree
+        self.assertEqual((out["outcome"], out["anomalies"][0]["kind"]), ("anomaly", "doing_without_worktree"))
+        wt = os.path.join(self.tmp, "wt", "spike-s")
+        sh(self.repo, "git", "worktree", "add", "-q", "-b", "spike/s", wt, "feature/shop")
+        self.assertEqual(self.status()["outcome"], "work")                     # the prototype is running
+        sh(self.repo, "git", "worktree", "remove", "--force", wt)
+        self.put("spikes/s.md", "evidence\n")
+        self.assertEqual(self.status()["outcome"], "idle")                     # waits on the user's closure
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 

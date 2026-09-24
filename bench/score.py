@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 
 PLUGINS_JSON = os.path.expanduser("~/.claude/plugins/installed_plugins.json")
-SKIP_DIRS = {".git", ".gradle", "build", "node_modules", ".idea", ".kotlin", ".serena", ".claude",
+SKIP_DIRS = {".git", ".worktrees", ".gradle", "build", "node_modules", ".idea", ".kotlin", ".serena", ".claude",
              ".mismagent", "bin", "obj", "dist", "out", "target", "generated", "__pycache__",
              ".venv", "venv", "gradle", ".vscode"}
 LANG = {".kt": "Kotlin", ".java": "Java", ".scala": "Scala", ".py": "Python", ".cs": "C#",

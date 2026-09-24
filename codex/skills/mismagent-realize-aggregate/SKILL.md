@@ -36,8 +36,8 @@ once — a parallel predicate that never touches the confined fields is for the 
 ## The check you carry
 - **One invariant test per declared invariant**; they are the aggregate's contract test.
 - **Translate the user's `tests_nl`** into those tests — they encode the user's intent, not yours.
-- **Test names start with the invariant tag `INV-n `** — no brackets or other characters illegal in
-  the stack's test names — so per-block coverage is matched mechanically.
+- **Test names carry the invariant's tag** — canonical `INV-n` in the docs, spelled as the
+  dev-architecture fixes for the stack (e.g. `INV_12`) — so coverage is matched by its number.
 - **A concurrency claim needs a real contention test:** an invariant or AC that says "under
   concurrency" / "simultaneous" is proven by N concurrent callers released together against the same
   instance, failing before the synchronization lands and passing after — never by sequential calls.

@@ -23,7 +23,6 @@ reviewer — steps 1–8 in full, plus step 9.
 
 **No deep probing:** the gate, the diff, the tests and the checks — no decompiling, no exploratory
 harnesses. A suspected HIGH you cannot confirm → report it as suspected, with what confirms it.
-A gate step that does not finish → `SKIP` naming it (a strategy question).
 
 **Scaffold:** a `type: scaffold` block is accepted by the gate alone; if handed one, run the gate:
 green → PASS, red → FAIL.
@@ -56,7 +55,8 @@ green → PASS, red → FAIL.
    - **not yet applicable** → NOTES only; a **LEGACY** entry is never executed → `adr-enforced`
      red, NOTE "legacy enforced_by — migrate at write-adr";
    - discursive ADRs are the code-review's.
-7. **Invariants and errors (a block exposing a write):** each invariant AC has a test; the failure
+7. **Invariants and errors (a block exposing a write):** each invariant AC has a test (its `INV-n`
+   tag in any stack spelling, e.g. `INV_12`, matched by number); the failure
    side too — the declared error cases and the command's rejection criteria. Missing → FAIL.
 8. **Render check (`ui` blocks):** per the side's `ui_render_check` — automated: it ran green in
    step 2; manual: `render-proof/<block-id>/` from `run-app-smoke` naming `HEAD_SHA`. Absent or

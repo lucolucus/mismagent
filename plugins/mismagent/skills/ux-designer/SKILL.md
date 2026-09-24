@@ -25,7 +25,7 @@ material the profile declares (`materials.ui`, `materials.sample`; `none` → st
 1. Read what exists and what the user expects.
 2. Propose 1–3 concepts (layout, flow, components).
 3. Converge with the user on one; a non-obvious choice → an entry of the feature's `decisions.md`
-   (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`).
+   (format: `${CLAUDE_PLUGIN_ROOT}/tools/CLI.md`).
 4. Write `<output_dir>/features/<feature>/UI/ux-proposal.md`: screens, components, states, and for
    each screen the **data views** it needs (→ read-model `view_shape`) and the commands it triggers.
    Each surface is assigned to a screen, so build-manifest can land it or declare it cut.

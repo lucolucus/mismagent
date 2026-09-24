@@ -30,8 +30,8 @@ the real app** and recording what you see — clipped or invisible controls are 
    - **re-render** — interact and watch the view actually update.
 3. **Record the evidence** in `<output_dir>/features/<feature>/render-proof/<block-id>/`: a screenshot per
    checklist item where the platform allows capture (browser tooling, OS screenshot), otherwise a
-   dated observation note per item — **what was checked, what was seen**. Evidence is written even
-   when everything passes (the proof of green is the point, not just the bugs), plus a
+   dated observation note per item — **what was checked, what was seen**; a live process or a
+   window title alone proves nothing. Evidence is written even when everything passes, plus a
    `sha.txt` holding the sha you ran (`rev-parse HEAD` in the worktree): evidence for another
    sha is no proof.
 4. **Verdict per block:**

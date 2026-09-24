@@ -9,9 +9,9 @@ A thin, optional early run of the worker-composer's readiness step. Its verdict 
 the one gate lives in the worker-composer.
 
 ## Run
-`MM lint <output_dir>/features/<feature>/`, where `MM` = `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"`.
+`MM lint <output_dir>/features/<feature>/`, where `MM` = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py"`.
 It prints `{ok, gaps:[{rule, where, gap, bounce_to}], deferred}` — structural checks only (the list:
-`$CLAUDE_PLUGIN_ROOT/tools/CLI.md`). Judgment items (a high-value block with no `tests_nl`, the
+`${CLAUDE_PLUGIN_ROOT}/tools/CLI.md`). Judgment items (a high-value block with no `tests_nl`, the
 gate's red-green proof, stale spikes) you only **name** as reminders.
 
 ## Outcome

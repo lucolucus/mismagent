@@ -13,8 +13,7 @@ almost always `backlog/`). State **IS the folder** — no `status:` in the file.
 `methodology/mismagent.md`.
 
 > **Not the implementation-task writer:** the units of work are the **blocks**
-> (`blocks/<ctx>/<state>/<id>.md`). This skill writes only the two node kinds that are *not*
-> blocks, under a different tree (`tasks/<side>/<state>/`).
+> (`blocks/<ctx>/<state>/<id>.md`).
 
 ## Template — `type: spike` node (unknown/research; from the context-map or a Defer)
 ```markdown
@@ -35,8 +34,10 @@ central: false          # true = an unproven capability the product stands on: t
 <what must exist to call it resolved: a decision in an ADR, a prototype, a measurement>
 
 ## Unblocks
-<ids of the blocks/tasks that depend on this spike>
+- <block-id>
 ```
+`## Unblocks` holds only `- <block-id>` lines (prose is ignored); empty until those blocks exist —
+`build-manifest` fills it.
 
 ### Closing a spike (protocol)
 An open spike **blocks** its consumers; close it like this, never by "deleting it":
@@ -50,8 +51,9 @@ An open spike **blocks** its consumers; close it like this, never by "deleting i
    `features/<feature>/spikes/<id>.md` until the user decides; the decision is recorded by
    `write-adr` (or folded into the consuming blocks' ACs by `build-manifest`), then the composer
    moves the node to `done/`; in
-   `model`/`explore` — where no orchestrator exists — whoever leads the movement in session closes it,
-   noting it in the outcome. (Not a violation of "state = the folder": the monopolist rule holds inside build.)
+   `explore`/`model` the conductor closes it mechanically once the user's answer is recorded: the
+   context-map entry `[x]` with its `D-NNNN`/ADR reference, the node (if any) to `done/` with its
+   `resolution:`. An answer never replaces the evidence a closure criterion demands.
 
 ## Template — `type: cleanup` node (removal of a deprecated published symbol, post-migration)
 ```markdown

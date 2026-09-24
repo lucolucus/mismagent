@@ -19,7 +19,9 @@ Mapping (verified against pi.dev/docs/latest + the earendil-works/pi subagent ex
   methodology   mismagent.md        -> pi/AGENTS.md  (pi reads AGENTS.md from the project cwd)
   package.json                      -> pi package manifest (skills+prompts, `pi install` alternative)
 
-Usage: python3 tools/generate-pi.py   (from the repo root)
+Usage: python3 tools/generate-pi.py   [--out DIR]   (from the repo root; --out: tests)
+Paths into the shipped skills are written as "@@MISMAGENT_SKILLS@@/..." (quoted); install.sh
+rewrites them to the absolute installed skills directory, so they work from any cwd.
 """
 import json
 import os
@@ -49,7 +51,16 @@ def wrapper_commands():
 WRAPPERS = None  # filled in main() — needed by adapt()
 
 
-COMPOSER_DIR = ".agents/skills/mismagent-worker-composer"
+# Every path into the shipped skills is written against this placeholder; install.sh replaces it
+# with the ABSOLUTE skills directory of the installation (quoted in commands), so a command works
+# from any cwd — a worker's worktree included — and never depends on a shell variable.
+SKILLS = "@@MISMAGENT_SKILLS@@"
+COMPOSER_DIR = SKILLS + "/mismagent-worker-composer"
+PLUGIN_ROOTS = ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT", "<plugin root>")  # braces first
+TOOL_PATHS = (("/tools/board.py", SKILLS + "/mismagent-board/scripts/board.py"),
+              ("/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py"),
+              ("/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md"),
+              ("/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md"))
 
 
 # ---- text adaptation (deterministic, reviewable rules) -----------------------
@@ -60,22 +71,20 @@ def adapt(text, keep_args=False):
     text = re.sub(r"/mismagent:([a-z0-9-]+)",
                   lambda m: ("/mismagent-%s" if m.group(1) in WRAPPERS
                              else "/skill:mismagent-%s") % m.group(1), text)
-    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/board.py"',
-                        ".agents/skills/mismagent-board/scripts/board.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/board.py",
-                        ".agents/skills/mismagent-board/scripts/board.py")
-    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"', COMPOSER_DIR + "/scripts/mismagent.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md")
+    for root in PLUGIN_ROOTS:  # the plugin's tools -> their installed place (quotes kept as written)
+        for src, dst in TOOL_PATHS:
+            text = text.replace(root + src, dst)
+    for src, dst in TOOL_PATHS:  # relative from methodology/ in the plugin
+        text = text.replace("`.." + src + "`", "`" + dst + "`")
     text = text.replace("(Agent tool)", "(the `subagent` tool)")
     text = text.replace("(Agent tool,", "(the `subagent` tool,")
     if not keep_args:  # pi substitutes $ARGUMENTS in prompt templates, not in skills
         text = text.replace("$ARGUMENTS", "<the argument this skill was invoked with>")
     # the profile templates ship inside the explore skill's references/
-    text = text.replace("`PROFILE.md`", "`.agents/skills/mismagent-explore/references/PROFILE.md`")
+    text = text.replace("`../PROFILE.md`", "`PROFILE.md`")  # relative from profiles/ in the plugin
+    text = text.replace("`PROFILE.md`", "`" + SKILLS + "/mismagent-explore/references/PROFILE.md`")
     text = text.replace("`profiles/example.md`",
-                        "`.agents/skills/mismagent-explore/references/profile-example.md`")
+                        "`" + SKILLS + "/mismagent-explore/references/profile-example.md`")
     return text
 
 
@@ -173,7 +182,7 @@ tools: read, grep, find, ls, bash
 ---
 
 %sYou are a fresh-context reviewer: you did not see the development, so you don't trust — you hunt.
-Read `.agents/skills/mismagent-code-review/SKILL.md` and execute it **exactly** on the block's
+Read `@@MISMAGENT_SKILLS@@/mismagent-code-review/SKILL.md` and execute it **exactly** on the block's
 diff named in your task (block id, context, diff scope). Use bash only to inspect (`git diff` /
 `git log` / `git show`, the gate commands read-only) — never to write. Return the skill's finding
 triage as your final message.
@@ -219,14 +228,14 @@ COMPOSER_PI_NOTES = """
 - **Parallel consumers in a wave — use the tool's parallel mode**: one
   `{agent: "mismagent-worker", task: ...}` entry per ready block, each task carrying `block_id`,
   `block_type`, `context`, the block-type skill names (e.g.
-  `mismagent-realize-aggregate` — the worker reads them from `.agents/skills/<name>/SKILL.md`),
+  `mismagent-realize-aggregate` — the worker reads them from `@@MISMAGENT_SKILLS@@/<name>/SKILL.md`),
   the path of the block's rich `<id>.md` spec and the side's gate commands. The extension caps a
   call at 8 tasks (4 concurrent) — size waves accordingly. Ask each worker to end with the RESULT
   handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to step 4
   as usual.
 - **Review (step 5)**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
   (structural), then `{agent: "mismagent-reviewer", task: <block id + diff scope>}` — a generated
-  glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
+  glue agent whose only job is to load `@@MISMAGENT_SKILLS@@/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
 - **Model routing on pi:** bind the tiers to your pi models in the profile's
@@ -305,8 +314,10 @@ PI_SETUP = (
     "additionally need pi's official `subagent` example extension (pi repo, "
     "`packages/coding-agent/examples/extensions/subagent/` — symlink `index.ts` + `agents.ts` "
     "into `~/.pi/agent/extensions/subagent/`), always called with `agentScope: \"both\"`. "
-    "Verify: `/skill:mismagent-explore` autocompletes. Alternative global install "
-    "(skills+prompts only): `pi install <path-to-mismagent-repo>/pi`."
+    "The installer anchors every tool path to the absolute installed skills directory (re-run it "
+    "after moving the project). Verify: `/skill:mismagent-explore` autocompletes. Alternative "
+    "global install (skills+prompts only): `pi/install.sh --package <dir>` writes an anchored pi "
+    "package into `<dir>`, then `pi install <dir>`."
 )
 
 PI_LEGEND = (
@@ -316,7 +327,7 @@ PI_LEGEND = (
     "(`/mismagent-<name>`) that dispatch the matching subagent definition in `.pi/agents/` "
     "through the `subagent` tool (`agentScope: \"both\"`; every spawn is a fresh isolated "
     "context — the guarantee the review relies on). The board script lives at "
-    "`.agents/skills/mismagent-board/scripts/board.py`. The worker-composer's parallel waves map "
+    "`" + SKILLS + "/mismagent-board/scripts/board.py`. The worker-composer's parallel waves map "
     "onto the subagent tool's parallel mode (max 8 tasks per call, 4 concurrent — see its "
     "skill's pi execution notes); `mismagent-reviewer` is generated glue hosting the "
     "`mismagent-code-review` skill in fresh context. pi has no per-agent reasoning knob — to "
@@ -338,7 +349,7 @@ def convert_methodology():
 
 
 # ---- the generated tree must be self-contained ---------------------------------
-CLAUDE_ONLY = ("$CLAUDE_PLUGIN_ROOT", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
+CLAUDE_ONLY = ("CLAUDE_PLUGIN_ROOT", "<plugin root>", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
                "/mismagent-cross-deploy:")
 
 
@@ -361,6 +372,12 @@ def check_tree():
             for link in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
                 if not re.match(r"^[a-z]+:", link) and not os.path.exists(os.path.join(d, link)):
                     bad.append("%s: link %s does not resolve" % (rel, link))
+            for m in re.finditer(re.escape(SKILLS) + r"/([A-Za-z0-9_./-]+)", text):
+                p = m.group(1).rstrip(".")
+                if text[m.start() - 1:m.start()] not in ('"', "`"):
+                    bad.append("%s: %s/%s is not quoted (a path may hold spaces)" % (rel, SKILLS, p))
+                if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
+                    bad.append("%s: path %s/%s not shipped" % (rel, SKILLS, p))
             for p in re.findall(r"\.agents/skills/([A-Za-z0-9_./-]+)", text):
                 p = p.rstrip(".")
                 if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
@@ -388,19 +405,50 @@ def write_manifest():
     write(os.path.join(OUT, "package.json"), json.dumps(manifest, indent=2) + "\n")
 
 
-INSTALL_SH = """#!/bin/sh
-# GENERATED by tools/generate-pi.py — installs the mismAgent pi packaging into a project.
+INSTALL_SH = r"""#!/bin/sh
+# GENERATED by tools/generate-pi.py — installs the mismAgent pi packaging.
+#   install.sh <project-root>     skills, prompts, agents and AGENTS.md into the project
+#   install.sh --package <dir>    an anchored pi package (skills + prompts) for `pi install <dir>`
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
-TARGET=${1:?usage: install.sh <project-root>}
+usage() { echo "usage: install.sh <project-root> | install.sh --package <dir>" >&2; exit 2; }
+check_path() {  # the path is written quoted into commands: refuse what would break the quoting
+  case "$1" in *'"'*|*'`'*|*'$'*|*'\'*) echo "install.sh: the path must not contain a quote, backtick, dollar or backslash" >&2; exit 2 ;; esac
+}
+anchor() {  # every path into the skills -> this installation's absolute skills directory
+  ESC=$(printf '%s' "$1" | sed 's/[|&\\]/\\&/g')
+  shift
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    sed "s|@@MISMAGENT_SKILLS@@|$ESC|g" "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  done
+}
+case "${1:-}" in
+  "") usage ;;
+  --with-cross-deploy) usage ;;
+  --package)
+    [ -n "${2:-}" ] && [ -z "${3:-}" ] || usage
+    mkdir -p "$2"
+    PKG=$(cd "$2" && pwd)
+    check_path "$PKG"
+    rm -rf "$PKG/skills" "$PKG/prompts"
+    cp -R "$HERE/skills" "$HERE/prompts" "$HERE/package.json" "$PKG/"
+    anchor "$PKG/skills" "$PKG"/skills/mismagent-*/SKILL.md "$PKG"/skills/mismagent-*/references/*.md \
+      "$PKG"/prompts/mismagent-*.md
+    echo "mismAgent pi package written to $PKG — install it with: pi install \"$PKG\""
+    exit 0 ;;
+esac
 case "${2:-}" in
   "") ;;
   --with-cross-deploy)
     echo "install.sh: --with-cross-deploy was removed in v0.18.0 (cross-deploy is no longer a module;" \
       "keep such contracts as project files). Run: install.sh <project-root>" >&2
     exit 2 ;;
-  *) echo "usage: install.sh <project-root>" >&2; exit 2 ;;
+  *) usage ;;
 esac
+mkdir -p "$1"
+TARGET=$(cd "$1" && pwd)
+check_path "$TARGET"
 
 mkdir -p "$TARGET/.agents/skills" "$TARGET/.pi/prompts" "$TARGET/.pi/agents"
 # skills retired in v0.18.0: remove them from an upgraded installation
@@ -421,13 +469,20 @@ if [ -f "$TARGET/AGENTS.md" ]; then
 else
   cp "$HERE/AGENTS.md" "$TARGET/AGENTS.md"
 fi
+anchor "$TARGET/.agents/skills" "$TARGET"/.agents/skills/mismagent-*/SKILL.md \
+  "$TARGET"/.agents/skills/mismagent-*/references/*.md "$TARGET"/.pi/prompts/mismagent-*.md \
+  "$TARGET"/.pi/agents/mismagent-*.md "$TARGET/AGENTS.md" "$TARGET/AGENTS.mismagent.md"
 echo "mismAgent (pi) installed into $TARGET — verify with /skill:mismagent-explore."
 echo "[agent] steps need pi's subagent example extension (AGENTS.md, Setup) with agentScope 'both'."
 """
 
 
 def main():
-    global WRAPPERS
+    global WRAPPERS, OUT
+    if sys.argv[1:2] == ["--out"] and len(sys.argv) == 3:  # tests: generate elsewhere
+        OUT = os.path.abspath(sys.argv[2])
+    elif sys.argv[1:]:
+        sys.exit("usage: generate-pi.py [--out DIR]")
     WRAPPERS = wrapper_commands()
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)

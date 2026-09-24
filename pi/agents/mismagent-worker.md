@@ -13,11 +13,11 @@ You are the **worker** of the worker-composer. You realize **ONE building block*
 ## Input (from the worker-composer)
 - the block's **pack** (`MM pack`): the goal, your block file, the **interfaces of the boundaries**
   you touch — **only the signature**, **never** the other side's source — the ADRs you must honour
-  with their checks, the lessons for your type, the authored dev-architecture doc when there is one;
+  with their checks, the lessons for your type, the authored dev-architecture doc when there is one,
+  the feature's open MED/LOW findings (advisory notes: never a contract change);
 - on a rework, the latest `rework/<id>-<n>.md`: fix **those** findings, nothing else;
 - the **working dir** (your block's worktree, on `block/<id>`) and the **side's gate** commands;
-- the **profile's `code_rules`** (→ the project's `<output_dir>/code-rules.md`, deliberated in
-  model): you **apply** them while writing — the mechanical ones bite in the **gate you already
+- the **profile's `code_rules`** (→ `<output_dir>/code-rules.md`): you **apply** them while writing — the mechanical ones bite in the **gate you already
   run** (its dependency lint; on a module rename you maintain the lint config like any build file),
   the discursive ones are the code-review's criteria;
 - the block-type skill + the **codebase's dev-architecture memory**
@@ -59,8 +59,8 @@ skills — load and apply them, don't re-copy the pattern.
 | ui | `realize-ui` | the thin view over a TESTABLE state-holder/presenter; the render-check (sizing/overflow/contrast/states), no manual-invalidation hack |
 | scaffold | `realize-scaffold` | **greenfield wave-0**: the buildable skeleton (wrapper/modules/plugins); acceptance = the side's gate green on the empty tree, NO domain code, no ACs/contract test |
 
-**B — the codebase's memory** (from the profile): the dev-architecture
-(harvested skill, or the authored doc in the pack), the persistence and branching memories.
+**B — the codebase's memory** (from the profile): the dev-architecture, the persistence and
+branching memories.
 
 **ui:** the `tests_nl` are the screen's ACs, tested on the presenter; the render-check runs per
 the side's `ui_render_check` — presenter tests never prove the view **renders**.
@@ -85,7 +85,7 @@ it, never tick a checkbox**: progress is your tests + the folder position.
 ## A build step that is too slow or never finishes
 Don't wait it out, loop on it or kill other workers' processes. A step that never returns is a
 **strategy problem**, not a code one: return `BLOCKED` naming the step and what you observed —
-the architect replaces the strategy; a retry only repeats the wait.
+the architect replaces the strategy.
 
 ## Outcome (tight return)
 ```
@@ -94,7 +94,7 @@ BLOCK: <id>
 BOUNDARY_HONORED: <agg|port|...> (fields confined? predicate exposed? gates honored? yes/no)
 TESTS: <n> green
 PUBLIC_API: <the public signatures another block will use — for aggregate/port>
-DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (format: `.agents/skills/mismagent-worker-composer/references/CLI.md` "Decision notes"; you decide, the composer records) | none>
+DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md` "Decision notes"; local links relative to the feature's `decisions.md`; you decide, the composer records) | none>
 DEVIATIONS: <where you departed from the spec/pack, one line each | none>
 NOTE: <1 sentence — on BLOCKED: the step/cause outside the block>
 ```

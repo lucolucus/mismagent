@@ -2,7 +2,7 @@
 
 > The core (agents, skills, flow) is generic; this file is the **binding to your project**. Agents
 > read *"the profile"* and never name a project. The active profile lives in
-> **`<output_dir>/profile.md`** (default `.mismagent/profile.md`); `.agents/skills/mismagent-explore/references/profile-example.md` is a
+> **`<output_dir>/profile.md`** (default `.mismagent/profile.md`); `@@MISMAGENT_SKILLS@@/mismagent-explore/references/profile-example.md` is a
 > filled-in fictional instance.
 >
 > **One profile per project** — the junction point, not a per-feature artifact. Features
@@ -11,7 +11,7 @@
 >
 > **Filled in at two moments, both on the first feature:**
 > - **Bootstrap** (explore creates it if missing): output dir, language, validation mode, materials,
->   capacity, contexts, sides.
+>   capacity, sides. The bounded contexts live only in `context-map.md`.
 > - **Post-architect** (model): `gate` and its companions, `run`, `dev_architecture`, the definition
 >   files — knowable only after the stack ADR. Until then: `gate: "manual — TBD after the stack ADR"`.
 
@@ -23,13 +23,11 @@ ubiquitous_language:
   lang: <it|en|...>             # the language the domain speaks — canonical names are never translated
 validation_mode: normal         # or greenfield_from_requirements: the deliverable is (re)built from the
                                 # stated requirements ONLY — no prior implementation is ground truth.
-                                # explore asks if it does not surface.
 materials:                      # what source material EXISTS; `none` is an answer — no skill hunts
   sample: <path | none>         # domain PDFs/screenshots (analyst, researcher, challenger, ux-designer)
   ui: <path | none>             # pre-existing mockups (ux-designer, architect)
 capacity: <team & hours>        # e.g. "2 devs, ~6h/week" or "full-agentic" — the architect and
                                 # build-manifest size stack, architecture and waves on it.
-                                # explore asks if it does not surface.
 ```
 
 ## Project definition files (written by the architect)
@@ -58,8 +56,9 @@ sides:
                                 # power is proven red-green (at the scaffold on greenfield); the
                                 # worker-composer refuses a gate without a fresh proof.
     gate_files: [<glob>…]       # REQUIRED whenever `gate` is set: the files defining the side's
-                                # build, modules, tests and registered checks (repo-relative, `**`
-                                # allowed). They key the gate proof: a change to them makes it stale.
+                                # build, modules, tests and registered checks — stable inputs, never
+                                # generated files (repo-relative, `**` allowed). They key the gate
+                                # proof: a change to them makes it stale.
     gate_verify: "<commands>"   # optional: `gate` + the stack's re-run switch (no cached test phase); verifier and candidate run it
     gate_after_release: "<steps>" # checks that protect RELEASED versions (e.g. migrations from
                                 # released data). Kept out of `gate` until the side's first release, when
@@ -71,7 +70,8 @@ sides:
     ui_render_check: "<mechanism>"  # UI sides only: how a `ui` block proves it RENDERS — an automated
                                 # smoke/screenshot test folded into the gate, or
                                 # "manual run-the-app (recorded)". none otherwise.
-    run: "<command + port>"     # UI sides only: how to launch the side locally (run-app-smoke).
+    run: "<launch command>"     # UI sides only: how to launch the side (run-app-smoke); its port only
+                                # if it serves one.
                                 # REQUIRED when ui_render_check is manual. Pinned by the architect
                                 # BEFORE any scaffold: a contract the wave-0 scaffold satisfies.
 ```
@@ -104,10 +104,6 @@ build:
 people: ["<name> — <role>"]   # names for decision notes' `By:`; never proof of approval
 ```
 
-## Domain bounded contexts
-- `<Context1>`, `<Context2>`, … — only contexts with a domain language of their own. A cross-cutting
-  concern (sync, caching, auth) is an NFR or a spike, not a bounded context.
-
 ## Boundaries
 - Every boundary is a consumer-owned port + its consumer-driven contract test, on a fake then the
   real adapter. How a boundary travels over a network (API specs, event schemas, generated types) is
@@ -115,6 +111,8 @@ people: ["<name> — <role>"]   # names for decision notes' `By:`; never proof o
 - **authorship:** reads consumer-driven, writes producer-driven; the architect arbitrates.
 
 ## Branching
+- **base:** `<the branch releases land on — it must exist; never assume main>`
+- **integration:** `<the build's line, cut from base; default integration/<feature>>`
 - **tool:** `<script/command, or "manual">`
 - **commit:** `"<message format>"`
 - **model:** `<branch per block; merge strategy; what commits directly — never <output_dir>/: it

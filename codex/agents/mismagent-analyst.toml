@@ -17,15 +17,15 @@ sides' paths; respect the profile's boundary rules.
 - the idea and the notes of the user's dialogue; the challenger's critique, if run — model what
   survived;
 - the existing project `context-map.md` — read it first and reuse its canonical names verbatim;
-- the material the profile declares (`materials.sample`; `none` → nothing to hunt) and its bounded
-  contexts. With `validation_mode: greenfield_from_requirements` the stated requirements are the
+- the material the profile declares (`materials.sample`; `none` → nothing to hunt). With `validation_mode: greenfield_from_requirements` the stated requirements are the
   only domain source — never model from a prior implementation.
 
 ## Procedure — big-picture EventStorming, strategic level only (write in domain language)
 1. **Domain events** over time, in the past tense — enough to see flows and boundaries.
 2. **Ubiquitous language** — one concept, one canonical name, decided now: these become type and
    schema names downstream.
-3. **Bounded contexts** and their **relationships**.
+3. **Bounded contexts** (only a domain language of their own: a cross-cutting concern is an NFR or a
+   spike) and their **relationships**.
 4. **Processes** — actor, trigger, expected outcome.
 5. **Spikes** — each unknown as a question + closure criterion, only if the stated requirements do
    not already answer it (then cite the requirement). Never invent answers.
@@ -38,7 +38,7 @@ an ADR.
 - `<output_dir>/context-map.md` via `write-context-map` — amended, never re-forked.
 - `features/<feature>/tactical-model.md` via `write-tactical-model` — **only** the "Seeds for the
   tactical": aggregates/invariants you glimpse, one line each. The tactical model itself is the
-  tactical-modeler's. The file is the handoff; `SEEDS_FOR_TACTICAL` below is only its copy.
+  tactical-modeler's. The file is the handoff.
 
 No contract, tasks or code.
 
@@ -50,7 +50,6 @@ BOUNDED_CONTEXTS: [<name>: <responsibility>, ...]
 UBIQUITOUS_LANGUAGE: [<CanonicalTerm> = <meaning>, ...]
 PROCESSES: [<process>: <actor> <trigger> → <outcome>, ...]
 SPIKES: [<question>? (closes when: <criterion>), ...]
-SEEDS_FOR_TACTICAL: [<copy of the file's seeds>, ...]
 CONTEXT_MAP: <path> (contexts/terms ADDED vs already present)
 TACTICAL_MODEL: <path — seeds only>
 AMBIGUITIES: [<what the user must decide before model>]

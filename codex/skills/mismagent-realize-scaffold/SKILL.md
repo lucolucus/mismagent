@@ -25,7 +25,7 @@ against. Greenfield only — if the project already builds, this block does not 
   UI-test dependency/config, wired so the gate can execute it (a placeholder smoke test is fine —
   the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness);
 - if the side renders UI: **honor the profile's `run` binding** — create exactly what it names (the
-  launch task/entry point and the pinned port), so the command launches on the empty skeleton. It
+  launch task/entry point, and its port only if it names one), so the command launches on the empty skeleton. It
   is a **contract you satisfy**, not a value you choose — if the skeleton can't honor it, report
   it. *(Proving it renders stays `run-app-smoke`'s job, at the first `ui` block.)*
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
@@ -34,13 +34,13 @@ against. Greenfield only — if the project already builds, this block does not 
   and it lives in this repo (the workers maintain it on rename, like any build file);
 - the **`enforced_by` checks without `from`** of the ADRs in your pack (they apply from the start):
   each at its path with its violating and conforming fixture, registered in the gate so it prints
-  its ADR and result — `MM lint` defers them until you are done.
+  its ADR and result.
 
 ## Boundaries — you write NO domain
-You create **only** the skeleton: no aggregate, no port, no invariant, no business rule. Those are the
-owner blocks that come **after** you. Do not invent module names beyond the architecture's; do not add
-dependencies the stack ADR / infra-notes did not call for (frugality: the smallest skeleton the gate
-needs).
+You create **only** the skeleton: no aggregate, no port, no invariant, no business rule, no shared
+domain type (VO, enum). Those are the reviewed owner blocks that come **after** you. Do not invent
+module names beyond the architecture's; do not add dependencies the stack ADR / infra-notes did not
+call for.
 
 ## Acceptance — the negative space (no ACs, no contract test)
 Your only acceptance is: **the side's `gate` (profile) runs GREEN on this empty skeleton** — the build
@@ -55,7 +55,7 @@ probe → see it **GREEN**; record the proof as a **FILE** —
 `<output_dir>/features/<feature>/gate-proof/<side>/evidence.md`: modules probed, the red excerpt, the green rerun
 (handoffs are files) — then stamp it with
 `MM proof record <feature-dir> gate <side> --gate "<the side's gate>" --gate-files <the profile's sides.<side>.gate_files>`
-(`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`). A gate that stays green
+(`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`). A gate that stays green
 over a failing test (e.g. a build task that compiles modules but never runs their tests) is a
 **finding to report against the profile's gate string**:
 without this proof every future review is vacuously green, and readiness refuses the gate.

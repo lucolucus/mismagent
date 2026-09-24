@@ -8,13 +8,13 @@ description: "mismAgent model movement. Derives building-blocks.yaml and its sta
 
 # build-manifest — the model → build bridge
 
-Emits `<output_dir>/features/<feature>/building-blocks.yaml` — the worker-composer's only input — and
-seeds one derived block file per row in `blocks/<context>/todo/<id>.md`. The manifest is a
-**consequence of the model**, never hand-written: every field has a reader.
+Emits `<output_dir>/features/<feature>/building-blocks.yaml` — the worker-composer's only input. You
+author only the YAML; `MM manifest render F` (`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`,
+`F` = the feature folder) renders one block file per row — never hand-patch one (a legacy manifest: rule 22). The
+manifest is a **consequence of the model**: every field has a reader.
 
-**Before writing or regenerating, read `references/manifest-schema.md`** (in this skill's folder):
-it is the normative shape of the YAML and of the block files, and the per-type standard each block
-must meet. Do not emit from memory.
+**First read `references/manifest-schema.md`** (this skill's folder): the normative YAML, block
+files and per-type standard.
 
 ## Input
 - `features/<feature>/tactical-model.md` (aggregates, invariants, commands, events);
@@ -76,26 +76,28 @@ must meet. Do not emit from memory.
     reworded into a failable test or marked `by-construction` so nobody counts it as coverage. A `ui`
     block's `tests_nl` cover its states (empty/error/loading); rendering itself is proven by
     `realize-ui` and the side's `ui_render_check`.
-11. **The invariant tag is a verifiable convention:** prescribe that each invariant test's name
-    starts with `INV-n ` — no brackets, no character illegal in the stack's test names — so coverage
-    is matched per block. Never turn it into a project-wide presence check (red for the whole wave).
+11. **The invariant tag is a verifiable convention:** each invariant test's name carries its tag —
+    canonical `INV-n` in the docs, spelled as the dev-architecture fixes for the stack (e.g. `INV_12`),
+    matched by number per block. Never a project-wide presence check (red for the whole wave).
 
 ## Structure — waves, owners, releases
-12. **Waves:** the scaffold at `0`; owners (aggregate, port) before their consumers; consumers of a
-    wave in parallel, width sized to `capacity`. Waves are integers — an extra wave is a renumbering.
+12. **Waves:** the scaffold at `0`; boundary owners before their consumers; consumers of a
+    wave in parallel, width sized to `capacity`. Other order (e.g. the composition-root owner before
+    the UIs) → `after:` on the later block.
 13. **Scaffold (greenfield only):** a side whose gate cannot run yet gets one `type: scaffold` block,
-    `wave: 0`, no boundary, no `tests_nl`; its acceptance is the side's gate green on the empty
+    `wave: 0`, no boundary, no `tests_nl`, **no domain** (no invariant, no shared type); its acceptance is the side's gate green on the empty
     skeleton. It also wires the UI-test setup when `ui_render_check` is automated and satisfies the
     profile's `run` binding on a UI side.
     A project that already builds gets no scaffold.
-14. **Shared artifact ⇒ derived owner block:** an artifact ≥ 2 blocks of the same wave consume (the
-    shared-kernel types, a module's build files, a ui-kit, a schema/migration set, DI wiring) gets
-    ONE owner block in an earlier wave, with no domain rules. Compute it from the manifest.
+14. **Shared artifact ⇒ derived owner block** in an earlier wave, computed from the manifest:
+    shared-kernel domain types (VOs, enums, their invariants — the Shared Kernel section) → an
+    ordinary, reviewed owner block; a technical artifact ≥ 2 blocks of a wave consume (a module's
+    build files, a ui-kit, a schema/migration set, DI wiring) → one owner block, no domain rules.
 15. **Every prescribed capability names its owner module** (a local store, a sync engine, a ui-kit):
     in the block's module list, or stated in the spec.
 16. **Group infrastructure by module:** the adapters of one infrastructure module are one block that
-    `consumes` every boundary it implements. Split only for owners in different
-    waves or different releases. Domain blocks keep one aggregate = one block.
+    `consumes` every boundary it implements, under its declared host context. Split only for owners
+    in different waves or different releases. Domain blocks keep one aggregate = one block.
 17. **Every ux-prescribed surface lands or is declared cut:** each surface the ux-proposal assigns to
     a `ui` block has a `triggers`/`consumes_rm` entry, or a `notes` line saying where it went.
 18. **`model_hint: deep`** on a consumer block only when it folds ≥ 2 boundaries, mints or re-keys a
@@ -103,33 +105,31 @@ must meet. Do not emit from memory.
     `open-questions/` file. Never for size alone.
 19. **Releases:** every non-scaffold block has `release:`; `releases:` says what each lets the user
     do. **R0** is the thinnest launchable vertical slice (the app starts and does one real thing end
-    to end) within the first 3 build waves after the scaffold — size it down until it fits. Present
-    the R0 cut to the user at the `tests_nl` checkpoint.
+    to end), as few waves as the dependency graph allows — never bent to fit (domain in the
+    scaffold, a boundary owned by the wrong block). Present the R0 cut to the user at the `tests_nl`
+    checkpoint.
 20. **Central risks are wave-0 spikes:** every `central: true` spike of the context-map (and every
     risk the architect flagged) has a `type: spike` node with `central: true` — set the flag on the
     tactical-modeler's node, never emit a second one; only a risk with no node gets one, via
-    `write-task`.
+    `write-task`. Fill each spike's `## Unblocks` with `- <block-id>` lines.
 
 ## Coherence and regeneration
 21. **Reconcile before emitting:** check your pins against profile, `architecture.md` and the ADRs.
     A contradiction is resolved **with the user** and the losing artifact amended in the same pass.
-22. **Regeneration is incremental.** Re-running refreshes the YAML and the block files in place from
-    the current model; elicited `tests_nl` stay; ask only about new or changed blocks; report the
-    delta (added / changed / unchanged). With blocks in `doing/` or `done/`, the delta is the only
-    legal mode: re-seed only the impacted files, list them, never rewrite an unimpacted file and
-    never move a file between state folders. Hand-editing a block file is a divergence bug.
-23. **Un-parking:** fold the user's answer to a parked block into its spec, record the answer and
-    why in `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`; decider: the user), then delete its
-    `open-questions/<block-id>.md` — regeneration is what clears it. A non-obvious R0 cut or
-    `tests_nl` choice is recorded the same way.
+22. **Regeneration is incremental.** Refresh the YAML from the current model, then
+    `MM manifest render F` (it keeps state folders and unchanged files); elicited `tests_nl` stay; ask
+    only about new or changed blocks; report the delta. A **legacy**
+    manifest (`MM lint` → `mode: legacy`) is never force-rendered: update the YAML and only the
+    affected block files.
+23. **Un-parking:** fold the user's answer into the parked block's spec (22), record answer and
+    why in `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`; decider: the user), then delete its
+    `open-questions/<block-id>.md`. A non-obvious R0 cut or `tests_nl` choice is recorded the same way.
 
 ## Output
-- `building-blocks.yaml` — authoritative; `boundaries:` stays a first-class section.
-- the block files — its per-block projection, status-less (the folder is the state).
-- no other task list: the human reads the blocks live with `$mismagent-board` (read-only).
+`building-blocks.yaml` (authoritative; `boundaries:` first-class) and the rendered, status-less
+block files — no other task list (the human reads them with `$mismagent-board`).
 
-Close by running `MM lint <output_dir>/features/<feature>/` (`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`):
-it is blocking — fix every gap before reporting.
+Close with `MM manifest render F` (rendered mode only) then `MM lint F`: blocking — fix every gap in the YAML.
 
 ## Outcome
 Blocks per type (and the scaffold), boundaries, the releases (R0's blocks and its

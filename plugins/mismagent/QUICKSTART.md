@@ -29,7 +29,8 @@ explore — you need the **bootstrap** (`explore` also creates it at step 0 if i
 `.mismagent/profile.md` put
 - **output_dir** (recommended default: `.mismagent`),
 - **ubiquitous_language.lang** (the language the domain speaks),
-- the known **bounded contexts** and the **list of sides** (a single one is perfectly fine),
+- the **list of sides** (a single one is perfectly fine) — the bounded contexts live in
+  `context-map.md`, written by the analyst,
 - **materials** (what source material exists — `sample:`/`ui:` path or `none`: declared once, so
   no skill hunts for folders that don't exist) and **capacity** (who builds, with how many hours —
   the architecture is sized to the team).
@@ -71,15 +72,17 @@ you confirm each release → flag).
   so the `gate` can't even run. `build-manifest` emits a **wave-0 `scaffold` block**; the
   worker-composer builds it **first** (via `realize-scaffold`) and only then the owner blocks have
   something to compile against. Don't expect the architect to scaffold — it writes design, not code.
-- **One git repo per project.** The worker-composer lives on worktrees + merges. If you start in a
-  non-git folder, its Phase 1 will ask you to confirm a `git init` + first commit before proceeding.
+- **One git repo per project.** The worker-composer lives on worktrees (`.worktrees/<feature>/<id>`,
+  git-ignored) + merges onto the profile's integration branch (default `integration/<feature>`), cut
+  from the base branch the profile names. If you start in a non-git folder, it asks you to confirm a
+  `git init` + first commit before proceeding.
 - **"Where are the tasks?"** Run **`/mismagent:board`** — a read-only live view of the blocks and
-  their state. The work-item *is* the block: `build-manifest` seeds one **rich `<id>.md` file per
+  their state. The work-item *is* the block: the tool renders one **rich `<id>.md` file per
   block** in `.mismagent/features/<feature>/blocks/<context>/{todo,doing,done}/` (spec + `## What to do`/
   `## Tasks`/`## Dependencies`, **status-less, no checkboxes**) — its **folder is its status**, moved only
   by the worker-composer. The board renders those files + their folder position; it never writes them.
   The block files are a derived projection of the authoritative `building-blocks.yaml` (re-run
-  `build-manifest` to refresh). The legacy file-driven flow lives in `attic/`.
+  `build-manifest`, which re-renders them). The legacy file-driven flow lives in `attic/`.
 
 ## When something doesn't add up
 The first real run surfaces the holes in the core. Keep a **`MISMAGENT-LOG.md`** in the project

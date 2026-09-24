@@ -35,7 +35,7 @@ An element with no reader is not written.
 ## Open spikes
 - [ ] <spike-slug>: <question> — <closure criterion> — side: <from the profile>
       — owner: <feature that raised it>   <!-- REQUIRED: tells a build its own spikes -->
-      — central: <true|false>   <!-- true = an unproven capability the product stands on -->
+      — central: <true|false>
 ```
 
 ## Rules
@@ -46,7 +46,7 @@ An element with no reader is not written.
   modeled.
 - **Renaming a canonical term is a breaking amendment:** only with the user, recorded as an ADR with
   the old → new mapping.
-- Spikes are actionable: a question and a closure criterion.
+- The analyst writes the map; the explore/model conductor only closes an answered spike (`write-task`).
 - No tactical detail here: that is `write-tactical-model`'s file.
 
 ## Outcome

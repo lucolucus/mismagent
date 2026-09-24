@@ -5,6 +5,6 @@ argument-hint: "[repo/worktree path + branch + block-spec]"
 
 Dispatch the **`mismagent-verifier`** subagent (Agent tool, **fresh context**). The worker-composer
 normally drives it; standalone, give it the **repo/worktree path**, the `BRANCH`, the `RANGE` and
-`HEAD_SHA` from `MM diff-range`, and the block's `MM pack`. Read-only → `PASS | FAIL | SKIP`; an objection to a `D-NNNN` goes into that entry's `Debate`
+`HEAD_SHA` from `MM diff-range`, and the block's `MM pack` (`MM` = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py"`). Read-only → `PASS | FAIL | SKIP`; an objection to a `D-NNNN` goes into that entry's `Debate`
 (`F/decisions.md`). See
 `agents/mismagent-verifier.md`.

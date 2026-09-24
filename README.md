@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.20.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.22.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -212,6 +212,18 @@ another feature's work for a gap in yours.
 > exit) plus six short references (TDD, frugality, simple design, clean code, SOLID, refactoring), each
 > read only for the concrete problem at hand; the code-review uses them as lenses (HIGH needs evidence
 > and consequence). `code-rules.md` narrows or overrides them.
+>
+> **v0.21.0 (fixes from the first real v0.20 run):** the tool is invoked as
+> `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py"` (braces: Claude Code substitutes it; the env var is
+> not exported to Bash). New: `manifest render` (block files generated from the YAML, which gains
+> `what:`/`sources:`), `why append`, `lint --adrs`, a short form for requirement-derived decision notes.
+> No 3-wave cap on R0; the scaffold carries no domain; the profile no longer lists bounded contexts
+> (the context map is the only source); explicit base and integration branches.
+>
+> **v0.22.0:** the composer dispatches in the foreground and ends a firing only after every return is
+> handled (a headless run no longer loses a worker); per-block `after:` replaces `build_order` (tolerated
+> on legacy manifests); the pack carries open MED/LOW findings; `status` reports done/idle/work/anomaly;
+> `bench/run.py` re-invokes the composer headless until done or idle, with a cost cap.
 
 ## Going deeper
 
@@ -226,6 +238,8 @@ another feature's work for a gap in yours.
 
 - `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool's tests, including a check
   that every `MM …` command in the prompts is runnable as written.
+- `python3 bench/score.py <run-dir>…` — a zero-cost benchmark: compares runs of the same deliverable
+  built with different mismAgent versions (requirements coverage, tests, friction, process, git).
 - `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
   (`git config core.hooksPath .githooks` once per clone).
 - `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a

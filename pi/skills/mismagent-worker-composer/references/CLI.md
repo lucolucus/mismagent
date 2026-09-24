@@ -2,7 +2,9 @@
 
 **Stateless: it computes and refuses; it never guesses and never recovers on its own.** The design
 and the composer's procedure are in `LOOP.md`; this file is the interface. Python 3 stdlib only.
-`MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`. `F` = `<output_dir>/features/<feature>/`
+`MM` is an **editorial abbreviation**, not a shell alias, variable or function: in every command
+write the full command the calling prompt resolved — `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`,
+the path quoted — so each Bash call stands alone (no word splitting, nothing kept between calls). `F` = `<output_dir>/features/<feature>/`
 (a project root with a single feature resolves to it). **One repository per project**: the repo is the
 git toplevel of `F` (for `diff-range`, of the working directory). A block's branch is `block/<id>`.
 Output: JSON on stdout (`pack`: Markdown). Exit `0` ok · `1` refused / anomaly / gap (the JSON says
@@ -12,14 +14,16 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | Command | Output |
 |---|---|
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}]}` — exit 1 if any |
-| `MM lint F` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
+| `MM lint F` · `MM lint --adrs <dir>` | `{ok, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
+| `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
+| `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}]}` |
-| `MM move F <id> --to todo\|doing\|done` | `{id, from, to, path, git}` or `{refused}` |
+| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
 | `MM proof record F review <id> --sha S --spec-hash H` · `MM proof check F review <id> --sha S` | `{recorded, sha}` or `{refused, reviewed, current}` · `{fresh, stale_because}` |
-| `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` · `MM proof check F gate <side> --gate TEXT --gate-files GLOB…` | `{recorded, proof}` · `{fresh, stale_because, proof}` |
+| `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` · `MM proof check F gate <side> --gate TEXT --gate-files GLOB…` | `{recorded, proof[, warnings]}` · `{fresh, stale_because, proof}` |
 | `MM compose start F <id> --integration B --branch X` | `{candidate_path, candidate_sha, base_sha, branch_sha}` or `{refused}` |
 | `MM compose promote F <id>` · `MM compose abort F <id>` | `{promoted, integration_sha}` · `{aborted, kept_branch}` |
 
@@ -36,12 +40,30 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   anomaly) · `integrated_not_on_line` (the recorded `sha` is not an ancestor of `B`) ·
   `stale_review_proof` (its `spec_hash` differs from the current one) · `done_unwelded` (in `done/`,
   not finishable). Read-only.
-- **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`, not named in the
+- **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
+  the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done`,
   every consumed boundary's owner integrated. Order: `wave`, then release (the `releases:` keys in
   order, then undeclared labels in natural order), then manifest order. The cap is the composer's.
 - **move**: blocks `todo→doing`, `doing→todo`, `doing→done` (only if finishable); spike/cleanup
-  nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`.
+  nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`. A
+  refusal is `ok:false` + `refused`, exit 1, no `to`, filesystem untouched. An integrated block not
+  yet finishable stays in `doing/` (the board badges it "integrated, closing pending").
+- **manifest render** writes every block file from its row: frontmatter = the row minus `what`,
+  `sources`, `tests_nl`, `notes`; body = `## What to do` (`what`), `## Invariants` (the row's),
+  `## Tasks` (`tests_nl`), `## Dependencies` (each touched boundary: role, consumers,
+  `contract_test`, pinned types and keys inlined), `## Notes`, `Sources:` (`sources`). A block keeps
+  its state folder (a new one lands in `todo/`); an identical file is not rewritten. Refuses,
+  writing nothing, on: a non-scaffold row missing `what`, `sources` or `tests_nl` (blank = missing),
+  an empty criterion, a touched boundary whose `pinned_types`/`keys` is not a mapping, an `INV-n`
+  or command not covered by `tests_nl`; a duplicate id or file, a file under another context (a move
+  is yours). Files without a row are listed as `orphans`, untouched. It writes documents only: the
+  decisions and criteria are the row's.
+- **why append** adds the entry file's `### D-NNNN` entries (their ids as written, nothing assigned)
+  only if the whole file then passes `why check`; an identical entry already present is a no-op. The
+  same id with other content is an **update**, replaced in place, only when it changes nothing but
+  `Debate`/`Result` and adds an `ADR:` backlink (an existing one kept); anything else is refused. An
+  entry that `Supersedes` an accepted one flips its `status` to `superseded`. Refused → nothing written.
 - **pack** / **spec_hash** share ONE dependency resolution: the block file, its manifest row, the rows
   of the boundaries it touches, and the ADRs of the block ∪ of the owners of the boundaries it
   consumes (`<output_dir>/decisions/NNNN-*.md`) ∪ every ADR with a check whose `from` is the block; a `scaffold` block honours every block's ADRs (it
@@ -63,7 +85,9 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `--sha` resolved, and its `spec_hash` is the current one.
 - **gate proof** `F/gate-proof/<side>/proof.json` = `{gate, gate_files, gate_hash}`; `gate_hash` =
   the gate string + each glob + the content of every file it matches (globs relative to the repo,
-  `**` allowed). `record` refuses a glob that matches no file. Fresh ⇔ **any**
+  `**` allowed). `record` refuses a glob that matches no file, and **warns** (`warnings`) on matches
+  that look generated (git-ignored, under a build/cache directory, compiled/log files) — still
+  hashed: `gate_files` name stable inputs, fix the globs. Fresh ⇔ **any**
   `<output_dir>/features/*/gate-proof/<side>/proof.json` has the current `gate_hash` (a project
   fact); it goes stale only when the gate string, the glob list or a matched file changes.
 - **compose** keeps its metadata in `<git-common-dir>/mismagent-candidates/<id>.json`, written
@@ -76,7 +100,8 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   ref; if `B` is checked out, `merge --ff-only` there, which git refuses if it would overwrite local
   changes), writes `F/integrated/<id>.json`, removes the candidate worktree and branch. `abort`
   removes whatever exists of the candidate (worktree, directory, metadata) — also a half-created one
-  — and keeps `candidate/<id>` as evidence. No revert, no timeout.
+  — and keeps `candidate/<id>` as evidence. No revert, no timeout. Candidates live in the
+  git-common-dir; block worktrees and packs do not (`LOOP.md`, Worktrees).
 
 ## lint — the exact checks (nothing else)
 Each gap names its `bounce_to` (`build-manifest` unless noted).
@@ -90,18 +115,23 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `consumes.boundary` | every `consumes` entry is a boundary id |
 | `boundary.owner` · `boundary.consumers` | `owner` / each consumer is a block id; `consumers` and the blocks' `consumes` agree both ways |
 | `release.required` · `release.declared` | every non-scaffold block has `release:`; declared in `releases:` when that section exists |
-| `release.r0_waves` | an `R0` block's `wave` is among the first 3 distinct non-scaffold waves |
-| `boundary.pinned_types` | `pinned_types` present and non-empty → `architect` |
+| `scaffold.domain_free` | a `scaffold` row has no `invariants`, `invariant_fields`, `commands`, `consumes`, `pinned_types`, `view_shape`, `keys`, and owns no boundary |
+| `boundary.pinned_types` | `pinned_types` present and non-empty; `pinned_types`/`keys` each a mapping `{name: text}` (never coerced) → `architect` |
 | `boundary.contract_test` | `invariant-test \| consumer-driven` |
 | `blockfile.exists` · `blockfile.unique` · `blockfile.orphan` | exactly one `blocks/<ctx>/{todo,doing,done}/<id>.md` per row; no file without a row |
 | `blockfile.frontmatter` · `blockfile.context_dir` | frontmatter `type`/`context`/`wave` equal the row; the file sits under `blocks/<context>/` |
 | `blockfile.status_free` | no `status:` field, no checkbox |
-| `spec.what` · `spec.tasks` · `spec.sources` | non-scaffold: `## What to do` non-empty; `## Tasks` ≥ 1 list item; a `Sources:` line |
-| `spec.invariants` | each `INV-n` tag of the row's `invariants` appears in `## Tasks`; with untagged invariants, criteria ≥ invariants |
+| `spec.what` · `spec.tasks` · `spec.sources` | non-scaffold: `## What to do` non-empty; `## Tasks` ≥ 1 list item; a non-empty `Sources:` line |
+| `spec.invariants` | each `INV-n` of the row's `invariants` is named in `## Tasks`, matched by number: `INV[-_ ]?n` (case-insensitive; `INV-1` ≠ `INV-12`), so `test_INV_12_…` counts; with untagged invariants, criteria ≥ invariants |
 | `spec.commands` | each `commands` entry appears in `## Tasks` |
 | `adr.checks` | every `enforced_by` entry of the ADRs the blocks resolve (as `pack`) is `{check: <repo-relative path>, from: <block>?}`, its `from` is a block of some feature's manifest, and the check exists in the repo → `architect`. A missing check is `deferred` while its `from` block is not integrated (project-wide), or — with no `from` — while a `scaffold` block is not in `done/` |
+| `render.input` · `blockfile.render` | when any row has `what:` (a rendered manifest), for every row: its render inputs are complete and its file equals `manifest render`'s output |
 | `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:` scope names a row of the manifest → `recorder` (who wrote the entry) |
 | `spikes.central_node` · `spikes.central_flag` | each open `[ ]` entry of the context map's `## Open spikes` with `owner: <this feature>` and `central: true` has a `type: spike` node carrying `central: true` |
+
+`MM lint --adrs <dir>` (before any manifest; → `architect`): `adr.filename` (`NNNN-<slug>.md`),
+`adr.frontmatter` (parses; `scope`; `status` proposed|accepted|superseded), `adr.checks` (the
+`enforced_by` shape); each check's `from` and existence are listed as `deferred` to `MM lint F`.
 
 Not linted (judgment — the composer's readiness and the reviewers): whether a criterion is
 meaningful, whether pinned types are complete, the gate's discrimination, whether an ADR check is
@@ -118,10 +148,14 @@ the decider by writing. Build: the composer records a worker's `DECISIONS` on it
 completes `Debate`/`Result` during review/rework. Explore/model: the conductor records the
 challenger's debate and the user's choice at each checkpoint (`KILL`/`RESHAPE` included);
 `build-manifest` records an open question's answer before deleting `open-questions/<id>.md`.
-Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`.
+Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`. The recorder
+writes each returned entry to a file and adds it with `MM why append F/decisions.md --entry <file>`
+(never a hand edit of the file); an allowed edit below is the same command with the whole updated
+entry under its own id.
 
 **Rules.** Ids `D-0001`… per feature, appended in order; a resumed return adds no duplicate. Once its
-block is integrated or its checkpoint closed an entry is closed. Exactly two edits are then allowed:
+block is integrated or its checkpoint closed an entry is closed; until then the recorder may complete
+its `Debate`/`Result`. Exactly two edits are then allowed:
 `status: accepted` → `superseded` (when a **new** entry `Supersedes` it — a changed choice is always
 a new entry) and adding the `ADR:` backlink when the architect promotes it. Nothing else is edited. Nothing invented to fill a field:
 an incomplete choice stays an open question. Humans are named as declared in the session — never
@@ -138,7 +172,7 @@ dumps, ordinary findings, backlog, open questions, progress, approvals.
 | `Meta` | `<ISO date>; scope: feature\|block:<id>\|boundary:<id>; status: accepted\|superseded[; sha: <commit>]` — sha when the choice concerns reviewed code |
 | `Question` | the problem and its decisive constraint (25) |
 | `Options` | 2–3 real alternatives and why each loses (40) |
-| `Hypothesis` | a testable prediction, stated before the check (25) |
+| `Hypothesis` | a testable prediction, stated before the check (25) — or, with `Check` and `Result`, the short form below |
 | `Check` | method, conditions, success criterion (30) |
 | `Result` | observation + a link to the evidence, or `untested`/`inconclusive` — <reason> (30) |
 | `Debate` | who argued what, the objection, the outcome; `none` (40) |
@@ -148,11 +182,17 @@ dumps, ordinary findings, backlog, open questions, progress, approvals.
 | `Revisit` | the observation that reopens it (20) |
 | `Confidence` · `Supersedes` · `ADR` | optional: `low\|medium\|high — <why>`, the why required (12) · the replaced `D-NNNN` · the ADR link (omit the field when none) |
 
+**Short form** — a choice the requirements, a scope cut or an ADR already decided: `Hypothesis`,
+`Check` and `Result` are **all three** `n/a — decided by <reference>`, the reference verifiable (an id
+such as `REQ-3`/`ADR-0002`, or a link to the scope cut); never mixed with experiment fields. A choice
+fully prescribed needs no entry at all; never invent alternatives to fill `Options`.
+
 **Checked by `why check`** (exit 1, each error an `{id, rule}`; `MM lint` → `why.<rule>` → the
 recorder): heading `### D-NNNN · <title>` at column 0 (an indented or other-level `D-NNNN` heading,
 or a field line outside an entry, is an error, never skipped); known fields, one line each, none
 empty or missing; word caps; ids unique and ascending; `Meta` date, scope, status, keys; `Result`
-has a link unless `untested`/`inconclusive` with a reason; `By` has non-empty `decided:` and
+has a link unless `untested`/`inconclusive` with a reason or in the short form (all three, a
+reference each); `By` has non-empty `decided:` and
 `recorded:`; `Docs` 1–3 links; `Confidence` level + reason; `ADR` is a link; local links exist;
 `Supersedes`/`superseded` pair up. **Judged by humans and reviewers** (never by the tool): whether
 the options are real, the hypothesis testable and stated first, the check discriminating, the

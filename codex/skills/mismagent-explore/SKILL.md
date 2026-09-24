@@ -35,21 +35,21 @@ challenger to attack.
 ## Procedure
 0. **Profile — bootstrap only if missing.** On any later feature the profile and the whole trunk
    exist: read them, never re-bootstrap. If `<output_dir>/profile.md` is missing, create it from
-   `.agents/skills/mismagent-explore/references/PROFILE.md` with the bootstrap fields only: `output_dir` (default `.mismagent`),
-   `ubiquitous_language.lang`, known contexts, sides, **`validation_mode`**, **`materials`**,
+   `@@MISMAGENT_SKILLS@@/mismagent-explore/references/PROFILE.md` with the bootstrap fields only: `output_dir` (default `.mismagent`),
+   `ubiquitous_language.lang`, sides, **`validation_mode`**, **`materials`**,
    **`capacity`**. The last three must come from the user: if the dialogue does not surface them,
-   **ask explicitly** — the mode decides whether a prior implementation may be treated as ground
-   truth, `materials` stops every skill from hunting for folders, `capacity` sizes the architecture.
+   **ask explicitly** (the profile's comments say why each matters).
    Never invent `gate` or `dev_architecture`: the architect finalizes them.
 1. **Diverge** with the user: goals, users, constraints, alternatives.
 2. **Attack before modeling:** dispatch `mismagent-challenger`. `KILL` → stop and report; `RESHAPE`
    → redesign with the user; `PROCEED` → close its `MUST_ANSWER_BEFORE_MODELING` items first.
    Record the challenger's debate and the user's non-obvious choice (a `KILL` too) in
-   `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`, scope `feature`); `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py why check <file>`.
+   `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`, scope `feature`;
+   a choice a requirement or the scope decides takes the short form); `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py" why check <file>`.
 3. **Model:** dispatch `mismagent-analyst` on what survived, passing the existing context-map as
    authoritative when there is one (it amends: adds this feature's contexts and terms, reuses the
    rest verbatim). `NEEDS-INPUT` → bring the `AMBIGUITIES` to the user and re-dispatch. A needed
-   rename goes to the user and becomes an ADR.
+   rename goes to the user and becomes an ADR. A spike the user answers: you close it (`write-task`).
 4. **Converge** on `product-brief.md`.
 5. **Infra draft** only if `infra-notes.md` does not exist; afterwards only the architect amends it.
 6. **Research on demand** via `mismagent-researcher`.

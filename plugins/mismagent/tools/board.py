@@ -6,7 +6,8 @@ It scans the feature's `blocks/<context>/{todo,doing,done}/<id>.md` (the rich, s
 files emitted by build-manifest) and serves a live kanban at a localhost URL. Status = the FOLDER
 (todo/doing/done); the block's spec/criteria come from the file body. A sibling
 `open-questions/<block-id>.md` (a bounce the worker-composer parked, awaiting the user) shows as a
-⏳ badge on the block. It NEVER writes anything —
+⏳ badge on the block; a block in doing/ with an `integrated/<block-id>.json` shows "integrated,
+closing pending" (promoted, not yet finishable — still doing, the folder is the state). It NEVER writes anything —
 coherent with mismAgent's invariant "only the worker-composer moves state". Zero dependencies
 (Python 3 stdlib only).
 
@@ -81,6 +82,9 @@ def scan(blocks_dir):
     open_qs = set()
     if os.path.isdir(oq_dir):
         open_qs = {fn[:-3] for fn in os.listdir(oq_dir) if fn.endswith(".md")}
+    # promoted blocks: integrated/<id>.json (compose promote writes it); the state is still the folder
+    int_dir = os.path.join(os.path.dirname(blocks_dir), "integrated")
+    integrated = {fn[:-5] for fn in os.listdir(int_dir) if fn.endswith(".json")} if os.path.isdir(int_dir) else set()
     for ctx in sorted(os.listdir(blocks_dir)):
         ctx_dir = os.path.join(blocks_dir, ctx)
         if not os.path.isdir(ctx_dir):
@@ -113,6 +117,7 @@ def scan(blocks_dir):
                 blocks.append({
                     "id": bid,
                     "open_question": bid in open_qs or fn[:-3] in open_qs,
+                    "integrated": bid in integrated or fn[:-3] in integrated,
                     "type": fm.get("type", ""),
                     "context": fm.get("context", ctx),
                     "wave": str(fm.get("wave", "")),
@@ -144,6 +149,7 @@ header b{font-size:16px}header span{color:var(--mut)}
 .b{font-size:11px;color:var(--mut);background:#21262d;border-radius:5px;padding:1px 6px}
 .b.warn{color:#f85149;background:#3d1d20}
 .b.wait{color:#d29922;background:#3a2d10}
+.b.ok{color:#2ea043;background:#12261a}
 .cf{color:#c9d1d9;margin:6px 0}
 .tasks{margin:6px 0 0;padding-left:16px;color:var(--mut)}.tasks li{margin:2px 0}
 .empty{color:var(--mut);font-style:italic}
@@ -151,7 +157,7 @@ footer{color:var(--mut);padding:6px 18px;font-size:12px;border-top:1px solid #21
 </style></head><body>
 <header><b>mismAgent board</b><span id=meta></span><span id=blocksdir></span></header>
 <div class=cols id=cols></div>
-<footer>read-only · refreshes every 1.5s · state = the folder (todo/doing/done) · ⏳ = parked on an open question</footer>
+<footer>read-only · refreshes every 1.5s · state = the folder (todo/doing/done) · ⏳ = parked on an open question · "integrated, closing pending" = promoted, waiting for its boundaries to weld before done/</footer>
 <script>
 const STATES=["todo","doing","done"];
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
@@ -171,6 +177,7 @@ async function tick(){
     +"<div class=badges><span class=b>"+esc(b.type)+"</span><span class=b>"+esc(b.context)+"</span>"
     +(b.release?"<span class=b>"+esc(b.release)+"</span>":"")
     +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")
+    +(b.status==="doing"&&b.integrated?"<span class=\\"b ok\\">integrated, closing pending</span>":"")
     +(b.open_question?"<span class=\\"b wait\\">⏳ awaiting user (open-questions/)</span>":"")
     +(b.spec_gaps&&b.spec_gaps.length?"<span class=\\"b warn\\">⚠ "+esc(b.spec_gaps.join(" · "))+"</span>":"")+"</div>"
     +(b.what_to_do?"<div class=cf>"+esc(b.what_to_do)+"</div>":"")

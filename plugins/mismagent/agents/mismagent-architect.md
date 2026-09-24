@@ -44,20 +44,21 @@ profile's `materials` (`none` → nothing to hunt), stated requirements, per-sid
 without pass 1 → checkpoint → pass 2 is a process defect, even if the choice was right.
 
 **Pass 2 — write**, citing the deliberation:
-- `architetture/architecture-overview.md` (decisions `D-1..D-N` with rationale), per-side docs;
-  shard documents over ~15KB into sections with stable anchors;
-- the ADRs (via `write-adr`) and `infra-notes.md` (via `write-infra-notes`);
-- `<output_dir>/architecture.md` — style, module map, allowed dependency directions (the scaffold
+- the ADRs (via `write-adr`) — the rationale lives there, once: no overview restating them; a
+  per-side doc in `architetture/` only for content no ADR or `architecture.md` holds; shard
+  documents over ~15KB into sections with stable anchors — then
+  `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py" lint --adrs <output_dir>/decisions/`: zero gaps
+  before any manifest; `infra-notes.md` via `write-infra-notes`;
+- `<output_dir>/architecture.md` — the structure: style, module map, allowed dependency directions (the scaffold
   derives the skeleton from it; the gate's dependency lint is its executable form);
 - `<output_dir>/code-rules.md` via `write-code-rules` — mechanical rules → the gate's dependency
   lint, discursive → code-review criteria, structural → citations; point the profile's
   `architecture:` and `code_rules:` at both files;
-- **the profile's gate, per side:** `gate` (build + test + dependency lint; it must execute the
-  tests of the side's whole module graph, not only build it), `gate_files` (the files defining
-  build, modules, tests and registered checks — required: they key the gate proof), `toolchain`,
+- **the profile's gate, per side:** `gate` (build + test + dependency lint, executing the tests of
+  the side's whole module graph), `gate_files` (required; the profile says which files), `toolchain`,
   and `gate_after_release` for checks that protect released versions — ask the user **when** each
   check starts to matter;
-- **for every UI side, its `run` binding** (launch command + port), pinned now: the wave-0 scaffold
+- **for every UI side, its `run` binding** (launch command; its port only if it serves one), pinned now: the wave-0 scaffold
   receives it as a contract to satisfy.
 
 ## Cheap, standard verification
@@ -69,8 +70,7 @@ with the user:
   fidelity demands it; never a shared external service);
 - the gate may be incremental and scoped by module where the build tool supports it — the project's
   gate defines execution; if it can skip an up-to-date test phase, set `gate_verify` (the gate with the
-  stack's re-run switch); its red-green proof shows it can go red and is renewed when its
-  configuration changes;
+  stack's re-run switch);
 - one conventional tool per concern.
 
 A step reported slow or hanging comes back **here**: replace the strategy, never add patience.
@@ -78,7 +78,7 @@ A step reported slow or hanging comes back **here**: replace the strategy, never
 ## The dev-architecture — before the first domain wave
 In greenfield (`dev_architecture: none`, ≥ 2 workers about to run in parallel), **author the
 codebase's style memory** before the first domain wave: aggregate shape, VO style, invariant-test
-pattern (the `INV-n ` test-name tag, with no character illegal in the stack's test names),
+pattern (how test names spell the `INV-n` tag in this stack, e.g. `INV_12`; matched by number),
 module/package layout, test conventions. Deliberate it with the user; on a finalized trunk this is a
 targeted style dispatch, not a pass-1 re-run. Write it as a doc
 (`architetture/dev-architecture-<codebase>.md`), **one per codebase** (sides sharing code share

@@ -23,7 +23,7 @@ example `profiles/example.md`) binds sides, paths, gates and branching.
 ## The three movements
 | movement | you | owners (in order) | handoff files |
 |---|---|---|---|
-| **explore** | in dialogue | `explore` skill (bootstraps the profile if missing) → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
+| **explore** | in dialogue | `explore` skill → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
 | **model** | confirm the boundaries | `/mismagent:model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
 | **build** | confirm each release | `/mismagent:worker-composer` → `mismagent-worker` ×N → `mismagent-verifier` (+ `code-review`) | code on the integration line, proofs |
 
@@ -37,10 +37,9 @@ choice · the `tests_nl` elicitation and the R0 cut · a `BOUNCED` block or a sp
 release. Nothing else stops for you.
 
 ## The rules the flow enforces
-1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. In a
-   read-only harness mode, dispatch only read-only agents and materialize the pending files as the
-   first action once writes reopen. A non-obvious choice, its debate and who decided it →
-   `features/<feature>/decisions.md` (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`).
+1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. A non-obvious choice, its debate and who decided it →
+   `features/<feature>/decisions.md` (format: `../tools/CLI.md`); a subagent that may not write it
+   returns `DECISIONS`, which its conductor appends.
 2. **State = folder.** A block's state is its folder (`todo/doing/done`); only the worker-composer
    moves it and merges.
 3. **Re-entrance.** Every command re-reads the files and resumes at the first missing artifact; an

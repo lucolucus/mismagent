@@ -10,7 +10,7 @@ Python stdlib server that scans `blocks/<ctx>/{todo,doing,done}/<id>.md` and ser
 Run it **in the background** and tell the user the URL it prints:
 
 ```
-python3 "$CLAUDE_PLUGIN_ROOT/tools/board.py" <feature-dir-or-project-root>
+python3 "${CLAUDE_PLUGIN_ROOT}/tools/board.py" <feature-dir-or-project-root>
 ```
 
 - `<feature-dir>` = `<output_dir>/features/<feature>/` (e.g. `.mismagent/features/cassa`). If you pass

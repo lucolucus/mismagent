@@ -25,7 +25,16 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 | `gate-proof/<side>/proof.json` | the gate's red-green proof (project fact) | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` |
 | `decisions.md` | the why: non-obvious choices, debates, deciders (history, not state; out of `spec_hash`; format in `CLI.md`) | composer when a worker returns and during review/rework; explore/model at the checkpoints; checked by `MM why check F/decisions.md` and `MM lint` |
 
-## The tool (`MM` = `python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"`) — stateless commands
+## Worktrees and packs
+Inside the repository, never a sibling folder: a block's worktree is `.worktrees/<feature>/<id>`
+(branch `block/<id>`), the packs handed to workers are saved under `.worktrees/packs/<feature>/`
+(`<id>.md`). Paths are relative to the repository root; `.worktrees/` is added to `.gitignore`
+**before** the first worktree is created. Candidates stay where `compose` puts them (the
+git-common-dir). Pass every path to a worker absolute.
+
+## The tool — stateless commands
+`MM` abbreviates the full command the calling prompt resolved (`python3 "<plugin root>/tools/mismagent.py"`):
+write that command out in every call — never a shell alias, variable or function.
 The repository is the git toplevel of `F` (`diff-range`: of the working directory). A block's
 branch is `block/<id>`.
 - `MM status F --integration B` — read-only; lists **anomalies**: a block in `doing/`, not yet
@@ -33,12 +42,18 @@ branch is `block/<id>`.
   the line; a `review-proof` whose `spec_hash` no longer matches; a block in `done/` that is not finishable.
   Exit 1 if any.
 - `MM lint F` — exact structural checks (listed in `CLI.md`); each gap names its `bounce_to`.
-- `MM ready F` — blocks in `todo/`, not parked, whose consumed boundaries' owners are `integrated/`,
+  `MM lint --adrs <dir>` checks ADRs before any manifest exists.
+- `MM manifest render F` — writes the block files from `building-blocks.yaml` (in place; refuses
+  incomplete rows, duplicates, context changes — writing nothing).
+- `MM why append F/decisions.md --entry <file>` — the recorder's only way to add decision notes.
+- `MM ready F` — while a scaffold of the feature is not integrated and `done`, only the scaffold;
+  then blocks in `todo/`, not parked, whose consumed boundaries' owners are `integrated/`,
   not named in an open spike's `Unblocks`; ordered by wave, release, manifest order. Plus
   `finishable`: blocks in `doing/`, integrated, whose every boundary is welded (its owner and all
   its consumers integrated).
 - `MM move F <id> --to todo|doing|done` — legal moves only (`todo→doing`, `doing→todo`, `doing→done`
-  only if finishable); also spike nodes.
+  only if finishable); also spike nodes. Read `ok`: a refusal is `ok:false` + `refused` (exit 1). An
+  integrated owner waits in `doing/` for its consumers — normal, not unfinished work.
 - `MM pack F <id>` — the worker's (and reviewers') context, headed by its `spec_hash` (the same
   dependency resolution); a pre-release group id packs its `rework/<id>-<n>.md` files.
 - `MM diff-range --base B --head X` — the three-dot review range from the merge-base.
@@ -56,11 +71,13 @@ branch is `block/<id>`.
 0. `move --to done` every `finishable` block of `MM ready` (exact: a crash may follow a promote),
    then `MM status` — any anomaly → **report it and ask the user; end the firing.** Never guess.
 1. Readiness, every firing: `MM lint` + the judgment checks.
-2. Greenfield: the scaffold first — build, gate only, `proof record gate`, compose (no review).
-3. **Build:** for each block of `MM ready` up to the cap: `move --to doing`, worktree from the line
-   tip (an un-parked block reuses its branch and worktree), dispatch the worker with `MM pack`.
+2. Greenfield: the scaffold first (`MM ready` offers nothing else until it is integrated and done) —
+   build, gate only, `proof record gate`, compose (no review).
+3. **Build:** for each block of `MM ready` up to the cap: `move --to doing`, worktree
+   `.worktrees/<feature>/<id>` from the line tip (an un-parked block reuses its branch and
+   worktree), dispatch the worker with `MM pack` saved under `.worktrees/packs/<feature>/`.
 4. **As each worker returns:** `BOUNCED` → park (`move --to todo` + `open-questions/`).
-   `BLOCKED` → report. `READY-FOR-REVIEW` → record its `DECISIONS` in `decisions.md`, queue it for
+   `BLOCKED` → report. `READY-FOR-REVIEW` → record its `DECISIONS` (`MM why append`), queue it for
    integration. An entry is `accepted` when the choice is made — integration is `integrated/`'s fact.
 5. **Integrate, one at a time:** reviewers on `diff-range` + one pack → FAIL/HIGH: write
    `rework/<id>-<n+1>.md`, re-dispatch the worker on its existing worktree with it (no `ready`, no

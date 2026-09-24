@@ -14,7 +14,9 @@ Mapping (verified against developers.openai.com/codex, 2026-07):
   methodology   mismagent.md        -> codex/AGENTS.md
   thin agent-wrapper commands       -> dropped (Codex spawns subagents on explicit ask)
 
-Usage: python3 tools/generate-codex.py   (from the repo root)
+Usage: python3 tools/generate-codex.py   [--out DIR]   (from the repo root; --out: tests)
+Paths into the shipped skills are written as "@@MISMAGENT_SKILLS@@/..." (quoted); install.sh
+rewrites them to the absolute installed skills directory, so they work from any cwd.
 """
 import json
 import os
@@ -32,7 +34,16 @@ GENERATED_NOTE = (
 )
 
 
-COMPOSER_DIR = ".agents/skills/mismagent-worker-composer"
+# Every path into the shipped skills is written against this placeholder; install.sh replaces it
+# with the ABSOLUTE skills directory of the installation (quoted in commands), so a command works
+# from any cwd — a worker's worktree included — and never depends on a shell variable.
+SKILLS = "@@MISMAGENT_SKILLS@@"
+COMPOSER_DIR = SKILLS + "/mismagent-worker-composer"
+PLUGIN_ROOTS = ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT", "<plugin root>")  # braces first
+TOOL_PATHS = (("/tools/board.py", SKILLS + "/mismagent-board/scripts/board.py"),
+              ("/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py"),
+              ("/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md"),
+              ("/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md"))
 
 
 # ---- text adaptation (deterministic, reviewable rules) -----------------------
@@ -45,20 +56,18 @@ def adapt(text):
                     if fn.startswith("mismagent-") and fn.endswith(".md"))
     text = re.sub(r"`?/mismagent:(%s)(?![a-z0-9-])`?" % "|".join(agents), r"the `mismagent-\1` subagent", text)
     text = re.sub(r"/mismagent:([a-z0-9-]+)", r"$mismagent-\1", text)
-    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/board.py"',
-                        ".agents/skills/mismagent-board/scripts/board.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/board.py",
-                        ".agents/skills/mismagent-board/scripts/board.py")
-    text = text.replace('"$CLAUDE_PLUGIN_ROOT/tools/mismagent.py"', COMPOSER_DIR + "/scripts/mismagent.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md")
-    text = text.replace("$CLAUDE_PLUGIN_ROOT/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md")
+    for root in PLUGIN_ROOTS:  # the plugin's tools -> their installed place (quotes kept as written)
+        for src, dst in TOOL_PATHS:
+            text = text.replace(root + src, dst)
+    for src, dst in TOOL_PATHS:  # relative from methodology/ in the plugin
+        text = text.replace("`.." + src + "`", "`" + dst + "`")
     text = text.replace("(Agent tool)", "(spawn it as a Codex subagent)")
     text = text.replace("$ARGUMENTS", "<the argument this skill was invoked with>")
     # the profile templates ship inside the explore skill's references/
-    text = text.replace("`PROFILE.md`", "`.agents/skills/mismagent-explore/references/PROFILE.md`")
+    text = text.replace("`../PROFILE.md`", "`PROFILE.md`")  # relative from profiles/ in the plugin
+    text = text.replace("`PROFILE.md`", "`" + SKILLS + "/mismagent-explore/references/PROFILE.md`")
     text = text.replace("`profiles/example.md`",
-                        "`.agents/skills/mismagent-explore/references/profile-example.md`")
+                        "`" + SKILLS + "/mismagent-explore/references/profile-example.md`")
     return text
 
 
@@ -246,8 +255,9 @@ CODEX_SETUP = (
     "**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` "
     "It copies the skills "
     "into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this "
-    "file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it). "
-    "Verify: `/skills` lists `mismagent-explore`."
+    "file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it), "
+    "and anchors every tool path to the absolute installed skills directory (re-run it after moving "
+    "the project). Verify: `/skills` lists `mismagent-explore`."
 )
 
 CODEX_LEGEND = (
@@ -256,7 +266,7 @@ CODEX_LEGEND = (
     "`.codex/agents/` — ask Codex to *\"spawn `mismagent-<name>` on <input>\"* (Codex spawns them "
     "only on explicit request). Skill names carry the `mismagent-` "
     "prefix because Codex has no namespaces. The board script lives at "
-    "`.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned "
+    "`" + SKILLS + "/mismagent-board/scripts/board.py`. Subagents ship with a tuned "
     "`model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching "
     "their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto "
     "`spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config "
@@ -266,7 +276,7 @@ CODEX_LEGEND = (
     "architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's "
     "`NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — "
     "each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: "
-    "`.agents/skills/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). "
+    "`" + SKILLS + "/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). "
     "Subagents never write that file: they cite `D-NNNN` in their notes.\n"
 )
 
@@ -285,7 +295,7 @@ def convert_methodology():
 
 
 # ---- the generated tree must be self-contained ---------------------------------
-CLAUDE_ONLY = ("$CLAUDE_PLUGIN_ROOT", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
+CLAUDE_ONLY = ("CLAUDE_PLUGIN_ROOT", "<plugin root>", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
                "/mismagent-cross-deploy:")
 
 
@@ -307,6 +317,12 @@ def check_tree():
             for link in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
                 if not re.match(r"^[a-z]+:", link) and not os.path.exists(os.path.join(d, link)):
                     bad.append("%s: link %s does not resolve" % (rel, link))
+            for m in re.finditer(re.escape(SKILLS) + r"/([A-Za-z0-9_./-]+)", text):
+                p = m.group(1).rstrip(".")
+                if text[m.start() - 1:m.start()] not in ('"', "`"):
+                    bad.append("%s: %s/%s is not quoted (a path may hold spaces)" % (rel, SKILLS, p))
+                if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
+                    bad.append("%s: path %s/%s not shipped" % (rel, SKILLS, p))
             for p in re.findall(r"\.agents/skills/([A-Za-z0-9_./-]+)", text):
                 p = p.rstrip(".")
                 if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
@@ -324,7 +340,7 @@ INSTALL_SH = """#!/bin/sh
 # GENERATED by tools/generate-codex.py — installs the mismAgent Codex packaging into a project.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
-TARGET=${1:?usage: install.sh <project-root>}
+[ -n "${1:-}" ] || { echo "usage: install.sh <project-root>" >&2; exit 2; }
 case "${2:-}" in
   "") ;;
   --with-cross-deploy)
@@ -333,6 +349,11 @@ case "${2:-}" in
     exit 2 ;;
   *) echo "usage: install.sh <project-root>" >&2; exit 2 ;;
 esac
+mkdir -p "$1"
+TARGET=$(cd "$1" && pwd)
+SKILLS="$TARGET/.agents/skills"
+# the path is written quoted into commands and inside the agents' TOML '''...''' strings
+case "$SKILLS" in *'"'*|*'`'*|*'$'*|*'\\'*|*"'''"*) echo "install.sh: the path must not contain a double quote, backtick, dollar, backslash or '''" >&2; exit 2 ;; esac
 
 mkdir -p "$TARGET/.agents/skills" "$TARGET/.codex/agents"
 # skills retired in v0.18.0: remove them from an upgraded installation
@@ -352,11 +373,23 @@ if [ -f "$TARGET/AGENTS.md" ]; then
 else
   cp "$HERE/AGENTS.md" "$TARGET/AGENTS.md"
 fi
+# anchor every path into the skills to this installation: absolute, so it works from any cwd
+ESC=$(printf '%s' "$SKILLS" | sed 's/[|&\\]/\\&/g')
+for f in "$SKILLS"/mismagent-*/SKILL.md "$SKILLS"/mismagent-*/references/*.md "$TARGET"/.codex/agents/mismagent-*.toml \
+         "$TARGET/AGENTS.md" "$TARGET/AGENTS.mismagent.md"; do
+  [ -f "$f" ] || continue
+  sed "s|@@MISMAGENT_SKILLS@@|$ESC|g" "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+done
 echo "mismAgent (Codex) installed into $TARGET — verify with /skills (expect mismagent-explore)."
 """
 
 
 def main():
+    global OUT
+    if sys.argv[1:2] == ["--out"] and len(sys.argv) == 3:  # tests: generate elsewhere
+        OUT = os.path.abspath(sys.argv[2])
+    elif sys.argv[1:]:
+        sys.exit("usage: generate-codex.py [--out DIR]")
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     print("generating codex/ from plugins/ ...")

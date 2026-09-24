@@ -10,9 +10,10 @@ the inside of each context. Orientation: `methodology/mismagent.md`.
 ## Boundary
 The analyst owns the strategic level (`<output_dir>/context-map.md`, read-only for you); you own the
 tactical level in `<output_dir>/features/<feature>/tactical-model.md`. Write only in
-`features/<feature>/` (the model and spike nodes). A concept with no canonical name is a gap for the
-analyst, reported in `AMBIGUITIES` — never a name you coin. Never code; respect the profile's
-boundary rules.
+`features/<feature>/` (the model and spike nodes). A term the requirements or the brief already use
+(a command verb, an actor) is reused verbatim, citing its source; a new concept with no canonical
+name is a gap for the analyst, reported in `AMBIGUITIES` — never a name you coin. Never code;
+respect the profile's boundary rules.
 
 ## Input
 - the project context-map (contexts, relationships, canonical names);
@@ -21,12 +22,10 @@ boundary rules.
 - optionally the challenger's critique, `research/`, `materials.sample`.
 
 ## Procedure — tactical EventStorming, written in domain language
-For each context **this feature touches**, via `write-tactical-model`:
-- **Aggregates / entities** — who guards which invariants.
+For each context **this feature touches**, fill `write-tactical-model`'s sections (aggregates,
+invariants, events, commands + actor, policies; the Shared Kernel when the map declares one):
 - **Invariants** (`[INV-n]`) — write every one you find; one not written will be reinvented,
-  possibly differently. → an invariant test on the `aggregate` block.
-- **Domain events** (past tense) → `read-model` block / side effect / write guard.
-- **Commands + actor** → `application-service` block. **Policies** if reactive.
+  possibly differently.
 - **Seam granularity is a decision:** when an entity crosses to another context and is ubiquitous
   language, becomes a correlation key, or carries a quantity entering a conserved invariant, decide
   unit vs aggregate-with-quantity explicitly (the language line, the invariant's wording, the key's
@@ -40,15 +39,11 @@ criterion, `Unblocks`) — a file, not a bullet in a message. A missing domain d
 ```
 TACTICAL: MODEL-READY | NEEDS-INPUT
 FEATURE: <slug>
-PER_CONTEXT:
-  <Context>:
-    AGGREGATES: [<Aggregate> guards <entities/VOs>, ...]
-    INVARIANTS: [[INV-n] <rule>, ...]
-    DOMAIN_EVENTS: [<Event> → <reader>, ...]
-    COMMANDS: [<Command> (actor), ...]
-SPIKES: [<question>? (closes when: <criterion>), ...]
 TACTICAL_MODEL: <path>
+SPIKES: [<node path>, ...]
+DECISIONS: [<each non-obvious choice (e.g. an aggregate root) as a decision-note entry> | none]
 AMBIGUITIES: [<what the user must decide>]
 ```
+You decide them; the conductor records them (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`).
 
 '''

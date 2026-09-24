@@ -50,21 +50,20 @@ sides:
     gate: "—"
 ```
 
-## Domain bounded contexts
-`Machines`, `Maintenance`, `Attachments`
-
 ## Boundaries
-- The FE reaches the `Maintenance` boundaries over HTTP: a project choice (OpenAPI + generated
+- The FE reaches the boundaries of a BE context over HTTP: a project choice (OpenAPI + generated
   types, per an ADR), checked by `npm run test:contract` in the gate — not a harness concept.
 - **authorship:** reads **consumer-driven** (the views are defined by the FE), writes
   **producer-driven** (the commands by the BE/domain); the architect arbitrates feasibility/coherence.
 
 ## Branching
-- **tool:** `.claude/skills/git-branching/gitflow.sh` (a `git-branching` skill) — or `manual`
-- **commit:** `"<SIDE>-<E>.<S>: <description>"` — SIDE ∈ {BE, FE}
-- **model:** branch per **story** `<feature>/<E>-<S>-<slug>`; **squash** merge onto the base
-  branch; `infra/` commits **directly** to the base branch; `.mismagent/` travels on the
-  integration line with the code.
+- **base:** `main` (checked: it exists)
+- **integration:** `integration/<feature>` (the default), cut from `main`
+- **tool:** `manual`
+- **commit:** `"<SIDE>: <block-id> — <description>"` — SIDE ∈ {BE, FE}
+- **model:** branch per **block** `block/<id>`, merged by the worker-composer into the integration
+  line; `.mismagent/` travels on that line with the code; the integration line reaches `main` only
+  when the user asks.
 
 ## Boundary rules
 - Never **FE** code under `be/` or vice versa.

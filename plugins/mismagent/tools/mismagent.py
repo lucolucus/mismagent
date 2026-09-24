@@ -437,6 +437,9 @@ NOTE_CAP, TITLE_CAP = 220, 8
 NOTE_HEAD = re.compile(r"^###\s+(D-\d{4})\s+·\s+(.*\S)\s*$")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 URL = re.compile(r"\b[a-z][a-z0-9+.-]*://\S+")
+SHORT_FIELDS = ("Hypothesis", "Check", "Result")
+SHORT_FORM = re.compile(r"^n/a\s*[—–-]+\s*decided by\s+(\S.*)$", re.I)
+REF_ID = re.compile(r"\b[A-Za-z]+[-_]?\d+\b")  # REQ-3, ADR-0002, D-0004, US12
 
 
 def _words(text):
@@ -517,10 +520,20 @@ def check_notes(path):
         if set(kv) - {"scope", "status", "sha"} or len(kv) != len(meta) - 1:
             err(i, "meta.keys", "Meta = <date>; scope: …; status: …[; sha: …] and nothing else")
         e["scope"], e["status"] = kv.get("scope"), kv.get("status")
+        short = [k for k in SHORT_FIELDS if re.match(r"^n/a\b", f.get(k, ""), re.I)]
+        if short:  # decided by a requirement / scope cut / ADR: all three, never mixed with an experiment
+            if len(short) != len(SHORT_FIELDS):
+                err(i, "short.all_three", "n/a in %s: Hypothesis, Check and Result are all "
+                    "`n/a — decided by <reference>` or none is" % ", ".join(short))
+            for k in short:
+                m = SHORT_FORM.match(f[k])
+                if not m or not (MD_LINK.search(m.group(1)) or URL.search(m.group(1)) or REF_ID.search(m.group(1))):
+                    err(i, "short.reference", "%s: `n/a — decided by <reference>` names a verifiable reference "
+                        "(a requirement/ADR id such as REQ-3, or a link to the scope cut)" % k)
         r = re.match(r"^(untested|inconclusive)\b[\s—:,.;-]*(.*)$", f.get("Result", ""), re.I)
         if r and not r.group(2).strip():
             err(i, "result.reason", "%s needs its reason" % r.group(1))
-        if f.get("Result") and not r and not (MD_LINK.search(f["Result"]) or URL.search(f["Result"])):
+        if f.get("Result") and not r and not short and not (MD_LINK.search(f["Result"]) or URL.search(f["Result"])):
             err(i, "result.link", "Result carries a link to its evidence, or is `untested`/`inconclusive` — <reason>")
         if f.get("ADR") and not (MD_LINK.search(f["ADR"]) or URL.search(f["ADR"])):
             err(i, "adr.link", "ADR is the ADR's link (omit the field when there is none)")
@@ -568,12 +581,242 @@ def active_notes(path):
     return out
 
 
+def note_blocks(text):
+    """[(id, block text)] — each `### D-NNNN · …` heading with its lines, trailing blanks dropped."""
+    out = []
+    for line in text.splitlines():
+        m = NOTE_HEAD.match(line)
+        if m:
+            out.append([m.group(1), [line]])
+        elif out:
+            out[-1][1].append(line)
+    return [(i, "\n".join(ls).rstrip()) for i, ls in out]
+
+
+NOTE_UPDATABLE = re.compile(r"^- (Debate|Result|ADR):")
+
+
+def note_update_ok(old, new):
+    """An update of an existing entry: only `Debate`/`Result` change and an `ADR:` backlink is added
+    (an existing one is kept as is); every other line stays identical."""
+    keep = lambda b: [l for l in b.splitlines() if not NOTE_UPDATABLE.match(l)]
+    adr = lambda b: [l for l in b.splitlines() if l.startswith("- ADR:")]
+    return keep(old) == keep(new) and adr(old) in ([], adr(new))
+
+
+def why_append(path, entry_path):
+    """Append the entry file's entries to `path` — only if the result passes `why check`. The entries
+    carry their ids (nothing is assigned); an identical entry already present is a no-op; the same id
+    with other content is refused unless it is an update (`note_update_ok`), replaced in place. The one
+    other edit to an old entry: `status: accepted` → `superseded` when a new entry `Supersedes` it.
+    Nothing is written unless everything validates."""
+    if not os.path.isfile(entry_path):
+        raise UsageError("--entry %s not found" % entry_path)
+    if not os.path.isdir(os.path.dirname(os.path.abspath(path))):
+        raise UsageError("the directory of %s does not exist" % path)
+    old = read(path) if os.path.isfile(path) else ""
+    have, new = dict(note_blocks(old)), note_blocks(read(entry_path))
+    if not new:
+        return {"ok": False, "refused": "the entry file holds no `### D-NNNN · <title>` entry"}
+    add, same, upd = [], [], []
+    for i, block in new:
+        if i not in have:
+            add.append((i, block))
+        elif have[i] == block:
+            same.append(i)
+        elif note_update_ok(have[i], block):
+            upd.append((i, block))
+        else:
+            return {"ok": False, "refused": "%s already exists with other content: an update may only complete "
+                    "Debate/Result or add the ADR backlink; a changed choice is a new entry that Supersedes it" % i}
+    text, flipped = old, []
+    for i, block in upd:
+        text = text.replace(have[i], block, 1)
+    for i, block in add:
+        sup = re.search(r"^- Supersedes:.*?(D-\d{4})", block, re.M)
+        if sup and sup.group(1) in have:
+            b = have[sup.group(1)]
+            nb = re.sub(r"^(- Meta:.*?\bstatus:\s*)accepted\b", r"\1superseded", b, count=1, flags=re.M)
+            if nb != b:
+                text, flipped = text.replace(b, nb, 1), flipped + [sup.group(1)]
+    if add:
+        text = (text.rstrip("\n") + "\n\n" if text.strip() else "") + "\n\n".join(b for _, b in add) + "\n"
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    try:
+        r = check_notes(tmp)
+    except UsageError:
+        os.remove(tmp)
+        raise
+    if not r["ok"]:
+        os.remove(tmp)
+        return {"ok": False, "refused": "the file would not pass `why check`", "errors": r["errors"]}
+    os.replace(tmp, path) if add or upd else os.remove(tmp)
+    return {"ok": True, "file": path, "appended": [i for i, _ in add], "updated": [i for i, _ in upd],
+            "unchanged": same, "superseded": flipped}
+
+
 def cmd_why(a):
+    if a.op == "append":
+        if not a.entry:
+            raise UsageError("why append takes --entry <file>")
+        r = why_append(a.file, a.entry)
+        return emit(r, 0 if r["ok"] else 1)
+    if a.entry:
+        raise UsageError("why check takes no --entry")
     r = check_notes(a.file)
     return emit(r, 0 if r["ok"] else 1)
 
 
 # ---- lint (exact checks only; the list is CLI.md's) -----------------------------------------------
+INV_RE = re.compile(r"INV[-_ ]?(\d+)(?!\d)", re.I)  # INV-12 ≡ INV_12 ≡ INV 12 ≡ INV12; never INV-1
+SCAFFOLD_DOMAIN = ("invariants", "invariant_fields", "commands", "consumes", "pinned_types", "view_shape", "keys")
+
+
+def coverage(row, tasks):
+    """[(rule, message)] — each INV-n of the row's invariants (by number) and each command in the tasks."""
+    out, text = [], "\n".join(tasks)
+    invs = [str(x) for x in row.get("invariants") or []]
+    have = {int(n) for n in INV_RE.findall(text)}
+    for n in sorted({int(m.group(1)) for m in (INV_RE.search(x) for x in invs) if m}):
+        if n not in have:
+            out.append(("spec.invariants", "invariant INV-%d has no criterion in ## Tasks" % n))
+    if [x for x in invs if not INV_RE.search(x)] and len(tasks) < len(invs):
+        out.append(("spec.invariants", "%d criteria < %d invariants" % (len(tasks), len(invs))))
+    for cmd in row.get("commands") or []:
+        if str(cmd) not in text:
+            out.append(("spec.commands", "command %s does not appear in ## Tasks" % cmd))
+    return out
+
+
+# ---- manifest render: the block files are a projection of building-blocks.yaml ---------------------
+BODY_FIELDS = ("what", "sources", "tests_nl", "notes")  # rendered in the body, not the frontmatter
+SLUG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+
+
+def yaml_scalar(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    s = str(v)
+    plain = re.match(r"^[A-Za-z_][A-Za-z0-9_./-]*$", s) and _scalar(s) == s and \
+        s.lower() not in ("yes", "no", "on", "off", "y", "n")
+    return s if plain else json.dumps(s, ensure_ascii=False)
+
+
+def boundary_shape(bd):
+    """[problem] — `pinned_types` / `keys` must be mappings `{name: text}`; never coerced to `{}`."""
+    return ["%s is not a mapping {name: text}" % k for k in ("pinned_types", "keys")
+            if bd.get(k) is not None and not (isinstance(bd[k], dict) and all(
+                str(n).strip() and not isinstance(v, (dict, list)) for n, v in bd[k].items()))]
+
+
+def render_block(feat, b):
+    """(text, [missing input]) — the block file `manifest render` writes for manifest row `b`."""
+    i, t, missing = str(b.get("id") or ""), b.get("type"), []
+    tests = b.get("tests_nl") or []
+    if not SLUG.match(i):
+        missing.append("id %r is not a slug" % i)
+    if t not in BLOCK_TYPES:
+        missing.append("type %r is not a block type" % (t,))
+    if not SLUG.match(str(b.get("context") or "")):
+        missing.append("context %r is not a slug" % b.get("context"))
+    if not isinstance(b.get("wave"), int) or isinstance(b.get("wave"), bool):
+        missing.append("wave %r is not an integer" % (b.get("wave"),))
+    if (t != "scaffold" or b.get("what") is not None) and (not isinstance(b.get("what"), str) or not b["what"].strip()):
+        missing.append("no what: (what to build, 1-3 sentences)")
+    if not isinstance(tests, list) or any(isinstance(x, (dict, list)) for x in tests):
+        missing.append("tests_nl is not a list of criteria")
+        tests = []
+    elif any(not str(x).strip() for x in tests):
+        missing.append("tests_nl has an empty criterion")
+    src = b.get("sources")
+    if src is not None and not (isinstance(src, str) or isinstance(src, list) and not any(
+            isinstance(x, (dict, list)) or not str(x).strip() for x in src)):
+        missing.append("sources is not a text or a list of non-empty references")
+    if t != "scaffold":
+        if not (" ".join(map(str, src)) if isinstance(src, list) else str(src or "")).strip():
+            missing.append("no sources: (the ADRs and the tactical-model section it comes from)")
+        if not tests:
+            missing.append("no tests_nl: (the acceptance criteria)")
+        missing += [m for _, m in coverage(b, [str(x) for x in tests])]
+    fm = ["---", "id: %s" % yaml_scalar(i)]
+    for k, v in b.items():
+        if k in BODY_FIELDS or k == "id" or v is None:
+            continue
+        if isinstance(v, list) and v and not any(isinstance(x, (dict, list)) for x in v):
+            fm += ["%s:" % k] + ["  - %s" % yaml_scalar(x) for x in v]
+        else:
+            fm.append("%s: %s" % (k, "[]" if v == [] else yaml_scalar(v)))
+    out = fm + ["---", "# %s" % i, ""]
+    if b.get("what") or t != "scaffold":
+        out += ["## What to do", str(b.get("what") or "").strip(), ""]
+    if b.get("invariants"):
+        out += ["## Invariants"] + ["- %s" % x for x in b["invariants"]] + [""]
+    if tests or t != "scaffold":
+        out += ["## Tasks"] + ["- %s" % x for x in tests] + [""]
+    touched = deps(feat, i)[0] if i in feat.row else []
+    for bd in touched:
+        missing += ["boundary %s: %s" % (bd.get("id"), m) for m in boundary_shape(bd)]
+    if touched:
+        out.append("## Dependencies")
+        for bd in touched:
+            bid, owner = str(bd.get("id")), str(bd.get("owner"))
+            role = "owns it" if owner == i else "consumes it; owner `%s`" % owner
+            out.append("- `%s` (%s) — consumers: %s · contract_test: %s" % (
+                bid, role, ", ".join("`%s`" % c for c in feat.consumers(bd)) or "none", bd.get("contract_test")))
+            for label, key in (("pinned", "pinned_types"), ("key", "keys")):
+                rows = bd.get(key) if isinstance(bd.get(key), dict) else {}  # else: in `missing` above
+                out += ["  - %s `%s`: %s" % (label, n, v) for n, v in rows.items()]
+        out.append("")
+    if b.get("notes"):
+        out += ["## Notes", str(b["notes"]).strip(), ""]
+    if src:
+        out.append("Sources: %s" % (" · ".join(str(s) for s in src) if isinstance(src, list) else str(src).strip()))
+    return "\n".join(out).rstrip("\n") + "\n", missing
+
+
+def cmd_manifest(a):
+    """Write each block file from its manifest row, in place: a block keeps its state folder, an
+    unchanged file is not rewritten, a new block lands in todo/. Refuses — writing nothing — on
+    incomplete rows, duplicate ids or files, and a context change (it would need a move)."""
+    feat = Feature(a.feature_dir)
+    files, problems, plan = feat.files(), [], []
+    ids = [str(b.get("id")) for b in feat.blocks]
+    problems += [{"id": d, "problem": "duplicate block id in the manifest"}
+                 for d in sorted({i for i in ids if ids.count(i) > 1})]
+    for b in feat.blocks:
+        i, ctx = str(b.get("id")), str(b.get("context"))
+        text, missing = render_block(feat, b)
+        problems += [{"id": i, "problem": m} for m in missing]
+        locs = files.get(i, [])
+        if len(locs) > 1:
+            problems.append({"id": i, "problem": "block file in several places: %s" % [l[2] for l in locs]})
+        elif locs and locs[0][1] != ctx:
+            problems.append({"id": i, "problem": "file under blocks/%s/, manifest context %s: a context change "
+                             "needs a file move — do it by hand, then re-render" % (locs[0][1], ctx)})
+        plan.append((i, locs[0][2] if locs else os.path.join(feat.dir, "blocks", ctx, "todo", i + ".md"), text))
+    if problems:
+        return emit({"ok": False, "refused": "incomplete or conflicting manifest: nothing written",
+                     "problems": problems}, 1)
+    written, unchanged = [], []
+    for i, path, text in plan:
+        if os.path.isfile(path) and read(path) == text:
+            unchanged.append(i)
+            continue
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(path + ".tmp", path)
+        written.append(os.path.relpath(path, feat.dir))
+    return emit({"ok": True, "written": written, "unchanged": unchanged,
+                 "orphans": sorted(set(files) - set(ids))})
+
+
 def central_spikes(feat):
     """Open `[ ]` entries of the context-map's `## Open spikes` with `owner: <feature>` + `central: true`."""
     path, out = os.path.join(feat.odir, "context-map.md"), []
@@ -619,8 +862,6 @@ def lint(feat):
                 gap("ids.unique", i, "duplicate %s id" % kind)
             seen.add((kind, i))
     labels = feat.manifest.get("releases") if isinstance(feat.manifest.get("releases"), dict) else None
-    first3 = sorted({b.get("wave") for b in feat.blocks
-                     if b.get("type") != "scaffold" and isinstance(b.get("wave"), int)})[:3]
     for b in feat.blocks:
         i, t, w = str(b.get("id")), b.get("type"), b.get("wave")
         if t not in BLOCK_TYPES:
@@ -643,8 +884,12 @@ def lint(feat):
                 gap("release.required", i, "non-scaffold block without release:")
             elif labels is not None and str(rel) not in labels:
                 gap("release.declared", i, "release %s is not in the releases: section" % rel)
-            if str(rel) == "R0" and isinstance(w, int) and w not in first3:
-                gap("release.r0_waves", i, "R0 block at wave %s, outside the first 3 build waves %s" % (w, first3))
+        else:
+            domain = [k for k in SCAFFOLD_DOMAIN if b.get(k)]
+            domain += ["owner of boundary %s" % bd.get("id") for bd in feat.boundaries if str(bd.get("owner")) == i]
+            if domain:
+                gap("scaffold.domain_free", i, "a scaffold declares no domain: %s — shared types/rules belong to "
+                    "an ordinary, reviewed owner block" % ", ".join(domain))
     scaffold_open = any(b.get("type") == "scaffold" and feat.state_of(str(b.get("id"))) != "done" for b in feat.blocks)
     try:
         repo_root = feat.repo()
@@ -664,10 +909,12 @@ def lint(feat):
                 gap("boundary.consumers", i, "block %s consumes it but is not in its consumers" % b.get("id"))
         if not bd.get("pinned_types"):
             gap("boundary.pinned_types", i, "no pinned_types (Published Language)", "architect")
+        for m in boundary_shape(bd):
+            gap("boundary.pinned_types", i, m, "architect")
         if bd.get("contract_test") not in ("invariant-test", "consumer-driven"):
             gap("boundary.contract_test", i,
                 "contract_test %r is not invariant-test | consumer-driven" % bd.get("contract_test"))
-    files = feat.files()
+    files, rendered = feat.files(), any("what" in b for b in feat.blocks)
     for i, locs in files.items():
         if i not in feat.row:
             gap("blockfile.orphan", locs[0][2], "block file with no manifest row")
@@ -686,25 +933,23 @@ def lint(feat):
             gap("blockfile.context_dir", i, "file under blocks/%s/, manifest context %s" % (locs[0][1], b.get("context")))
         if "status" in fm or re.search(r"^\s*[-*] \[[ xX]\]", body, re.M):
             gap("blockfile.status_free", i, "a status: field or a checkbox in the block file")
+        if rendered:  # a rendered manifest: the file is exactly `manifest render`'s projection
+            text, missing = render_block(feat, b)
+            if missing:
+                gap("render.input", i, "; ".join(missing))
+            elif read(locs[0][2]) != text:
+                gap("blockfile.render", i, "the block file differs from `manifest render`: re-render, never hand-patch")
         if b.get("type") == "scaffold":
             continue
         tasks = list_items(board.section(body, "tasks"))
-        task_text, invs = "\n".join(tasks), [str(x) for x in b.get("invariants") or []]
         if not board.section(body, "what to do"):
             gap("spec.what", i, "## What to do is missing or empty")
         if not tasks:
             gap("spec.tasks", i, "## Tasks has no criterion")
-        if not re.search(r"^[\s*_>]*sources\s*:", body, re.M | re.I):
+        if not re.search(r"^[\s*_>]*sources\s*:[ \t*_]*\S", body, re.M | re.I):
             gap("spec.sources", i, "no Sources: line")
-        for tag in [m.group(0) for m in (re.search(r"INV-\d+", x) for x in invs) if m]:
-            if not re.search(re.escape(tag) + r"(?!\d)", task_text):
-                gap("spec.invariants", i, "invariant %s has no criterion in ## Tasks" % tag)
-        untagged = [x for x in invs if not re.search(r"INV-\d+", x)]
-        if untagged and len(tasks) < len(invs):
-            gap("spec.invariants", i, "%d criteria < %d invariants" % (len(tasks), len(invs)))
-        for cmd in b.get("commands") or []:
-            if str(cmd) not in task_text:
-                gap("spec.commands", i, "command %s does not appear in ## Tasks" % cmd)
+        for rule, msg in coverage(b, tasks):
+            gap(rule, i, msg)
     seen_adrs = set()
     for b in feat.blocks:
         for ref, path in deps(feat, str(b.get("id")))[1]:
@@ -901,6 +1146,31 @@ def gate_hash(repo, gate, globs):
     return h.hexdigest()
 
 
+GENERATED_DIRS = {"__pycache__", "node_modules", "build", "dist", "target", "out", "obj", "coverage",
+                  ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".venv", "venv", ".gradle",
+                  ".next", ".nuxt", ".dart_tool", "DerivedData"}
+GENERATED_EXT = (".pyc", ".pyo", ".class", ".o", ".obj", ".so", ".dylib", ".dll", ".log", ".tmp")
+
+
+def suspect_generated(repo, globs):
+    """["<file>: <why>"] for gate_files matches that look generated: git-ignored, under a usual
+    build/cache directory, or a compiled/log extension. Diagnostic only."""
+    matched = sorted({os.path.relpath(p, repo) for g in globs
+                      for p in glob.glob(os.path.join(repo, g), recursive=True) if os.path.isfile(p)})
+    p = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin"], input="\n".join(matched), capture_output=True,
+                       text=True)
+    ignored = set(p.stdout.splitlines()) if p.returncode in (0, 1) else set()
+    out = []
+    for f in matched:
+        parts = f.replace("\\", "/").split("/")
+        why = ["git-ignored"] if f in ignored else []
+        why += ["under %s/" % d for d in parts[:-1] if d in GENERATED_DIRS][:1]
+        why += ["%s file" % os.path.splitext(f)[1]] if f.endswith(GENERATED_EXT) else []
+        if why:
+            out.append("%s: %s" % (f, ", ".join(why)))
+    return out
+
+
 # ---- commands -----------------------------------------------------------------------------------
 def emit(obj, code=0):
     print(json.dumps(obj, indent=2, ensure_ascii=False))
@@ -939,8 +1209,45 @@ def cmd_status(a):
     return emit({"ok": not out, "anomalies": out}, 1 if out else 0)
 
 
+def lint_adrs(adir):
+    """ADRs alone, before any manifest: file name, frontmatter, `enforced_by` shape. Whatever needs a
+    manifest or the repo (does `from` name a block, does the check exist) is `deferred`."""
+    if not os.path.isdir(adir):
+        raise UsageError("--adrs %s is not a directory" % adir)
+    gaps, deferred = [], []
+    for p in sorted(glob.glob(os.path.join(adir, "*.md"))):
+        where, text = os.path.basename(p), read(p)
+
+        def gap(rule, msg):
+            gaps.append({"rule": rule, "where": where, "gap": msg, "bounce_to": "architect"})
+        if not re.match(r"^\d{4}-[A-Za-z0-9][A-Za-z0-9_.-]*\.md$", where):
+            gap("adr.filename", "not NNNN-<slug>.md")
+        end = text.find("\n---", 3) if text.startswith("---") else -1
+        if end == -1:
+            gap("adr.frontmatter", "no --- frontmatter ---")
+            continue
+        try:
+            fm = parse_yaml(text[3:end])
+        except YamlError as e:
+            gap("adr.frontmatter", str(e).replace("building-blocks.yaml ", "frontmatter "))
+            continue
+        if not fm.get("scope"):
+            gap("adr.frontmatter", "no scope:")
+        if fm.get("status") not in ("proposed", "accepted", "superseded"):
+            gap("adr.frontmatter", "status %r is not proposed | accepted | superseded" % fm.get("status"))
+        for c in adr_checks(p):
+            if "legacy" in c:
+                gap("adr.checks", "enforced_by entry %s is not {check: <repo path>, from: <block>}" % c["legacy"])
+            else:
+                deferred.append({"where": where, "file": c["check"], "until": "`MM lint F` with a manifest: "
+                                 "from %s resolves to a block, the check exists" % (c["from"] or "(none)")})
+    return gaps, deferred
+
+
 def cmd_lint(a):
-    gaps, deferred = lint(Feature(a.feature_dir))
+    if bool(a.adrs) == bool(a.feature_dir):
+        raise UsageError("lint takes F, or --adrs <dir> alone")
+    gaps, deferred = lint_adrs(a.adrs) if a.adrs else lint(Feature(a.feature_dir))
     return emit({"ok": not gaps, "gaps": gaps, "deferred": deferred}, 1 if gaps else 0)
 
 
@@ -953,9 +1260,14 @@ def cmd_ready(a):
     spikes = [(i, set(re.findall(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", board.section(body, "unblocks"))), st, fm)
               for i, st, fm, body, _ in feat.nodes() if fm.get("type") == "spike" and st != "done"]
     ready, excluded = [], []
+    scaffolds = [str(b.get("id")) for b in feat.blocks if b.get("type") == "scaffold"
+                 and not (feat.integrated(str(b.get("id"))) and feat.state_of(str(b.get("id"))) == "done")]
     for n, b in enumerate(feat.blocks):
         bid = str(b.get("id"))
         if feat.state_of(bid) != "todo":
+            continue
+        if scaffolds and b.get("type") != "scaffold":  # the scaffold goes alone, first
+            excluded.append({"id": bid, "reason": "scaffold not integrated and done: " + ", ".join(scaffolds)})
             continue
         waiting = [str((feat.bnd.get(c) or {}).get("owner")) for c in feat.consumes(bid)]
         waiting = [o for o in waiting if not feat.integrated(o)]
@@ -987,16 +1299,16 @@ def cmd_move(a):
     if len(locs) != 1:
         raise UsageError("%s: %d block/node files found" % (a.id, len(locs)))
     (src, legal), frm = locs[0], os.path.basename(os.path.dirname(locs[0][0]))
-    res = {"id": a.id, "from": frm, "to": a.to}
-    if (frm, a.to) not in legal:
-        return emit(dict(res, refused="illegal transition %s->%s" % (frm, a.to)), 1)
+    if (frm, a.to) not in legal:  # a refusal carries no `to`: nothing moved
+        return emit({"ok": False, "id": a.id, "from": frm, "refused": "illegal transition %s->%s" % (frm, a.to)}, 1)
     if legal is BLOCK_MOVES and a.to == "done" and not feat.finishable(a.id):
-        return emit(dict(res, refused="not finishable: not integrated, or a boundary it touches is not welded"), 1)
+        return emit({"ok": False, "id": a.id, "from": frm, "refused": "not finishable: not integrated, or a "
+                     "boundary it touches is not welded (it stays in doing/)"}, 1)
     dst = os.path.join(os.path.dirname(os.path.dirname(src)), a.to, a.id + ".md")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tracked = git(os.path.dirname(src), "ls-files", "--error-unmatch", src, check=False).returncode == 0
     git(os.path.dirname(src), "mv", src, dst) if tracked else shutil.move(src, dst)
-    return emit(dict(res, path=dst, git=tracked))
+    return emit({"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked})
 
 
 def cmd_pack(a):
@@ -1130,7 +1442,12 @@ def cmd_proof(a):
         if empty:
             raise UsageError("--gate-files %s match no file in %s" % (" ".join(empty), repo))
         write_json(path, cur)
-        return emit({"recorded": path, "proof": cur})
+        sus = suspect_generated(repo, a.gate_files)
+        out = {"recorded": path, "proof": cur}
+        if sus:  # hashed all the same: a warning, never a silent exclusion
+            out["warnings"] = {"looks_generated": len(sus), "files": sus[:20], "hint": "gate_files name stable "
+                               "inputs: a generated file matched here stales the proof whenever it is rebuilt"}
+        return emit(out)
     olds = [(p, load_json(p) or {})
             for p in sorted(glob.glob(os.path.join(feat.odir, "features", "*", "gate-proof", a.id, "proof.json")))]
     for p, old in olds:  # a project fact: any feature's proof counts
@@ -1228,8 +1545,11 @@ def build_parser():
         p.set_defaults(fn=fn)
         return p
     cmd("status", cmd_status, "anomalies (read-only)", "feature_dir").add_argument("--integration", required=True)
-    cmd("lint", cmd_lint, "exact structural checks", "feature_dir")
-    cmd("why", cmd_why, "validate a decision-notes file (read-only)", ("op", ("check",)), "file")
+    p = cmd("lint", cmd_lint, "exact structural checks (F, or --adrs DIR before any manifest)")
+    p.add_argument("feature_dir", nargs="?")
+    p.add_argument("--adrs")
+    cmd("why", cmd_why, "check | append decision notes", ("op", ("check", "append")), "file").add_argument("--entry")
+    cmd("manifest", cmd_manifest, "render the block files from the manifest", ("op", ("render",)), "feature_dir")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)

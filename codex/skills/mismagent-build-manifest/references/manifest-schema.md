@@ -10,9 +10,11 @@ file first, then its readers.
 blocks:
   - id: <slug>                  # unique
     type: aggregate | application-service | port | adapter | read-model | ui | scaffold
-    context: <bounded-context>
+    context: <bounded-context>  # infrastructure serving several contexts: its declared host context
     side: <side>                # from the profile
     wave: 0 | 1 | 2 …           # integer; 0 ONLY for scaffold; owners before consumers
+    what: "<1–3 sentences: what to build, from the model>"   # non-scaffold
+    sources: [<tactical-model section>, <ADR NNNN>…]         # non-scaffold
     consumes: [<boundary-id>…]  # empty for owners/scaffold
     tests_nl: [<falsifiable AC in natural language>…]   # `by-construction` items marked as such
     related_adrs: [<NNNN>…]
@@ -30,7 +32,7 @@ blocks:
     notes: "<explicit cut / where a prescribed surface went>"   # OPTIONAL
 boundaries:                     # FIRST-CLASS section
   - id: <slug>
-    owner: <block-id>           # aggregate | port | read-model — built before its consumers
+    owner: <block-id>           # any ordinary block that publishes it — built before its consumers
     consumers: [<block-id>…]    # agrees both ways with the blocks' `consumes`
     pinned_types: { <Name>: <primitive or shared-kernel VO>… }  # every composite has its OWN row;
                                 # a quantity's unit-vs-quantity granularity is explicit here
@@ -43,41 +45,27 @@ build_order: [[<wave-0>…], [<owners>…], [<consumers>…]]   # derived
 
 ## The block files — `blocks/<context>/todo/<id>.md`
 
-A **derived, status-less** rendering of one manifest row, so opening a block shows the whole block.
-
-**Frontmatter** mirrors the row: `type`, `context`, `side`, `wave`, `consumes`, `related_adrs`,
-`release`, `model_hint` (when set), plus the per-type fields (aggregate → `invariants`,
-`invariant_fields`, `tables`; port → `pinned_types`, `contract_test`; read-model →
-`view_shape`). **No `status:` field, no `[ ]` checkboxes**: the state is the folder, moved only by
-the worker-composer.
-
-**Body:**
-```
-# <id> — <title>
-## What to do     — what to build (from the model), 1–3 sentences
-## Tasks          — the tests_nl / acceptance criteria, a plain list (read-only, not checkboxes)
-## Dependencies   — the boundary owners it waits on, each seam inlined (below)
-Sources: <related ADRs> · <tactical-model section>
-```
+**Rendered by `MM manifest render F`** from the row — never written or patched by hand: a
+status-less projection (frontmatter mirroring the row; `## What to do` ← `what`, `## Invariants`, `## Tasks` ←
+`tests_nl`, `## Dependencies` ← the touched boundaries with their pins, `Sources:` ← `sources`), so
+opening a block shows the whole block. The state is the folder, moved only by the worker-composer.
 
 ## The per-type standard — the floor of detail
 
-Hold every block to it at generation. `MM lint` checks the structural part: one file per row under `blocks/<context>/`, frontmatter
-`type`/`context`/`wave` equal to the row (the other mirrored fields are not compared), no status;
-for non-scaffold blocks only, non-empty `## What to do`, ≥ 1 `## Tasks` item, a `Sources:` line,
-every `INV-n` and every `commands` entry named in `## Tasks`. The rest is **not linted** — you
-guarantee it, and the composer's readiness and the reviewers judge it:
+Hold every row to it. `MM lint` checks the structural part (the list: the plugin's `tools/CLI.md`) — e.g. every `INV-n`
+and every `commands` entry named in the rendered `## Tasks`, so the `tests_nl` name them. The rest
+is **not linted** — you guarantee it, and the composer's readiness and the reviewers judge it:
 
-- **aggregate:** every invariant spelled out in the body and covered by ≥ 1 criterion;
+- **aggregate:** every invariant spelled out in `invariants` and covered by ≥ 1 criterion;
 - **application-service:** every command has ≥ 1 happy-path criterion **and** ≥ 1 rejection/failure
   criterion;
-- **any block at a boundary:** every boundary it touches appears in `## Dependencies` with the
-  **pinned signature inlined** — the Published-Language types, the `contract_test`, the `keys:`
-  minting rules. Order/duplicate guarantees come with the owner's ADR in the pack. The reader
-  never opens the YAML to learn the seam;
+- **any block at a boundary:** its boundaries' `pinned_types`, `contract_test` and `keys:` complete
+  enough that the rendered `## Dependencies` alone teaches the seam; order/duplicate guarantees come
+  with the owner's ADR in the pack;
 - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
-- **ui:** the screen's states (empty / error / loading) are covered.
+- **ui:** the screen's states (empty / error / loading) are covered;
+- **scaffold:** no domain — no boundary, invariant or owned shared type (lint refuses them).
 
 The ADR set a block reads is **derived** (`related_adrs` ∪ those of the owners of the boundaries it consumes ∪ those whose check names it as `from` —
 `MM pack` resolves it), never a hand-compiled list. A gap found downstream bounces back to
-`build-manifest`: regenerate, never hand-patch a block file.
+`build-manifest`: fix the YAML and re-render.

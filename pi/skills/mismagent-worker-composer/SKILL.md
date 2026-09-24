@@ -9,29 +9,34 @@ description: "mismAgent build: builds the block manifest \u2014 blocks in parall
 # Worker-Composer — the build loop
 
 You are a **thin coordinator**: you write **no code and no tests** (`mismagent-worker` does). You
-are the **only one that composes and moves state**. The design is `.agents/skills/mismagent-worker-composer/references/LOOP.md`;
+are the **only one that composes and moves state**. The design is `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/LOOP.md`;
 follow its procedure **literally**. **Build in parallel, integrate in series. In doubt, stop and
 ask** — never guess, never repair state by hand.
 
-**Computation is a tool call.** `MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`
-(interface: `.agents/skills/mismagent-worker-composer/references/CLI.md`; JSON out; exit `1` = refused, the JSON says why).
-Never re-derive its output. `F` = `<output_dir>/features/<feature>/` (from
-`<the argument this skill was invoked with>`), `B` = the integration line (the profile's branching, e.g. `feature/<feature>`).
-**One repository per project**: a side is a path inside it (the profile's `sides.<side>.path`).
+**Computation is a tool call.** `MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`
+(interface: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`; JSON out; exit `1` = refused, the JSON says why) —
+an abbreviation: always run the full command, never a shell variable. Never re-derive its output.
+`F` = `<output_dir>/features/<feature>/` (from `<the argument this skill was invoked with>`). `B` = the profile's integration branch
+(default `integration/<feature>`), cut from its base branch: `git rev-parse --verify` the base
+first; unnamed or missing → ask, never assume `main`.
+**One repository per project**: a side is a path inside it (the profile's `sides.<side>.path`). A
+block's worktree is `.worktrees/<feature>/<id>` on `block/<id>`, its pack saved under
+`.worktrees/packs/<feature>/`; add `.worktrees/` to `.gitignore` before the first. Workers get
+absolute paths.
 
 ## Inputs
-`F/building-blocks.yaml` (authoritative: blocks, boundaries, pinned types), the block files
+`F/building-blocks.yaml` (authoritative), the block files
 `F/blocks/<context>/{todo,doing,done}/<id>.md` (read-only spec; the folder is the state), and the
-profile (`<output_dir>/profile.md`: sides, gates, `gate_files`, branching, `build:`). Work in **one
-checkout of `B`** (created off the base branch if missing) and commit `F` there: state and code
+profile (`<output_dir>/profile.md`: sides, gates, branching, `build:`). Work in **one
+checkout of `B`** and commit `F` there: state and code
 share one line. The project is not a git repository → **ask the user** before
 `git init`.
 
 ## The procedure (one firing)
 
-**0 · Finish, then status.** `MM move F <x> --to done` for every `finishable` block of `MM ready F`
-(a crash may follow a promote). Then `MM status F --integration B`: any anomaly → report it
-with its `detail` and **ask the user; end the firing.** Never clean up on your own.
+**0 · Finish, then status.** `MM move F <x> --to done` for every `finishable` block of `MM ready F`.
+Then `MM status F --integration B`: any anomaly → report it
+with its `detail` and **ask the user; end the firing.**
 
 **1 · Readiness.** `MM lint F` (every firing): every gap → bounce to its `bounce_to`
 with the gap named (regenerate, never hand-patch; `recorder` below). Then the judgment items, yours:
@@ -51,17 +56,16 @@ with the gap named (regenerate, never hand-patch; `recorder` below). Then the ju
   side with a manual `ui_render_check` and no `run` binding → the profile.
 
 Bounce targets: `/skill:mismagent-build-manifest`, `/mismagent-architect`, **the profile** (a targeted
-field edit with the user), or `recorder` (`why.*`: the entry's recorder — in the build, you — fixes
-`F/decisions.md`, then re-lints).
+field edit with the user), or `recorder` (`why.*`: in the build, you fix `F/decisions.md` and re-lint).
 
-**2 · Scaffold** (greenfield, before any owner). `MM move F <id> --to doing`, a worktree on
-`block/<id>` from `B`, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
+**2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is integrated and done).
+`MM move F <id> --to doing`, its worktree, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
 the worker records the gate proof; then `MM compose start F <id> --integration B --branch block/<id>`,
 the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to done`.
 
 **3 · Build.** `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
-(default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, a worktree on
-`block/<id>` from `B`'s tip (an un-parked block reuses its existing branch and worktree), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
+(default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
+from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
 (`--extra` the authored dev-architecture doc, if the profile points to one), the
 block-type skill, the worktree and the side's gate. Never assemble context by hand.
 
@@ -101,11 +105,12 @@ Commit `F`'s changes at the end of the firing — never between `compose start` 
 
 ## Decision notes — `F/decisions.md`
 You are the **recorder**, not the decider (format, rules: `CLI.md`): the workers' `DECISIONS`, a reviewer's objection or a rework's evidence into `Debate`/`Result`, your
-own non-obvious calls; a reversed choice `Supersedes`. Before committing `F`, if it exists: `MM why check F/decisions.md`.
+own non-obvious calls; a reversed choice `Supersedes`. Each via `MM why append F/decisions.md --entry <file>`;
+before committing `F`, if it exists: `MM why check F/decisions.md`.
 
 ## Model routing — the model follows the action
-Tiers: `light` · `standard` · `deep` (Claude Code default: `haiku` · `sonnet` · `opus`, via the Agent
-tool's `model`; the profile's `build.model_routing` rebinds tiers and overrides rows).
+Tiers `light` · `standard` · `deep` (the Agent tool's `model`; the profile's `build.model_routing`
+binds them and overrides rows).
 | action | tier |
 |---|---|
 | `run-app-smoke` | light |
@@ -154,20 +159,19 @@ the gate proof.
 When the first block of a type passes review — or a rework fixed a defect class the next block of
 that type could repeat — dispatch `harvest-dev-architecture` in lessons mode (tier standard) with
 the block's `rework/` files and findings; `MM pack` carries the type's lessons to every worker and
-reviewer. Never paste lessons into prompts by hand.
+reviewer.
 
 ## Report (~30 lines)
-Blocks integrated and done, parked (with their `open-questions/<id>.md`), blocked and why; this
+Blocks integrated and done, parked, blocked and why; this
 firing's dispatches with tier and depth; spikes; the next release and what is left on its path; open
 `pre-release.md` lines; the next action. Point the user to `/skill:mismagent-board`. Under `/loop`, use a
 long fallback interval; don't poll.
 
 ## Invariants
-1. Only you compose (`MM compose`) and move state (`MM move`). Workers write code in their worktrees:
+1. Only you compose (`MM compose`) and move state (`MM move`; `ok: false` = nothing moved, read
+   `refused`). Workers write code in their worktrees:
    never state, never merges, never another side.
-2. State = the folders and the files of LOOP.md; no `status:` in a block file.
-3. The types at a boundary are Published Language, never the supplier's domain.
-4. **No merge or push onto the base branch** without the user's explicit request.
+2. **No merge or push onto the base branch** without the user's explicit request.
 
 ## pi execution notes (generated — how to run the waves on this harness)
 - **All subagent dispatch goes through the `subagent` tool** (pi's official example extension —
@@ -177,14 +181,14 @@ long fallback interval; don't poll.
 - **Parallel consumers in a wave — use the tool's parallel mode**: one
   `{agent: "mismagent-worker", task: ...}` entry per ready block, each task carrying `block_id`,
   `block_type`, `context`, the block-type skill names (e.g.
-  `mismagent-realize-aggregate` — the worker reads them from `.agents/skills/<name>/SKILL.md`),
+  `mismagent-realize-aggregate` — the worker reads them from `@@MISMAGENT_SKILLS@@/<name>/SKILL.md`),
   the path of the block's rich `<id>.md` spec and the side's gate commands. The extension caps a
   call at 8 tasks (4 concurrent) — size waves accordingly. Ask each worker to end with the RESULT
   handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, file list, notes) and route it to step 4
   as usual.
 - **Review (step 5)**: spawn `{agent: "mismagent-verifier", task: <block + gate>}`
   (structural), then `{agent: "mismagent-reviewer", task: <block id + diff scope>}` — a generated
-  glue agent whose only job is to load `.agents/skills/mismagent-code-review/SKILL.md` in fresh
+  glue agent whose only job is to load `@@MISMAGENT_SKILLS@@/mismagent-code-review/SKILL.md` in fresh
   context and apply it to the block's diff (read-only). A `chain: [...]` with `{previous}` can
   wire worker → verifier → reviewer per block when sequential handoffs are preferable.
 - **Model routing on pi:** bind the tiers to your pi models in the profile's

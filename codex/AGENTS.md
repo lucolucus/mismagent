@@ -3,16 +3,16 @@
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
+> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `@@MISMAGENT_SKILLS@@/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
 
-> **Recording duty (the caller's).** Whoever spawns a subagent is the **recorder**: the challenger's debate and the user's `KILL`/`RESHAPE`/`PROCEED` choice, the user's answer to the architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's `NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). Subagents never write that file: they cite `D-NNNN` in their notes.
+> **Recording duty (the caller's).** Whoever spawns a subagent is the **recorder**: the challenger's debate and the user's `KILL`/`RESHAPE`/`PROCEED` choice, the user's answer to the architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's `NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). Subagents never write that file: they cite `D-NNNN` in their notes.
 
-**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` It copies the skills into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it). Verify: `/skills` lists `mismagent-explore`.
+**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` It copies the skills into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it), and anchors every tool path to the absolute installed skills directory (re-run it after moving the project). Verify: `/skills` lists `mismagent-explore`.
 
 A flow to invoke, not a methodology to read: the agents' and skills' instructions are the process.
 This file says who owns what and in which order. The core names no project; each project's
-**profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`; template `.agents/skills/mismagent-explore/references/PROFILE.md`,
-example `.agents/skills/mismagent-explore/references/profile-example.md`) binds sides, paths, gates and branching.
+**profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`; template `@@MISMAGENT_SKILLS@@/mismagent-explore/references/PROFILE.md`,
+example `@@MISMAGENT_SKILLS@@/mismagent-explore/references/profile-example.md`) binds sides, paths, gates and branching.
 
 ## Where things live — trunk and features
 ```
@@ -32,7 +32,7 @@ example `.agents/skills/mismagent-explore/references/profile-example.md`) binds 
 ## The three movements
 | movement | you | owners (in order) | handoff files |
 |---|---|---|---|
-| **explore** | in dialogue | `explore` skill (bootstraps the profile if missing) → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
+| **explore** | in dialogue | `explore` skill → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
 | **model** | confirm the boundaries | `$mismagent-model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
 | **build** | confirm each release | `$mismagent-worker-composer` → `mismagent-worker` ×N → `mismagent-verifier` (+ `code-review`) | code on the integration line, proofs |
 
@@ -46,10 +46,9 @@ choice · the `tests_nl` elicitation and the R0 cut · a `BOUNCED` block or a sp
 release. Nothing else stops for you.
 
 ## The rules the flow enforces
-1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. In a
-   read-only harness mode, dispatch only read-only agents and materialize the pending files as the
-   first action once writes reopen. A non-obvious choice, its debate and who decided it →
-   `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`).
+1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. A non-obvious choice, its debate and who decided it →
+   `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`); a subagent that may not write it
+   returns `DECISIONS`, which its conductor appends.
 2. **State = folder.** A block's state is its folder (`todo/doing/done`); only the worker-composer
    moves it and merges.
 3. **Re-entrance.** Every command re-reads the files and resumes at the first missing artifact; an

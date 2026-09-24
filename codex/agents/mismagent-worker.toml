@@ -91,7 +91,7 @@ BLOCK: <id>
 BOUNDARY_HONORED: <agg|port|...> (fields confined? predicate exposed? gates honored? yes/no)
 TESTS: <n> green
 PUBLIC_API: <the public signatures another block will use — for aggregate/port>
-DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (format: `.agents/skills/mismagent-worker-composer/references/CLI.md` "Decision notes"; you decide, the composer records) | none>
+DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md` "Decision notes"; you decide, the composer records) | none>
 DEVIATIONS: <where you departed from the spec/pack, one line each | none>
 NOTE: <1 sentence — on BLOCKED: the step/cause outside the block>
 ```

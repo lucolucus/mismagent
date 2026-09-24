@@ -12,9 +12,9 @@ A thin, optional early run of the worker-composer's readiness step. Its verdict 
 the one gate lives in the worker-composer.
 
 ## Run
-`MM lint <output_dir>/features/<feature>/`, where `MM` = `python3 .agents/skills/mismagent-worker-composer/scripts/mismagent.py`.
+`MM lint <output_dir>/features/<feature>/`, where `MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`.
 It prints `{ok, gaps:[{rule, where, gap, bounce_to}], deferred}` — structural checks only (the list:
-`.agents/skills/mismagent-worker-composer/references/CLI.md`). Judgment items (a high-value block with no `tests_nl`, the
+`@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`). Judgment items (a high-value block with no `tests_nl`, the
 gate's red-green proof, stale spikes) you only **name** as reminders.
 
 ## Outcome

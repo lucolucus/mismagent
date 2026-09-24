@@ -230,10 +230,35 @@ class TestLint(Base):
             self.assertIn(g, gaps)
         self.assertIn("blockfile.orphan", {r for r, _ in gaps})
 
-    def test_r0_outside_first_three_waves(self):
-        self.write_feature(MANIFEST.replace("    wave: 3\n    release: R1", "    wave: 4\n    release: R0")
-                           .replace("    wave: 2\n    release: R1", "    wave: 3\n    release: R1"))
-        self.assertIn(("release.r0_waves", "svc-report"), self.gaps()[0])
+    def test_r0_has_no_wave_cap(self):  # R0 = the minimal slice the graph allows, at any depth
+        m = (MANIFEST.replace("    wave: 3\n    release: R1", "    wave: 4\n    release: R0")
+             .replace("    wave: 2\n    release: R1", "    wave: 3\n    release: R1"))
+        self.write_feature(m)
+        for bid, w in (("svc-report", 4), ("rm-orders", 3)):
+            path = glob.glob(os.path.join(self.feat, "blocks", "*", "todo", bid + ".md"))[0]
+            with open(path) as f:
+                text = f.read()
+            self.put(os.path.relpath(path, self.feat), re.sub(r"wave: \d+", "wave: %d" % w, text, count=1))
+        self.run_tool("lint", self.feat, expect=0)
+
+    def test_scaffold_declares_no_domain(self):
+        m = MANIFEST.replace("    context: shell\n    wave: 0\n",
+                             "    context: shell\n    wave: 0\n    invariants: [\"[INV-9] money is cents\"]\n")
+        self.write_feature(m.replace("owner: rm-orders", "owner: scaffold-app"))
+        texts = [g["gap"] for g in self.gaps()[1]["gaps"] if g["rule"] == "scaffold.domain_free"]
+        self.assertEqual(len(texts), 1, texts)
+        self.assertIn("invariants", texts[0])
+        self.assertIn("owner of boundary b-rm", texts[0])
+
+    def test_inv_tags_match_by_number(self):
+        m = MANIFEST.replace('      - "[INV-1] an order total is never negative"\n',
+                             '      - "[INV-1] an order total is never negative"\n      - "[INV-12] lines are unique"\n')
+        self.write_feature(m, mutate={"agg-order": {"tasks": ["test_INV_12_duplicate_line_is_rejected"]}})
+        gaps = [g["gap"] for g in self.gaps()[1]["gaps"] if g["rule"] == "spec.invariants"]
+        self.assertEqual(gaps, ["invariant INV-1 has no criterion in ## Tasks"])  # INV-12 never counts as INV-1
+        self.write_feature(m, mutate={"agg-order": {"tasks": ["inv 1: a negative total is rejected",
+                                                               "test_INV_12_duplicate_line_is_rejected"]}})
+        self.run_tool("lint", self.feat, expect=0)
 
     def test_wave_zero_and_frontmatter(self):
         self.write_feature(MANIFEST.replace("# the owner\n    type: aggregate\n    context: orders\n    wave: 1",
@@ -345,7 +370,12 @@ class TestFlow(Base):
         return [r["id"] for r in self.run_tool("ready", self.feat, expect=0)["ready"]]
 
     def test_ready_owner_integrated_parked_spike_order(self):
-        self.assertEqual(self.ready_ids(), ["scaffold-app", "agg-order"])
+        self.assertEqual(self.ready_ids(), ["scaffold-app"])          # the scaffold goes alone, first
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=1)  # todo -> done is illegal
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.assertEqual(self.ready_ids(), ["agg-order"])
         self.move("agg-order", "doing")
         self.block_wt("agg-order")                    # a branch alone is not integration
         self.assertNotIn("svc-order", self.ready_ids())
@@ -353,15 +383,59 @@ class TestFlow(Base):
         self.review("agg-order")
         self.compose("start", "agg-order", expect=0)
         self.compose("promote", "agg-order", expect=0)
-        self.assertEqual(self.ready_ids(), ["scaffold-app", "svc-order", "rm-orders"])  # wave, then release
+        self.assertEqual(self.ready_ids(), ["svc-order", "rm-orders"])  # wave, then release
         self.put("open-questions/svc-order.md", "which currency?\n")
         out = self.run_tool("ready", self.feat, expect=0)
         self.assertIn("parked", {e["id"]: e["reason"] for e in out["excluded"]}["svc-order"])
         self.put("tasks/be/backlog/perf-spike.md", "---\nid: perf-spike\ntype: spike\ncentral: true\n---\n"
                  "# Spike\n\n## Unblocks\n- rm-orders\n")
         out = self.run_tool("ready", self.feat, expect=0)
-        self.assertEqual([r["id"] for r in out["ready"]], ["scaffold-app"])
+        self.assertEqual([r["id"] for r in out["ready"]], [])
         self.assertEqual(out["open_spikes"], [{"id": "perf-spike", "state": "backlog", "central": True, "unblocks": ["rm-orders"]}])
+
+    def test_ready_scaffold_barrier(self):
+        self.put("tasks/be/backlog/perf-spike.md", "---\nid: perf-spike\ntype: spike\n---\n# S\n\n## Unblocks\n- rm-orders\n")
+        out = self.run_tool("ready", self.feat, expect=0)
+        self.assertEqual([r["id"] for r in out["ready"]], ["scaffold-app"])
+        self.assertIn("scaffold not integrated and done: scaffold-app", {e["id"]: e["reason"] for e in out["excluded"]}["agg-order"])
+        self.assertEqual([s["id"] for s in out["open_spikes"]], ["perf-spike"])       # spikes stay visible
+        self.move("scaffold-app", "doing")
+        self.assertEqual(self.ready_ids(), [])                                        # doing: still the barrier
+        self.integrate("scaffold-app")
+        self.assertEqual(self.ready_ids(), [])                                        # integrated, not done
+        self.assertEqual(self.run_tool("ready", self.feat, expect=0)["finishable"], ["scaffold-app"])
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.assertEqual(self.ready_ids(), ["agg-order"])
+
+    def test_ready_two_scaffolds_and_brownfield(self):
+        two = MANIFEST.replace("blocks:\n", "blocks:\n  - id: scaffold-ui\n    type: scaffold\n    context: shell\n    wave: 0\n", 1)
+        self.write_feature(two)
+        self.put("blocks/shell/todo/scaffold-ui.md", block_file("scaffold-ui", "scaffold", "shell", 0))
+        self.assertEqual(self.ready_ids(), ["scaffold-ui", "scaffold-app"])
+        self.integrate("scaffold-app")
+        self.move("scaffold-app", "done")
+        self.assertEqual(self.ready_ids(), ["scaffold-ui"])                          # every scaffold first
+        brown = MANIFEST.replace("  - id: scaffold-app\n    type: scaffold\n    context: shell\n    wave: 0\n", "")
+        self.write_feature(brown, skip=("scaffold-app",))
+        self.assertEqual(self.ready_ids(), ["agg-order"])                             # no scaffold: no barrier
+
+    def snapshot(self):
+        return sorted(os.path.relpath(p, self.feat) for p in glob.glob(os.path.join(self.feat, "**"), recursive=True))
+
+    def test_move_refusal_is_unmistakable(self):
+        before = self.snapshot()
+        for bid, to in (("agg-order", "done"), ("scaffold-app", "todo")):
+            out = self.run_tool("move", self.feat, bid, "--to", to, expect=1)
+            self.assertEqual((out["ok"], "to" in out, out["from"]), (False, False, "todo"))
+            self.assertIn("refused", out)
+        self.move("agg-order", "doing")
+        before = self.snapshot()
+        out = self.run_tool("move", self.feat, "agg-order", "--to", "done", expect=1)
+        self.assertEqual((out["ok"], "to" in out), (False, False))
+        self.assertIn("not finishable", out["refused"])
+        self.assertEqual(self.snapshot(), before)                                     # nothing moved
+        out = self.run_tool("move", self.feat, "agg-order", "--to", "todo", expect=0)
+        self.assertEqual((out["ok"], out["to"]), (True, "todo"))
 
     # -- compose
     def started(self, bid="rm-orders"):
@@ -463,6 +537,19 @@ class TestFlow(Base):
     def gate(self, op, *extra, feat=None, expect=None):
         return self.run_tool("proof", op, feat or self.feat, "gate", "be", *extra, expect=expect)
 
+    def test_gate_record_warns_on_generated_matches_and_still_hashes_them(self):
+        self.put(".gitignore", "*.log\n", base=self.repo)
+        self.put("src/app.cfg", "a\n", base=self.repo)
+        self.put("build/gen.cfg", "g1\n", base=self.repo)
+        self.put("src/run.log", "x\n", base=self.repo)
+        out = self.gate("record", "--gate", "make test", "--gate-files", "src/*.cfg", expect=0)
+        self.assertNotIn("warnings", out)
+        out = self.gate("record", "--gate", "make test", "--gate-files", "**/*.cfg", "src/*.log", expect=0)
+        self.assertEqual(out["warnings"]["looks_generated"], 2)
+        self.assertEqual(sorted(out["warnings"]["files"]), ["build/gen.cfg: under build/", "src/run.log: git-ignored, .log file"])
+        self.put("build/gen.cfg", "g2\n", base=self.repo)                        # never excluded from the hash
+        self.gate("check", "--gate", "make test", "--gate-files", "**/*.cfg", "src/*.log", expect=1)
+
     def test_gate_proof_stale_on_gate_string_and_files(self):
         self.put("build.cfg", "strict\n", base=self.repo)
         self.gate("record", "--gate", "make test", expect=2)                               # --gate-files required
@@ -559,6 +646,137 @@ class TestPack(Base):
         self.assertIn("go through the root", self.run_tool("pack", self.feat, "svc-order", expect=0))
 
 
+RENDERED = """\
+blocks:
+  - id: scaffold-app
+    type: scaffold
+    context: shell
+    wave: 0
+  - id: agg-order
+    type: aggregate
+    context: orders
+    wave: 1
+    release: R0
+    what: "The Order aggregate: places orders and guards their totals."
+    sources: [tactical-model#orders, ADR 0001]
+    related_adrs: ["0001"]
+    invariants:
+      - "[INV-1] an order total is never negative"
+    tests_nl: ["INV-1 a negative total is rejected"]
+  - id: svc-order
+    type: application-service
+    context: orders
+    wave: 2
+    release: R0
+    what: "PlaceOrder: validates the lines, asks the aggregate, returns the id."
+    sources: [tactical-model#orders]
+    consumes: [b-order]
+    commands: [PlaceOrder]
+    tests_nl: ["PlaceOrder creates an order", "PlaceOrder with no lines is rejected"]
+boundaries:
+  - id: b-order
+    owner: agg-order
+    consumers: [svc-order]
+    pinned_types: { OrderPlaced: "orderId:string · total:int" }
+    keys: { orderId: "minted by agg-order — uuid4, stable" }
+    contract_test: invariant-test
+releases:
+  R0: { goal: "place an order", launch: "orders screen", blocks: [agg-order, svc-order] }
+"""
+
+
+class TestRender(Base):
+    def setUp(self):
+        super().setUp()
+        shutil.rmtree(os.path.join(self.feat, "blocks"))
+        self.put("building-blocks.yaml", RENDERED)
+
+    def render(self, expect=0):
+        return self.run_tool("manifest", "render", self.feat, expect=expect)
+
+    def files(self):
+        out = {}
+        for p in sorted(glob.glob(os.path.join(self.feat, "blocks", "*", "*", "*.md"))):
+            with open(p) as f:
+                out[os.path.relpath(p, self.feat)] = f.read()
+        return out
+
+    def test_render_is_deterministic_lint_green_and_idempotent(self):
+        out = self.render()
+        self.assertEqual(sorted(out["written"]), ["blocks/orders/todo/agg-order.md", "blocks/orders/todo/svc-order.md",
+                                                  "blocks/shell/todo/scaffold-app.md"])
+        first = self.files()
+        svc = first["blocks/orders/todo/svc-order.md"]
+        for want in ("## What to do\nPlaceOrder: validates", "- PlaceOrder with no lines is rejected",
+                     "`b-order` (consumes it; owner `agg-order`)", "pinned `OrderPlaced`: orderId:string · total:int",
+                     "key `orderId`: minted by agg-order", "Sources: tactical-model#orders"):
+            self.assertIn(want, svc)
+        self.assertIn("## Invariants\n- [INV-1] an order total is never negative", first["blocks/orders/todo/agg-order.md"])
+        self.run_tool("lint", self.feat, expect=0)
+        out = self.render()
+        self.assertEqual((out["written"], len(out["unchanged"])), ([], 3))
+        self.assertEqual(self.files(), first)
+
+    def test_boundary_change_propagates_in_place_and_stales_the_spec(self):
+        self.render()
+        self.move("svc-order", "doing")
+        self.move("agg-order", "done")
+        before = self.spec_hash("svc-order")
+        self.put("building-blocks.yaml", RENDERED.replace("total:int\" }", "total:int · currency:string\" }"))
+        out = self.render()
+        self.assertEqual(sorted(out["written"]), ["blocks/orders/doing/svc-order.md", "blocks/orders/done/agg-order.md"])
+        self.assertEqual(sorted(self.files()), ["blocks/orders/doing/svc-order.md", "blocks/orders/done/agg-order.md",
+                                                "blocks/shell/todo/scaffold-app.md"])  # nothing moved
+        self.assertIn("currency:string", self.files()["blocks/orders/doing/svc-order.md"])
+        self.assertNotEqual(self.spec_hash("svc-order"), before)
+        with open(os.path.join(self.feat, "blocks/orders/doing/svc-order.md"), "a") as f:
+            f.write("- a hand-patched criterion\n")
+        self.assertIn(("blockfile.render", "svc-order"), self.gaps()[0])
+
+    def test_incomplete_or_conflicting_input_writes_nothing(self):
+        self.render()
+        before = self.files()
+        bad = RENDERED.replace('    what: "PlaceOrder: validates the lines, asks the aggregate, returns the id."\n', "")
+        bad = bad.replace('tests_nl: ["INV-1 a negative total is rejected"]', 'tests_nl: ["a total is checked"]')
+        bad = bad.replace("The Order aggregate", "The ORDER aggregate")        # a change that would be written
+        self.put("building-blocks.yaml", bad)
+        out = self.render(expect=1)
+        self.assertFalse(out["ok"])
+        self.assertEqual(sorted(p["id"] for p in out["problems"]), ["agg-order", "svc-order"])
+        self.assertEqual(self.files(), before)
+        self.put("building-blocks.yaml", RENDERED.replace("context: orders\n    wave: 2", "context: sales\n    wave: 2"))
+        self.assertIn("context change", self.render(expect=1)["problems"][0]["problem"])
+        dup = RENDERED[RENDERED.index("  - id: svc-order"):RENDERED.index("boundaries:")]
+        self.put("building-blocks.yaml", RENDERED.replace("boundaries:", dup + "boundaries:", 1))
+        self.assertIn("duplicate block id", str(self.render(expect=1)["problems"]))
+        self.assertEqual(self.files(), before)
+
+    def test_blank_criteria_and_sources_are_missing_before_any_write(self):
+        before = self.files()
+        for bad in (RENDERED.replace('"PlaceOrder with no lines is rejected"', '""'),
+                    RENDERED.replace("sources: [tactical-model#orders]\n", 'sources: "   "\n'),
+                    RENDERED.replace("sources: [tactical-model#orders]\n", 'sources: [" "]\n')):
+            self.put("building-blocks.yaml", bad)
+            out = self.render(expect=1)
+            self.assertEqual({p["id"] for p in out["problems"]}, {"svc-order"}, out)
+            self.assertEqual(self.files(), before)                              # nothing written
+        self.put("building-blocks.yaml", RENDERED)
+        self.render()
+        self.put("building-blocks.yaml", RENDERED.replace("sources: [tactical-model#orders]\n", 'sources: "   "\n'))
+        self.assertIn(("render.input", "svc-order"), self.gaps()[0])            # lint: the same validation
+
+    def test_malformed_pins_and_keys_are_refused_never_dropped(self):
+        before = self.files()
+        for bad in (RENDERED.replace('pinned_types: { OrderPlaced: "orderId:string · total:int" }',
+                                     'pinned_types: ["OrderPlaced: orderId:string"]'),
+                    RENDERED.replace('keys: { orderId: "minted by agg-order — uuid4, stable" }', 'keys: "orderId"')):
+            self.put("building-blocks.yaml", bad)
+            out = self.render(expect=1)
+            self.assertIn("is not a mapping", str(out["problems"]))
+            self.assertEqual(self.files(), before)
+            self.assertIn(("boundary.pinned_types", "b-order"), self.gaps()[0])
+
+
 def note(i, scope="feature", status="accepted", drop=(), **over):
     f = {"Meta": "2026-09-24; scope: %s; status: %s" % (scope, status), "Question": "Which parser?",
          "Options": "A split, fails on quotes; B standard parser.", "Hypothesis": "B reads every agreed format.",
@@ -644,6 +862,105 @@ class TestWhy(Base):
         self.assertEqual(self.spec_hash("svc-order"), before)
 
 
+class TestNotesShortFormAndAppend(Base):
+    SHORT = {"Hypothesis": "n/a — decided by REQ-3", "Check": "n/a — decided by REQ-3",
+             "Result": "n/a — decided by [scope cut](brief.md#out-of-scope)"}
+
+    def rules(self, text):
+        path = self.put("decisions.md", text)
+        return {(e["id"], e["rule"]) for e in self.run_tool("why", "check", path)["errors"]}
+
+    def test_short_form(self):
+        self.put("brief.md", "# Brief\n")
+        self.assertEqual(self.rules(note("D-0001", **self.SHORT)), set())
+        got = self.rules(note("D-0001", Hypothesis="n/a — decided by REQ-3")
+                         + note("D-0002", **dict(self.SHORT, Check="n/a — decided by the team"))
+                         + note("D-0003", **dict(self.SHORT, Result="n/a")))
+        self.assertIn(("D-0001", "short.all_three"), got)                      # never mixed with an experiment
+        self.assertIn(("D-0002", "short.reference"), got)                      # the reference must be verifiable
+        self.assertIn(("D-0003", "short.reference"), got)
+        self.assertNotIn(("D-0002", "short.all_three"), got)
+
+    def append(self, text, expect):
+        entry = self.put("entry.md", text, base=self.tmp)
+        return self.run_tool("why", "append", os.path.join(self.feat, "decisions.md"), "--entry", entry, expect=expect)
+
+    def test_append_validates_before_writing(self):
+        path = os.path.join(self.feat, "decisions.md")
+        self.assertEqual(self.append(note("D-0001"), 0)["appended"], ["D-0001"])  # creates the file
+        self.assertEqual(self.append(note("D-0002"), 0)["appended"], ["D-0002"])
+        with open(path) as f:
+            good = f.read()
+        out = self.append(note("D-0002"), 0)                                    # identical: a no-op success
+        self.assertEqual((out["ok"], out["appended"], out["unchanged"]), (True, [], ["D-0002"]))
+        out = self.append(note("D-0002", Decision="C instead"), 1)              # same id, other content
+        self.assertEqual(out["ok"], False)
+        self.assertIn("already exists", out["refused"])
+        out = self.append(note("D-0003", drop=("Revisit",)), 1)                 # invalid entry
+        self.assertEqual(out["errors"][0]["rule"], "field.missing")
+        self.append(note("D-0001", Question="x?"), 1)
+        with open(path) as f:
+            self.assertEqual(f.read(), good)                                    # nothing written on refusal
+        self.assertFalse(os.path.exists(path + ".tmp"))
+        out = self.append(note("D-0003", Supersedes="D-0001"), 0)
+        self.assertEqual(out["superseded"], ["D-0001"])
+        self.run_tool("why", "check", path, expect=0)
+        self.run_tool("why", "append", path, expect=2)                          # --entry is required
+
+    def test_append_updates_only_debate_result_and_adr_backlink(self):
+        path = os.path.join(self.feat, "decisions.md")
+        self.put("adr.md", "# ADR\n")
+        self.append(note("D-0001") + note("D-0002"), 0)
+        out = self.append(note("D-0001", Debate="reviewer objected on quotes; fixtures added, resolved.",
+                               Result="B 24/24; [run](https://ci.example.com/413)."), 0)
+        self.assertEqual((out["appended"], out["updated"]), ([], ["D-0001"]))
+        adr = note("D-0001", Debate="reviewer objected on quotes; fixtures added, resolved.",
+                   Result="B 24/24; [run](https://ci.example.com/413).", ADR="[ADR 0003](adr.md)")
+        self.assertEqual(self.append(adr, 0)["updated"], ["D-0001"])
+        with open(path) as f:
+            good = f.read()
+        self.assertIn("- ADR: [ADR 0003](adr.md)", good)
+        self.assertLess(good.index("D-0001"), good.index("D-0002"))             # replaced in place
+        self.assertIn("already exists", self.append(adr.replace("adr.md)", "other.md)"), 1)["refused"])  # backlink kept
+        self.append(note("D-0002", Decision="C instead", Debate="x"), 1)       # other fields: a new entry
+        self.append(note("D-0002", Debate=""), 1)                               # an update still validates
+        with open(path) as f:
+            self.assertEqual(f.read(), good)
+        self.run_tool("why", "check", path, expect=0)
+
+
+class TestAdrLint(Base):
+    def test_adrs_before_any_manifest(self):
+        d = os.path.join(self.tmp, "early", "decisions")
+        self.put("0001-money.md", "---\nscope: global\nstatus: accepted\nenforced_by:\n  - check: checks/no-float.sh\n"
+                 "  - { check: checks/port.sh, from: svc-order }\n---\n# 0001\n", base=d)
+        self.put("0002-ports.md", "---\nscope: be\nstatus: proposed\nenforced_by:\n  - check: checks/no-float.sh\n---\n# 0002\n",
+                 base=d)                                                         # a script shared by two ADRs
+        out = self.run_tool("lint", "--adrs", d, expect=0)
+        self.assertEqual(sorted(x["file"] for x in out["deferred"]), ["checks/no-float.sh", "checks/no-float.sh", "checks/port.sh"])
+        self.put("0003-bad.md", "---\nstatus: maybe\nenforced_by: \"grep -rn float src/\"\n---\n# 0003\n", base=d)
+        self.put("notes.md", "# no frontmatter\n", base=d)
+        out = self.run_tool("lint", "--adrs", d, expect=1)
+        self.assertEqual(sorted((g["rule"], g["where"]) for g in out["gaps"]),
+                         [("adr.checks", "0003-bad.md"), ("adr.filename", "notes.md"), ("adr.frontmatter", "0003-bad.md"),
+                          ("adr.frontmatter", "0003-bad.md"), ("adr.frontmatter", "notes.md")])
+        self.assertEqual({g["bounce_to"] for g in out["gaps"]}, {"architect"})
+        self.run_tool("lint", self.feat, "--adrs", d, expect=2)
+        self.run_tool("lint", expect=2)
+
+
+class TestBoard(Base):
+    def test_integrated_block_in_doing_is_badged_and_stays_doing(self):
+        import board
+        self.move("agg-order", "doing")
+        self.move("svc-order", "doing")
+        self.put("integrated/agg-order.json", '{"id": "agg-order"}')
+        got = {b["id"]: (b["status"], b["integrated"]) for b in board.scan(os.path.join(self.feat, "blocks"))}
+        self.assertEqual((got["agg-order"], got["svc-order"], got["rm-orders"]),
+                         (("doing", True), ("doing", False), ("todo", False)))
+        self.assertIn("integrated, closing pending", board.PAGE)
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 
@@ -678,7 +995,7 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest") else 1):
                 continue  # a name reference (`MM status`), not an invocation
             seen += 1
             try:
@@ -688,6 +1005,85 @@ class TestPromptInvocations(unittest.TestCase):
                 bad.append("%s: `%s` -> %s" % (where, span, argv))
         self.assertEqual(bad, [], "\n".join(bad))
         self.assertGreater(seen, 10)
+
+
+SHELLS = [sh_ for sh_ in ("bash", "zsh") if shutil.which(sh_)]
+ROOT_REF = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}|\$CLAUDE_PLUGIN_ROOT")
+
+
+def run_in_shells(cmd, cwd):
+    """[(shell, returncode, stderr)] — `cmd` run by each available shell, CLAUDE_PLUGIN_ROOT unset."""
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+    return [(s_, p.returncode, p.stderr.strip()[-200:]) for s_ in SHELLS
+            for p in [subprocess.run([s_, "-c", cmd], cwd=cwd, env=env, capture_output=True, text=True)]]
+
+
+class TestExecutablePaths(unittest.TestCase):
+    """The tool command a prompt writes must RUN, not only parse: Claude Code substitutes
+    `${CLAUDE_PLUGIN_ROOT}` in loaded skill/agent/command content and exports nothing to Bash, so
+    the command is taken from the prompt, substituted the documented way (the braced form only),
+    and run with `--help` from an unrelated cwd, with no CLAUDE_PLUGIN_ROOT, in bash and zsh, from
+    an install path holding spaces."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = os.path.realpath(tempfile.mkdtemp())
+        cls.root = os.path.join(cls.tmp, "plugin cache", "mismagent")  # a path with spaces
+        shutil.copytree(PLUGIN, cls.root, ignore=shutil.ignore_patterns("__pycache__", "tests"))
+        cls.cwd = os.path.join(cls.tmp, "project", ".worktrees", "shop", "agg-order")
+        os.makedirs(cls.cwd)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, True)
+
+    @staticmethod
+    def substitute(text, root):
+        return text.replace("${CLAUDE_PLUGIN_ROOT}", root)  # the ONLY substitution Claude Code makes
+
+    def commands(self):
+        """{(file, command)} — every `python3 "<…CLAUDE_PLUGIN_ROOT…>.py"` written in a prompt."""
+        out = set()
+        for path in glob.glob(os.path.join(PLUGIN, "**", "*.md"), recursive=True):
+            if "/tests/" in path:
+                continue
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            for m in re.finditer(r"python3\s+(\"[^\"\n]*CLAUDE_PLUGIN_ROOT[^\"\n]*\"|[^\s`\"]*CLAUDE_PLUGIN_ROOT[^\s`\"]*)", text):
+                out.add((os.path.relpath(path, PLUGIN), m.group(0)))
+        return sorted(out)
+
+    def test_the_old_braceless_form_fails(self):
+        self.assertTrue(SHELLS)
+        cmd = self.substitute('python3 "$CLAUDE_PLUGIN_ROOT/tools/mismagent.py" --help', self.root)
+        self.assertTrue(all(rc != 0 for _, rc, _ in run_in_shells(cmd, self.cwd)))
+        cmd = self.substitute('python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py" --help', self.root)
+        self.assertEqual([rc for _, rc, _ in run_in_shells(cmd, self.cwd)], [0] * len(SHELLS))
+
+    def test_every_prompt_tool_command_runs(self):
+        cmds, bad = self.commands(), []
+        self.assertGreater(len(cmds), 5)
+        for where, cmd in cmds:
+            for shell, rc, err in run_in_shells(self.substitute(cmd, self.root) + " --help", self.cwd):
+                if rc:
+                    bad.append("%s [%s]: `%s` -> %s" % (where, shell, cmd, err))
+        self.assertEqual(bad, [], "\n".join(bad))
+
+    def test_every_plugin_root_path_resolves_and_read_docs_carry_none(self):
+        bad = []
+        for path in glob.glob(os.path.join(PLUGIN, "**", "*.md"), recursive=True):
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            rel = os.path.relpath(path, PLUGIN)
+            if rel in ("tools/CLI.md", "tools/LOOP.md"):  # read with Read: nothing substitutes there
+                bad += ["%s: names CLAUDE_PLUGIN_ROOT" % rel] if "CLAUDE_PLUGIN_ROOT" in text else []
+                continue
+            bad += ["%s: `$CLAUDE_PLUGIN_ROOT` (no braces) is left to the shell, where it is unset" % rel
+                    for _ in re.findall(r"\$CLAUDE_PLUGIN_ROOT", text)][:1]
+            for p in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_./-]+)", text):
+                if not os.path.exists(os.path.join(PLUGIN, p.rstrip("."))):
+                    bad.append("%s: ${CLAUDE_PLUGIN_ROOT}/%s does not exist" % (rel, p))
+        self.assertEqual(bad, [], "\n".join(bad))
 
 
 if __name__ == "__main__":

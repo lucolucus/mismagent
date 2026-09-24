@@ -140,6 +140,7 @@ def snapshot(fdir):
 def firing_cmd(a, cap, session, prompt):
     cmd = [a.claude_bin, "-p", "--plugin-dir", a.plugin_dir, "--output-format", "json", "--max-budget-usd", "%.4f" % cap]
     cmd += ["--model", a.model] if a.model else []
+    cmd += ["--permission-mode", a.permission_mode] if a.permission_mode else []
     cmd += ["--resume", session] if session else []
     return cmd + [prompt]
 
@@ -225,6 +226,8 @@ def parse(argv=None):
     ap.add_argument("--total-usd", type=float, required=True)
     ap.add_argument("--per-firing-usd", type=float, required=True)
     ap.add_argument("--model")
+    ap.add_argument("--permission-mode", help="passed to claude -p (headless runs need one that allows tools, "
+                                               "e.g. bypassPermissions in an isolated project)")
     ap.add_argument("--prompt-file", help="extra instructions appended to the command (e.g. simulated-user rules)")
     ap.add_argument("--integration", help="the integration branch (default integration/<feature>)")
     ap.add_argument("--feature-dir", help="F, when it cannot be found under --project")

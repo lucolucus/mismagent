@@ -66,3 +66,6 @@ python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated cla
 - **Output**: one JSON summary `{outcome, reason, firings, total_cost_usd, session_id, log:[{n,
   cap_usd, cost_usd, subtype, is_error, status, progress}]}`; exit 0 on `done`/`idle`, else 1.
 - No timeout, no polling, no sleep, no automatic recovery: every doubt is a stop with its reason.
+
+Headless firings cannot answer permission prompts: pass `--permission-mode` (e.g. `bypassPermissions`,
+only on an isolated project you are willing to let the agent modify freely).

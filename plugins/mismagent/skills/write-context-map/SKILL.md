@@ -1,62 +1,51 @@
 ---
 name: write-context-map
-description: 'mismAgent''s specialized context-map writer (explore movement). Produces the PROJECT-level strategic map <output_dir>/context-map.md: bounded contexts (DDD strategic) + relationships + ubiquitous language per context + list of open spikes. It is the project''s TRUNK, shared by every feature and AMENDED across them — never re-forked (a second context-map would fork the canonical names). The per-feature TACTICAL level lives elsewhere: features/<feature>/tactical-model.md (write-tactical-model). Invoked by mismagent-analyst (inside explore). Every element has a downstream consumer (survival test), so it is not a zombie.'
+description: 'mismAgent writer of the PROJECT context-map (<output_dir>/context-map.md): bounded contexts, relationships, ubiquitous language, open spikes. Amended across features, never re-forked. Invoked by mismagent-analyst.'
+user-invocable: false
 ---
 
-# MismAgent — Write Context Map (writer, explore)
+# mismAgent — Write Context Map
 
-Write/update `<output_dir>/context-map.md` — the **project's** strategic map, not the feature's.
-Invoked by `mismagent-analyst`. Orientation: `methodology/mismagent.md`.
+Write or amend `<output_dir>/context-map.md` — the **project's** strategic map. Invoked by
+`mismagent-analyst`. Orientation: `methodology/mismagent.md`.
 
-## Why it exists (downstream consumers = survival test)
-- **Bounded contexts** → seed the **boundaries** (manifest boundaries, `build-manifest`).
-- **Ubiquitous language** → seeds the **canonical names** of blocks and types (and, if a boundary
-  projects cross-deploy, of the OpenAPI `components/schemas`); the `mismagent-verifier` greps those
-  terms on the diff → drift = FAIL.
-- **Relationships** → decide each boundary's direction and its projection (architect).
-- **Open spikes** → become **`type: spike` nodes** (via `write-task`).
+## Readers
+- **Bounded contexts** → the manifest's boundaries.
+- **Ubiquitous language** → the canonical names of blocks, operations, events and types; the
+  verifier holds the diff to them.
+- **Relationships** → each boundary's direction (architect).
+- **Open spikes** → `type: spike` nodes (`write-task`); `central: true` ones run at wave 0.
 
-If an element has no consumer, **do not write it**.
+An element with no reader is not written.
 
 ## Template
 ```markdown
 # Context map — <project>
 
-## Bounded context: <Name>            <!-- from the profile; e.g. Maintenance (e.g.) -->
-- **Role:** <core | supporting | generic> + <host of the view | upstream | downstream>
-- **Ubiquitous language:** <Term = canonical values/meaning>   → schema name (verifier grep)
+## Bounded context: <Name>
+- **Role:** <core | supporting | generic> + <upstream | downstream | host of the view>
+- **Ubiquitous language:** <Term = canonical meaning/values>
 - **Introduced by:** <feature that first modeled this context>
 
 ## Relationships
-- <ContextA> → <ContextB> : <type: upstream/downstream, conformist, ACL...> — <note>
+- <ContextA> → <ContextB> : <upstream/downstream, conformist, ACL…> — <note>
 
-## Open spikes (unknowns/risks → future spike nodes)
-- [ ] <spike-slug>: <question to answer> — <closure criterion> — expected side: <from the profile>
-      — owner: <the feature that raised it>   <!-- REQUIRED: the map is project-wide, so a build
-           run must be able to tell its own spikes from another feature's -->
+## Open spikes
+- [ ] <spike-slug>: <question> — <closure criterion> — side: <from the profile>
+      — owner: <feature that raised it>   <!-- REQUIRED: tells a build its own spikes -->
+      — central: <true|false>   <!-- true = an unproven capability the product stands on -->
 ```
 
 ## Rules
-- The ubiquitous-language terms are **canonical and in the domain language** — the language is
-  declared by the profile (`ubiquitous_language.lang`); default: the language the domain speaks
-  (e.g. an Italian-domain project keeps `TipoIntervento`, `StatoOcr`). They will become schema/type
-  names: no scattered synonyms, **never** translate a term the domain already uses.
-- Reuse the **domain's bounded contexts declared in the profile** as reference (e.g. a
-  context like `Maintenance` (e.g.)).
-- **Project scope — amend, never fork.** One context map per project, in the `<output_dir>` root.
-  On a second feature you **read the existing file first** and *extend* it: add the contexts the
-  feature introduces, add terms to the contexts it touches, add relationships. **Never** rewrite a
-  context another feature already modeled, and never create a second map: two maps fork the
-  ubiquitous language, and the canonical names are exactly what everything downstream inherits.
-  *(This reverses the old per-feature rule — see the v0.13.0 layout note in `methodology/mismagent.md`.)*
-- **Renaming a canonical term is a breaking amendment**: it invalidates the verifier's greps on
-  already-merged blocks. Do it only with the user, and record it as an ADR
-  (`<output_dir>/decisions/`) with the old → new mapping.
-- Spikes are **actionable** (question + closure criterion), not vague notes.
-- **No tactical here.** Aggregates, invariants, domain events and commands belong to the feature:
-  `write-tactical-model` → `<output_dir>/features/<feature>/tactical-model.md`.
+- Terms are **canonical and in the domain's language** (profile `ubiquitous_language.lang`): they
+  become type and schema names — no synonyms, never translate a term the domain already uses.
+- **Amend, never fork.** One map per project, in the `<output_dir>` root. Read it first; add the
+  contexts, terms and relationships this feature introduces; never rewrite a context another feature
+  modeled.
+- **Renaming a canonical term is a breaking amendment:** only with the user, recorded as an ADR with
+  the old → new mapping.
+- Spikes are actionable: a question and a closure criterion.
+- No tactical detail here: that is `write-tactical-model`'s file.
 
 ## Outcome
-Path of the file, bounded contexts **added vs already present**, key ubiquitous-language terms,
-open spikes (materializable as `type: spike` nodes via `write-task`), and — if any — the terms
-amended and why.
+Path, contexts added vs already present, key terms, open spikes, terms amended and why.

@@ -1,10 +1,11 @@
 ---
-description: Invoke mismAgent's worker (build movement) — dispatches the mismagent-worker subagent to realize ONE building block (aggregate/application-service/port/adapter/read-model/ui/scaffold) green on its own. Normally the worker-composer dispatches it per block; use directly to build a single block.
+description: "mismAgent build: dispatch the mismagent-worker subagent to realize ONE building block green on its own. The worker-composer normally dispatches it per block; use directly to build a single block."
 argument-hint: "[block id / what to realize]"
 ---
 
-Dispatch the **`mismagent-worker`** subagent (Agent tool). It is **normally driven by the
-worker-composer** (one worktree per block); to run it standalone give it the **block-spec** from the
-manifest, the **working dir** + the side's **gate**, the **boundary interfaces** it touches, and the
-**skills** (`realize-<type>` × projection + the codebase's dev-architecture memory). It returns
-`READY-FOR-REVIEW | BLOCKED | BOUNCED`. See `agents/mismagent-worker.md`.
+Dispatch the **`mismagent-worker`** subagent (Agent tool). The worker-composer normally drives it
+(one worktree per block); standalone, give it the block's `MM pack`, the **working dir** + the
+side's **gate**, and the **skills** (`realize-<type>` + the codebase's
+dev-architecture memory). It returns `READY-FOR-REVIEW | BLOCKED | BOUNCED`; record its `DECISIONS` in
+`F/decisions.md` (format: `$CLAUDE_PLUGIN_ROOT/tools/CLI.md`). See
+`agents/mismagent-worker.md`.

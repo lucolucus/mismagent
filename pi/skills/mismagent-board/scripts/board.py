@@ -116,6 +116,7 @@ def scan(blocks_dir):
                     "type": fm.get("type", ""),
                     "context": fm.get("context", ctx),
                     "wave": str(fm.get("wave", "")),
+                    "release": str(fm.get("release", "")),
                     "consumes": fm.get("consumes", []) if isinstance(fm.get("consumes"), list) else [],
                     "status": st,
                     # "cosa fare" kept as a fallback for block files seeded before v0.8.0
@@ -168,6 +169,7 @@ async function tick(){
    const tasks=b.tasks.map(t=>"<li>"+esc(t)+"</li>").join("");
    col.innerHTML+="<div class=card><div class=id>"+esc(b.id)+"</div>"
     +"<div class=badges><span class=b>"+esc(b.type)+"</span><span class=b>"+esc(b.context)+"</span>"
+    +(b.release?"<span class=b>"+esc(b.release)+"</span>":"")
     +(b.wave?"<span class=b>wave "+esc(b.wave)+"</span>":"")
     +(b.open_question?"<span class=\\"b wait\\">⏳ awaiting user (open-questions/)</span>":"")
     +(b.spec_gaps&&b.spec_gaps.length?"<span class=\\"b warn\\">⚠ "+esc(b.spec_gaps.join(" · "))+"</span>":"")+"</div>"

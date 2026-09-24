@@ -1,5 +1,5 @@
 ---
-description: Invoke mismAgent's researcher (explore movement) — dispatches the mismagent-researcher subagent to explore a domain/topic and gather material into research/<topic>.md. Use only when a decision needs investigation AND the topic unblocks something downstream.
+description: Dispatch mismAgent's researcher (explore) to gather material into research/<topic>.md. Use only when a downstream decision needs investigation.
 argument-hint: "[topic / question to research]"
 ---
 

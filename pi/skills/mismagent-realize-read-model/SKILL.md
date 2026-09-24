@@ -1,6 +1,6 @@
 ---
 name: mismagent-realize-read-model
-description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A). Realizes a read-model \u2014 query/projection (CQRS) whose output respects the view_shape pinned in the manifest. Read-only, no domain rules (those live on the Aggregate). Carries the view test: consumer-driven contract test where the consumer is the UI. Loaded by the worker when block.type = read-model."
+description: "mismAgent worker block-type skill for `read-model`. Realizes a read-only query/projection (CQRS) whose output is the pinned view_shape, with a consumer-driven view test and folds that respect the owner's declared guarantees. Loaded by the worker."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -8,39 +8,28 @@ description: "BLOCK-TYPE skill of the mismAgent worker (build, matrix \u00a713.A
 
 # realize-read-model — the read projection (CQRS)
 
-You realize **ONE read-model**: a query/projection that serves a view to a consumer (typically the
-UI). It is the **read side** of CQRS. Rationale: `redesign/composer-spec.md` §1·§8.
+You realize **one read-model**: a query or projection serving a view to its consumer (e.g. the UI).
 
 ## The pattern
-- **Read-only, zero domain rules:** a read-model **decides** nothing — the rules live on the
-  Aggregate. If you need a predicate, you take it already computed (the root/port exposes it), you do
-  not recompute it.
-- **The output respects the `view_shape`** pinned in the manifest: the view's fields, types and names
-  are the **Published Language** towards the consumer, not an internal detail.
-- It may aggregate from multiple aggregates/tables when reading, but it remains a projection: no
-  writes.
-- **A sync-fed fold respects the wire's PINNED guarantees** (friction-log-4 #50): folding events
-  that arrive over an `event-schema` wire, read the boundary's **`delivery:`** and design against
-  it — cross-stream order does NOT exist unless pinned. More than one writer stream for the same
-  key ⇒ the manifest pinned either **single-writer** (fold only the owning authority's absolute
-  stream) or a **commutative fold** (tombstones for a late "entry" event, an orphan buffer for an
-  effect that precedes its cause): implement the pinned design. A fold that converges only when
-  events arrive in order is a bug even when every shape matches.
-- **Order only by fields pinned ORDERABLE** (friction-log-4 #46): "sorted by X" is a contract on
-  X's **format** (fixed-width zero-pad, a dedicated Comparable, the cross-namespace rule) that the
-  producer pins upstream; a lexicographic sort over an unpinned string is wrong at every digit
-  boundary — format not pinned → **BOUNCED**, don't sort-and-hope.
+- **Read-only, no domain rules.** It decides nothing: a predicate comes already computed from the
+  root or the port, and reads of an aggregate's invariant fields go through that predicate. It
+  never writes.
+- **The output is the pinned `view_shape`** — field names and types are the Published Language
+  towards the consumer. It may read several aggregates or tables.
+- **A fold follows the guarantees in the owner's ADR Decision** (in your pack): order,
+  duplicates/replay, who writes each key. Several writer streams per key → single-writer (fold only
+  the owner's absolute stream) or a commutative fold (tombstones, an orphan buffer). Where the ADR
+  admits reordering, a fold converging only on in-order events is a bug. Guarantee missing → `BOUNCED`.
+- **Order only by fields pinned orderable.** "Sorted by X" is a contract on X's format; if the
+  format is not pinned → `BOUNCED`, never sort and hope.
 
-## The check (you carry it with you)
-- **Contract test of the view, consumer-driven:** the **consumer is the UI** → the view is pinned
-  *and* verified (the `view_shape` alone, without a test, leaves the boundary unwelded — gap closed in
-  Phase-1 readiness).
-- **Translate the user's `tests_nl`** (§16) into view test cases (e.g. *"the history shows the shift's
-  takings"* → a case on the shape and the values).
+## The check you carry
+- **A consumer-driven view test:** the `view_shape` without a test leaves the boundary unwelded.
+- **Translate the user's `tests_nl`** into view test cases (shape, values; a fold: the admitted
+  permutations and duplicates).
 
-## TDD + green on its own
-`tdd` red-green-refactor. Self-review fix-loop on the **side's gate** until green and the view
-respects the shape.
+## TDD, green on its own
+Red-green-refactor on the side's gate until green and the view matches its shape.
 
-## Return (to the worker)
-`PUBLIC_API`: the realized `view_shape` (the signature the UI consumes).
+## Return
+`PUBLIC_API`: the realized `view_shape`.

@@ -11,7 +11,7 @@ flowchart LR
     EX --> f1[("product-brief.md<br/>context-map.md")]
     f1 --> MO["2 · model<br/>you decide three things"]
     MO --> f2[("building-blocks.yaml<br/>+ one file per block")]
-    BU["3 · build<br/>you confirm at the end"] --> done([green tag → flag])
+    BU["3 · build<br/>you confirm each release"] --> done([green tag → flag])
     f2 --> BU
 
     classDef step fill:#f6f8fa,stroke:#d0d7de,color:#24292f
@@ -30,7 +30,6 @@ a GitHub repo:
 ```
 /plugin marketplace add /absolute/path/to/this/repo
 /plugin install mismagent@mismagent-method
-/plugin install mismagent-cross-deploy@mismagent-method   # only for cross-deploy boundaries
 /reload-plugins
 ```
 
@@ -40,11 +39,13 @@ Then, on a feature:
 |---|---|
 | `/mismagent:explore <idea in one sentence>` | You dialogue, the challenger attacks, the analyst fixes the names. |
 | `/mismagent:model <feature>` | Stops exactly three times — ambiguities, stack/style/infra, `tests_nl` — then emits the manifest with boundary types pinned. |
-| `/mismagent:worker-composer <feature>` | The build: readiness gate, owner-first waves, D1/D2. The **only** command that merges. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action (deep for aggregates, ports and the reviewers; one tier up on the second rework), logged in `dispatch.log`. |
+| `/mismagent:worker-composer <feature>` | The build: the **only** command that merges. Blocks **build in parallel** (each in its worktree) and **integrate one at a time**: review → candidate merge → gate + contract tests → promote, so the integration line is never red. The flow runs on a deterministic tool (`tools/mismagent.py`: lint, ready, pack, diff-range, proofs, compose); **in doubt the composer stops and asks** instead of guessing. Loop-safe — run it under `/loop`. Each dispatch runs on a model routed by its action; review depth follows the block type. Only HIGH findings go back to rework (max two cycles, counted from `rework/` files); MED/LOW land in `pre-release.md`, which a release must empty. |
 | `/mismagent:board [feature]` | Live read-only kanban. State *is* the folder; parked blocks show as ⏳. |
 
-You step in when a block parks with an open question, and at the end: confirm the release → green
-tag → feature flag on. When something jams, write it in the project's `MISMAGENT-LOG.md` the moment
+You step in when a block parks with an open question, and at each release: confirm it → green tag
+→ feature flag on. Releases are planned in the manifest: R0 is a thin vertical slice that opens the
+app within the first few waves, and the risks the product depends on run as spikes at wave 0,
+alongside the scaffold. When something jams, write it in the project's `MISMAGENT-LOG.md` the moment
 it happens — the method matures from those logs.
 
 ## The three movements
@@ -89,7 +90,7 @@ flowchart LR
         direction TB
         waves["owner-first waves<br/>worker ×N,<br/>one worktree each"]
         park{{"parks in<br/>open-questions/<br/>you answer, it resumes"}}
-        d1["D1 — green on its own<br/>verifier + review<br/>+ render proof"]
+        d1["D1 — green on its own<br/>verifier (+ review, deep blocks)<br/>+ render proof"]
         d2["D2 — merge composes<br/>contract test<br/>welds the boundary"]
         waves --> d1 --> d2
         waves -. BOUNCED .-> park
@@ -121,25 +122,23 @@ Each is also invocable directly as **`/mismagent:<name>`**.
 | `researcher` | explore | Gathers domain material *per feature* — prior art, constraints, real terminology. Dispatched only when the domain is new. |
 | `analyst` | explore | The **strategic** level: bounded contexts, relationships, **ubiquitous language**. |
 | `tactical-modeler` | model | The **tactical** level per context: aggregates, invariants, domain events, commands. Unknowns become spike nodes. |
-| `architect` | model | Architecture + ADRs, **guarantor of the boundaries**. Stack, style, infra and the code-writing rules deliberated **with you** (two-pass); mechanical constraints carry an `enforced_by` channel. Leaves ADRs ↔ context-map reconciled. |
-| `worker` | build | Realizes **one building block** in its own worktree — skills = block-type × projection, plus the side's memory — TDD until green. Returns `BOUNCED` on ambiguity instead of inventing. |
-| `verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, `enforced_by` greps, anti-shadow types, render check. Read-only. |
+| `architect` | model | Architecture + ADRs, **guarantor of the boundaries**. Stack, style, infra and the code-writing rules deliberated **with you** (two-pass); mechanical constraints point to a versioned check the gate runs (`enforced_by`). Leaves ADRs ↔ context-map reconciled. |
+| `worker` | build | Realizes **one building block** in its own worktree — skills = its block type, plus the side's memory — TDD until green through the `craft` loop (red → green → refactor, a craft reference only for the problem at hand). Returns `BOUNCED` on ambiguity instead of inventing. |
+| `verifier` | build | Fresh-context **structural gate** before merge: real diff from the merge-base, gate re-run, AC coverage, the ADRs' versioned checks, anti-shadow types, render check. Read-only. |
 
 ## The ideas that hold it together
 
 mismAgent sits between two extremes: working **by hand** — high quality only while you babysit every
 turn, and nothing survives the session — and a **heavy framework**, whose fixed ceremony you pay even
 for a small feature. Its bet: **the only legitimate ceremony is the one the architecture requires**.
-No role and no template decides it, the *boundary* does. So a single-side project pays almost
-nothing, and a multi-side one pays for the boundary that genuinely crosses a deploy.
+No role and no template decides it, the *boundary* does.
 
 - **State = the folder.** A block's status *is* its directory (`todo/ doing/ done/`); only the
   worker-composer moves it. No status fields to drift. A bounced block parks as a **file**
   (`open-questions/<id>.md`) — visible, never lost, cleared by regeneration.
 - **The boundary is executable.** Every boundary carries pinned types (Published Language) plus a
-  contract test — invariant tests on an aggregate, consumer-driven tests on a port. The cross-deploy
-  artifact exists only when the boundary crosses a deploy unit, **in the form the boundary
-  declares**: OpenAPI for request/response, a versioned event-schema for replication wires.
+  contract test — invariant tests on an aggregate, consumer-driven tests on a port. Its network
+  form, if any, is a project choice (ADRs, gate).
 - **The build composes, it doesn't orchestrate.** `git merge` *is* the composition; the contract
   test runs on the merge result. No conductor, no epics — the seam is everything, the order almost
   nothing.
@@ -152,8 +151,8 @@ nothing, and a multi-side one pays for the boundary that genuinely crosses a dep
 ## Core + profile
 
 The core names **no project**. Each project supplies a `profile.md` (default `.mismagent/profile.md`)
-binding the abstractions to reality: the sides (independent deploy units), their repos and gate
-commands, the boundary projections, the commit format. Reuse the method elsewhere by writing a new
+binding the abstractions to reality: the sides (code and verification scopes inside the repo),
+their paths and gate commands, the commit format. Reuse the method elsewhere by writing a new
 profile — see [`PROFILE.md`](plugins/mismagent/PROFILE.md) (template) and
 [`profiles/example.md`](plugins/mismagent/profiles/example.md) (a filled-in fictional instance).
 
@@ -163,13 +162,13 @@ away without touching anything above it.
 
 ```
 .mismagent/
-  profile.md            # the junction point — sides, repos, gate, projections, commit format
+  profile.md            # the junction point — sides (paths), gate, commit format
   context-map.md        # bounded contexts + ubiquitous language + relationships
   architecture.md       # style + module map + allowed dependency directions
   code-rules.md         # the deliberated rules, each with its enforcement channel
   infra-notes.md        # the deploy/infra context
   decisions/            # ADRs — scope: global | <side> | infra
-  architetture/         # architecture overview · dev-architecture per codebase · contracts
+  architetture/         # architecture overview · dev-architecture per codebase
   features/
     <feature>/          # brief · tactical-model · manifest · blocks · open-questions · proofs
 ```
@@ -179,31 +178,54 @@ construction, so emptiness there says nothing about whether the project has chos
 foundational deliberation happens **once per project**, the ubiquitous language is **amended** in
 the one context map rather than re-forked, and changing a foundational decision is an explicit
 amendment (a superseding ADR) rather than a silent rewrite. The same rule fixes what the *second*
-feature inherits: the gate's red-green proof and the infra notes are project facts, an OpenAPI
+feature inherits: the gate's red-green proof and the infra notes are project facts, a contract
 belongs to the **boundary** (the file the feature that introduced it opened, extended ever after),
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.14.0 is the current version.** Before, everything
-> lived in `<output_dir>/<feature>/` — the context map included — so a second feature forked the
-> ubiquitous language and made the architect re-deliberate the stack and rewrite the profile. There
-> is no compatibility shim: in an existing project, move `context-map.md`, `decisions/`,
-> `architetture/` and `infra-notes.md` up to the `<output_dir>` root, move the rest under
-> `features/<feature>/`, and reconcile by hand if two features had diverging context maps. Add an
-> `owner:` to each open spike in the context map while you are there — v0.13.1 requires it, and an
-> entry without one is reported, never acted on.
+> **v0.13.0 changes this layout (breaking); v0.20.0 is the current version.** Before, everything
+> (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
+> ubiquitous language and re-deliberated the stack. No shim: in an existing project,
+> move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
+> root, move the rest under `features/<feature>/`, and reconcile by hand if two features had
+> diverging context maps. Add an `owner:` to each open spike in the context map — v0.13.1 requires
+> it; an entry without one is reported, never acted on.
+>
+> **v0.16.0 (breaking for a build in progress):** one repository per project — a side is a path inside
+> it (`path:` replaces `repo:` in the profile, `gate_files:` added); `dispatch.log` is no longer read —
+> the build's state is the block folders plus `rework/`, `review-proof/`, `integrated/`.
+>
+> **v0.17.0:** prompts cut from ~35k to ~21k words (budgets enforced by a test); an ADR's `enforced_by` is
+> `[{check: <repo path>, from: <block>}]` — a versioned check the gate runs; a legacy grep string is
+> reported, never executed. Optional `gate_verify:` per side forces the tests to run for the verifier.
+> The design rationale moved to `docs/rationale/` (not read by the agents).
+>
+> **v0.18.0:** one plugin; cross-deploy is gone (module, `create-contract`, `seam-*`, manifest
+> `projection`, `contract_*`, `operation_ids`, `schema_paths`, `delivery`). Such contracts stay project
+> files: rules in ADRs, `code-rules.md`, dev-architecture; checks in the gate. Uninstall
+> `mismagent-cross-deploy`, drop retired fields; `install.sh` removes retired skills.
+>
+> **v0.19.0:** decision notes — each non-obvious choice (hypothesis, check, debate, who decided) lands in
+> `features/<feature>/decisions.md`, checked by `mismagent.py why check` and `lint`, summarized in the pack; features are archived, never deleted.
+>
+> **v0.20.0:** the internal `craft` skill — the worker's XP loop (red → green → refactor with an explicit
+> exit) plus six short references (TDD, frugality, simple design, clean code, SOLID, refactoring), each
+> read only for the concrete problem at hand; the code-review uses them as lenses (HIGH needs evidence
+> and consequence). `code-rules.md` narrows or overrides them.
 
 ## Going deeper
 
 - [`methodology/mismagent.md`](plugins/mismagent/methodology/mismagent.md) — the full map of the flow
   and the run-sheet: who types what, in what order.
-- [`redesign/composer-spec.md`](plugins/mismagent/redesign/composer-spec.md) — the design rationale
+- [`docs/rationale/composer-spec.md`](docs/rationale/composer-spec.md) — the (non-normative) design rationale
   of the architecture-driven build.
-- [`docs/PACKAGING.md`](docs/PACKAGING.md) — kernel and modules, the supporting skills the flow
+- [`docs/PACKAGING.md`](docs/PACKAGING.md) — the plugin, the supporting skills the flow
   invokes, the generated packagings for Codex and pi, and the guards that keep them aligned.
 
 ## Working on this repo
 
+- `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool's tests, including a check
+  that every `MM …` command in the prompts is runnable as written.
 - `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
   (`git config core.hooksPath .githooks` once per clone).
 - `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a

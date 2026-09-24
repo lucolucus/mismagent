@@ -3,288 +3,66 @@
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-codex.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request, which matches the run-sheet). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
+> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in `.codex/agents/` — ask Codex to *"spawn `mismagent-<name>` on <input>"* (Codex spawns them only on explicit request). Skill names carry the `mismagent-` prefix because Codex has no namespaces. The board script lives at `.agents/skills/mismagent-board/scripts/board.py`. Subagents ship with a tuned `model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto `spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config (`max_threads`, default 6) is the concurrency cap.
 
+> **Recording duty (the caller's).** Whoever spawns a subagent is the **recorder**: the challenger's debate and the user's `KILL`/`RESHAPE`/`PROCEED` choice, the user's answer to the architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's `NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). Subagents never write that file: they cite `D-NNNN` in their notes.
 
-> **It is not a methodology to read: it is a flow to invoke.** The substance is the agents
-> and the skills listed below — *their instructions are the process*. This file is only
-> the map of what to invoke and in what order.
-> Extended reasoning lives in the mismagent source repo
-> (`plugins/mismagent/redesign/composer-spec.md`).
->
-> **Core + profile.** mismAgent is **portable**: the core (agents, skills, flow) names no
-> project. Each project provides its profile — **the active profile lives in
-> `<output_dir>/profile.md`, default `.mismagent/profile.md`** (template: `.agents/skills/mismagent-explore/references/PROFILE.md`; filled-in
-> example: `.agents/skills/mismagent-explore/references/profile-example.md`) — from which the agents read the sides, the repos, the gates, the
-> dev-architecture skills, the boundary rules, the boundary projections and the commit format.
->
-> **Handoff rule:** every handoff that crosses a movement is a **FILE** (e.g. the "Seeds for the
-> tactical" in `features/<feature>/tactical-model.md`), never just a return message — movements may
-> run in different sessions.
+**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` It copies the skills into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it). Verify: `/skills` lists `mismagent-explore`.
 
-## Where things live — the trunk and the features (v0.13.0)
+A flow to invoke, not a methodology to read: the agents' and skills' instructions are the process.
+This file says who owns what and in which order. The core names no project; each project's
+**profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`; template `.agents/skills/mismagent-explore/references/PROFILE.md`,
+example `.agents/skills/mismagent-explore/references/profile-example.md`) binds sides, paths, gates and branching.
 
-`<output_dir>` (default `.mismagent`) has **two levels**, and the split is the method's own
-project/feature boundary. The **profile is the project's junction point**; a feature is a folder
-that is added and thrown away without touching anything above it.
-
+## Where things live — trunk and features
 ```
-.mismagent/
-  profile.md            # THE JUNCTION POINT — sides, repos, gate, projections, commit format
-  context-map.md        # strategic: bounded contexts + ubiquitous language + relationships
-  architecture.md       # the chosen style + module map + allowed dependency directions
-  code-rules.md         # the deliberated code-writing rules, each with its enforcement channel
-  infra-notes.md        # the deploy/infra context
-  decisions/            # ADRs — scope: global | <side> | infra (never per-feature)
-  architetture/         # architecture overview, dev-architecture per CODEBASE, api/ contracts
-  features/
-    <feature>/          # everything that is born and dies with this feature
-      product-brief.md · tactical-model.md · building-blocks.yaml
-      blocks/<ctx>/{todo,doing,done}/ · open-questions/ · tasks/
-      UI/ · research/ · render-proof/ · gate-proof/
+<output_dir>/
+  profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
+  decisions/ · architetture/        # the PROJECT trunk — decided once, amended explicitly
+  features/<feature>/               # born with the feature; archived, never deleted
+    product-brief.md · tactical-model.md · building-blocks.yaml · decisions.md · UI/ · research/
+    blocks/<ctx>/{todo,doing,done}/ · tasks/ · open-questions/ · proofs
 ```
+- **Only the architect writes the trunk**, except `context-map.md`, which the analyst amends (one map,
+  never re-forked). Everyone else writes inside `features/<feature>/`.
+- A signal is read at the **scope of the artifact it guards**: an empty feature folder says nothing
+  about the project. Stack, style, code rules, gate and `run` are deliberated once per project;
+  changing one is a superseding ADR the user asked for.
 
-**The rule that follows from it, and the reason the split exists:** a signal is read at the scope
-of the artifact it guards. A new feature's folder is empty *by construction*, so emptiness there
-says nothing about whether the project has decided its stack. Reading a feature-local signal to
-decide a project-level artifact is what made the architect re-deliberate the stack — and rewrite
-the profile — on every new feature. Concretely:
+## The three movements
+| movement | you | owners (in order) | handoff files |
+|---|---|---|---|
+| **explore** | in dialogue | `explore` skill (bootstraps the profile if missing) → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
+| **model** | confirm the boundaries | `$mismagent-model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
+| **build** | confirm each release | `$mismagent-worker-composer` → `mismagent-worker` ×N → `mismagent-verifier` (+ `code-review`) | code on the integration line, proofs |
 
-- the **ubiquitous language** is amended in the one project map, never re-forked per feature
-  (two maps = two sets of canonical names = the drift the verifier's greps exist to catch);
-- the **foundational deliberation** (stack, style, code rules, `gate`, `run`) happens **once per
-  project**; a later feature gets a *feature dispatch* that reuses the trunk, and changing a
-  foundational decision is an explicit **amendment** (a superseding ADR), never a silent rewrite;
-- **only the architect writes the trunk.** Analyst amends `context-map.md`; everyone else writes
-  inside `features/<feature>/`.
+User entry points: the movement commands above, each agent as a subagent (*"spawn `mismagent-<name>`"*),
+`readiness-gate`, `board`, `run-app-smoke`, `harvest-dev-architecture`. The other skills
+(`realize-*`, `write-*`, `code-review`) are invoked by the agents mid-flow.
 
-*(Before v0.13.0 everything lived in `<output_dir>/<feature>/`, context-map included. Existing
-projects: move the trunk files up, the rest under `features/<feature>/` — see the v0.13.0 note in
-the repo README. There is no compatibility shim.)*
+## Human checkpoints
+The challenger's verdict · `NEEDS-INPUT` ambiguities · the architect's stack/style/infra/code-rules
+choice · the `tests_nl` elicitation and the R0 cut · a `BOUNCED` block or a spike's evidence · every
+release. Nothing else stops for you.
 
-## The flow at a glance
-
-```mermaid
-flowchart LR
-    subgraph EX["explore — you in dialogue"]
-        direction TB
-        dlg["in-session dialogue<br/>(+ profile bootstrap<br/>if missing)"]
-        chal["mismagent-challenger<br/>fresh context<br/>KILL · RESHAPE · PROCEED"]
-        res["mismagent-researcher<br/>gathers material<br/>(only if new)"]
-        ana["mismagent-analyst<br/>strategic +<br/>ubiquitous language"]
-        dlg --> chal
-        chal -- "KILL /<br/>RESHAPE" --> dlg
-        chal -- PROCEED --> res --> ana
-    end
-
-    subgraph MO["model — you confirm the boundaries"]
-        direction TB
-        tact["mismagent-tactical-modeler<br/>aggregates · invariants<br/>events · commands"]
-        ux["ux-designer<br/>UI → views<br/>(if there is UI)"]
-        arch["mismagent-architect, two-pass<br/>stack · style · infra · rules<br/>DELIBERATED with you<br/>ONCE PER PROJECT"]
-        bman["build-manifest<br/>types PINNED · tests_nl<br/>scaffold · block files"]
-        ccon["create-contract<br/>cross-deploy MODULE<br/>→ OpenAPI"]
-        tact --> arch --> bman
-        ux --> bman
-        bman -. "if cross-deploy" .-> ccon
-    end
-
-    subgraph BU["build — you delegate; confirm at the end"]
-        direction TB
-        comp["$mismagent-worker-composer<br/>owner-first waves · merge<br/>= composition · D2 weld"]
-        wrk["mismagent-worker ×N<br/>block-type × projection<br/>+ side memory"]
-        ver["mismagent-verifier (structural)<br/>+ code-review (semantic)"]
-        comp --> wrk --> ver
-        ver -- FAIL --> wrk
-    end
-
-    idea([raw idea]) --> dlg
-    ana == "PROJECT context-map.md (amended)<br/>+ feature tactical-model.md" ==> tact
-    bman == "building-blocks.yaml<br/>blocks · boundaries · projection" ==> comp
-    ver -- PASS --> conf{{"you<br/>confirm"}}
-    conf --> rel([green tag →<br/>feature flag])
-
-    classDef human fill:#fff8c5,stroke:#d4a72c,stroke-width:2px,color:#24292f
-    classDef step fill:#f6f8fa,stroke:#d0d7de,color:#24292f
-    classDef term fill:#dafbe1,stroke:#2da44e,color:#24292f
-    classDef movement fill:#ffffff,stroke:#afb8c1,stroke-dasharray:4 3,color:#57606a
-    class arch,conf human
-    class dlg,chal,res,ana,tact,ux,bman,ccon,comp,wrk,ver step
-    class idea,rel term
-    class EX,MO,BU movement
-```
-
-## explore → model → build
-
-**explore** · *you in dialogue* — from raw idea to understood problem.
-- skill **`$mismagent-explore`** (you dialogue in session; **profile bootstrap** if missing:
-  `output_dir` default `.mismagent` + language of the names) · subagent **`mismagent-researcher`**
-  (explores the domain → `research/<topic>.md`, when the domain is new) · subagent
-  **`mismagent-challenger`** (with fresh context tries to *demolish* the idea) · subagent
-  **`mismagent-analyst`** (models the **strategic**: bounded contexts + **ubiquitous language** in the
-  domain language + **seeds for the tactical** persisted in `features/<feature>/tactical-model.md`).
-- explore→model gate: **PM-rigor** checklist: does the brief cover problem/user/value/scope?
-- output: the strategic model + the canonical names + research material + the spikes.
-
-**model** · *you confirm the boundaries* — from understood problem to manifest (+ contract if cross-deploy).
-
-**One command conducts the whole movement: `$mismagent-model <feature>`** `[command]` — it runs the
-five steps below in order, stopping **only** at the human checkpoints (`NEEDS-INPUT` ambiguities ·
-the stack/architecture/infra deliberation · the `tests_nl` elicitation), and resumes re-entrantly
-at the first missing artifact. The step-by-step form stays equivalent:
-
-*How to invoke it (in order). `[skill]`/`[command]` are Codex **skills** — invoke with `$mismagent-<name>`; `[agent]` is a Codex **subagent** — ask Codex to *"spawn `mismagent-<name>` on <input>"* (it spawns subagents only on explicit request).:*
-1. **`$mismagent-tactical-modeler`** `[agent]` — completes the model: aggregates/invariants/events/
-   commands per context, into `features/<feature>/tactical-model.md` (it starts from the "Seeds for
-   the tactical" of that same file; the project context-map is read-only for it).
-2. **`$mismagent-ux-designer`** `[skill]` — imagines the UI → views (only if there is UI).
-3. **`$mismagent-architect`** `[agent]` — architecture + ADRs + boundaries with projection.
-   **Foundational decisions deliberated WITH the user** via a **two-pass headless pattern** (it is a
-   subagent, it can't talk to the user): pass-1 DISCOVERY writes nothing and returns
-   `STACK_PROPOSAL` + `ARCH_PROPOSAL` (architecture style + quality drivers **+ the code-writing
-   rules that follow from the style** — the dependency-lint per candidate stack, the contested
-   knobs; catalogue from `write-code-rules`) + `INFRA_QUESTIONS`
-   (deploy/data/retention/maintenance), the orchestrator brings them to the user, pass-2 WRITES the
-   ADRs/architecture/infra-notes **and the user-visible project definition files** —
-   `<output_dir>/architecture.md` (style + module map) and `<output_dir>/code-rules.md` (each rule
-   with its enforcement: mechanical → the **gate's dependency lint**, discursive → code-review
-   criteria, structural → cited owner), profile pointed at both — never a
-   silent ADR. After the stack ADR it **finalizes the `gate` in the profile** (build + test + the
-   dependency lint) **and the UI sides' `run` binding** (pinned a priori — a contract the wave-0
-   scaffold must satisfy).
-4. **`$mismagent-build-manifest`** `[skill]` — the tactical → `building-blocks.yaml`:
-   blocks + boundaries with **PINNED types** (Published Language) + projection + the user's `tests_nl`;
-   in greenfield it also emits a **wave-0 `scaffold` block**. Besides the authoritative YAML it seeds
-   the **rich, derived block files** (`blocks/<ctx>/todo/<id>.md`: spec + `## What to do`/`## Tasks`/
-   `## Dependencies`, status-less, no checkboxes) so opening a block shows the whole block, **held to
-   a per-type completeness standard** (invariants covered by criteria, commands with happy+failure,
-   pinned signatures inlined — linted by the worker-composer's readiness, surfaced on the board).
-   **You read them live via `$mismagent-board`** (read-only).
-5. **`$mismagent-create-contract`** `[skill, from the cross-deploy module]` —
-   **only if** at least one boundary is `cross-deploy`: the port is projected into ONE OpenAPI
-   (names from the ubiquitous language). If the module is not enabled and you have no
-   cross-deploy boundaries, this step does not exist.
-- output: tactical model + **building-block manifest** (+ OpenAPI if cross-deploy) + ADRs.
-
-**build** · *you delegate; confirm only at the end* — from manifest to released code.
-- command **`$mismagent-worker-composer <feature>`** — thin coordinator, the only one that merges and
-  moves state: readiness on the manifest (pinned types, or BOUNCE to the model movement; **git present** — if the
-  side's repo isn't a git repo, it `git init`s **with your confirmation**) → **wave-0 scaffold** first
-  (greenfield: gate green on the empty skeleton) → *boundary-owner-first* waves → dispatches
-  **`mismagent-worker`** ×N `[subagent]` (skill = block-type ×
-  projection + the codebase's dev-architecture memory) → **D1** green on its own (fresh `mismagent-verifier` +
-  `code-review`) → merge = composition → **D2** contract test on the welded boundary →
-  **you confirm** → green release-tag = turn on the flag.
-- output: code composed at the boundaries, deployed behind a flag.
-- *(the file-driven flow — `/dev-orchestrator-v2`, `/project-orchestrator`, `mism-build-dag`,
-  `mism-developer-lean`, `mism-dev-story-lean` — is superseded and lives in `attic/`, outside the
-  registry: it is not invocable.)*
-
-## Running it — the run-sheet (who types what)
-
-Legend: `[skill]`/`[command]` are skills **you invoke** as `$mismagent-<name>`; `[agent]` is a **subagent you ask Codex to spawn** (*"spawn `mismagent-architect` on …"*). Every skill **not** named in this run-sheet (`write-*`, `realize-*`,
-`seam-*`, `code-review`) is **internal** — invoked *by* the agents mid-flow, not a user entry point:
-typed out of flow it has no block/context to work on.
-
-**0 · Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` (add `--with-cross-deploy` only if boundaries cross deploy units). It copies the skills into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it). Verify: `/skills` lists `mismagent-explore`.
-
-**1 · explore — you in dialogue (high presence).**
-You type **`$mismagent-explore <the idea in one sentence>`**. The skill: (step 0) if missing,
-creates the bootstrap `.mismagent/profile.md` (output_dir, language of the names, sides); dialogues
-with you; dispatches **`mismagent-challenger`** (KILL → stop · RESHAPE → redesign with you ·
-PROCEED → go on), if needed **`mismagent-researcher`**, then **`mismagent-analyst`** (amends the
-project `context-map.md`; writes the "Seeds for the tactical" into
-`features/<feature>/tactical-model.md`). It converges on the `product-brief.md`.
-*Gate:* brief with problem/user/value/scope + context-map with the bounded contexts. → model.
-
-**2 · model — you confirm the boundaries.**
-You type **`$mismagent-model <feature>`** — the conductor drives the five steps below and stops at
-the checkpoints (you decide; it types). Or step-by-step, equivalently:
-1. You type **`$mismagent-tactical-modeler`** → the "Tactical model" sections of
-   `features/<feature>/tactical-model.md` (it absorbs
-   the Seeds); on `NEEDS-INPUT` it brings you the ambiguities, you decide.
-2. *(if there is UI)* you type **`$mismagent-ux-designer`** → concept with you → `UI/ux-proposal.md`.
-3. You type **`$mismagent-architect`** → it presents the **stack/architecture/infra alternatives AND
-   the code-writing rules with pros/cons and YOU choose** (never a silent ADR) → ADRs + boundaries
-   with projection + **your project definition files in `<output_dir>`** — `architecture.md`
-   (style + module map) and `code-rules.md` (each rule with its enforcement channel), yours to
-   open and read — → it finalizes the `gate` in the profile (incl. the dependency lint) and the
-   UI sides' `run` binding (pinned a priori: the wave-0 scaffold must satisfy it). In greenfield,
-   **before the first domain wave**, it also **authors the codebase's dev-architecture** (the
-   style memory — aggregate shape, test conventions — deliberated with you, pointed at by the
-   profile, injected into every worker dispatch; the harvest later grounds it on real code).
-4. You type **`$mismagent-build-manifest`** → `building-blocks.yaml` (types PINNED at the
-   boundaries); it **asks you for the `tests_nl`** in natural language for the high-value blocks, and
-   seeds the **rich block files** in `blocks/<ctx>/todo/`. **Watch them live with `$mismagent-board`.**
-5. *(only if a boundary is cross-deploy with `contract_form: openapi`)* you type
-   **`$mismagent-create-contract`** → ONE OpenAPI. *(An `event-schema` wire's
-   contract is its versioned schema files — ADR + manifest declare it; the scaffold creates it.)*
-*Gate:* the worker-composer's **Phase 1** (the single survival-test gate) — optionally previewed early
-with `$mismagent-readiness-gate`. → build.
-
-**3 · build — you delegate; confirm only at the end.**
-Prerequisite: the side's repo is **under git** (the worker-composer lives on worktrees and merges) —
-if it isn't, the worker-composer's Phase 1 `git init`s it **after asking you to confirm**.
-You type **`$mismagent-worker-composer <feature>`**. It: readiness (unpinned boundary →
-BOUNCE to the model movement; git present) → **wave-0 scaffold** (greenfield: skeleton green on the gate) →
-owner-first waves → dispatches **`mismagent-worker`** ×N → D1 (verifier +
-code-review with fresh context) → merge = composition → D2 (contract test on the boundary) → loop.
-Every dispatch runs on a model **routed by its action** (worker-composer §2a: `light`/`standard`/
-`deep` by block type and role — deep for aggregate/port and for the verifier + code-review, +1 on a
-cross-deploy seam and on the second rework) and is recorded in `features/<feature>/dispatch.log`, so
-the rework cap and the escalation hold across firings. **Run it under `/loop`** (self-paced): each
-firing advances what is ready and ends; the folders + git + the ledger carry the rest. Tune the cap
-and the tier→model binding in the profile's `build:` block.
-You step in **only** if a worker returns `BOUNCED` (ambiguous AC — the block is parked in `todo/`
-with the question in `open-questions/<block-id>.md`: you decide, then re-run
-`$mismagent-build-manifest` to fold the answer in) and **at the end**:
-you confirm the release → green tag → feature-flag.
-*Other build steps:* **`$mismagent-run-app-smoke`** `[skill]` — the recorded render proof of `ui`
-blocks (launches the app via the profile's `run`, evidence in `render-proof/`). **Not optional on a
-manual-`ui_render_check` side: the worker-composer runs it itself at D1** when the proof is missing;
-typing it yourself is the *slice-wide* re-proof before you confirm the release.
-**`$mismagent-harvest-dev-architecture`** `[skill]` *(optional)* — after the first green slice,
-turns the done blocks' real conventions into the codebase's dev-architecture memory — grounding
-the architect's authored doc, if one exists (the profile's `dev_architecture` stops being `none`).
-
-**When it jams:** write the entry in the project's `MISMAGENT-LOG.md` *immediately* (which
-skill/agent, what it was attempting, what broke, `core` vs `profile`) — that is how the method matures.
-
-## The rules the flow ENFORCES (no human re-reads them: agents + CI apply them)
-1. **state = the folder** (`todo/ doing/ done/`); `git mv` and merges only by the worker-composer.
-2. **the boundary is executable**: every boundary has pinned types (Published Language) + contract
-   tests (invariant-test on the aggregate · consumer-driven on the port); the cross-deploy contract
-   exists **in the form the boundary declares** (`contract_form`: OpenAPI for request/response ·
-   a versioned event-schema for replication/sync wires) — OpenAPI is one projection of the
-   boundary, not its definition.
-3. **no artifact that no machine downstream re-reads** — the one exception is a **derived view
-   regenerated from a source** (e.g. the rich block files + the read-only `$mismagent-board`, derived
-   from the manifest): allowed because it is regenerated, never hand-maintained, so it cannot drift;
-   its consumer is the human.
-4. **every cross-movement handoff is a file**, never just a message. If the harness is in a
-   **read-only/plan mode**, dispatch only read-only subagents (the challenger) and **materialize the
-   pending files as the first action once writes reopen** — a plan's text is not a handoff (see
-   the explore skill's "Harness read-only mode").
-5. **release = tag ↔ feature-flag**: deploy per block (flag off), publish per tag.
-6. **never merge/push onto the base branch without an explicit user request.**
-7. **the core re-reads what it has already produced (re-entrance + reconciliation).** A command
-   whose artifact already exists and is finalized never re-deliberates it: it says what exists and
-   asks what to reopen (the conductor's resume-at-first-missing-artifact applies to every *single*
-   command too — `$mismagent-architect` on a finalized feature must not re-propose decisions an
-   adverse review already closed). And artifacts stay reconciled: an ADR that answers an open spike
-   **backlinks the slug and closes it** in the context-map; an ADR that contradicts a context-map
-   line **updates it or records the supersede** — two artifacts that disagree in silence are two
-   sources of truth (friction-log-4 #9/#13/#14); build-manifest reconciles its pins with
-   profile · architecture · ADRs before emitting (friction-log-4 #22).
-8. **a gate that cannot go red is not a gate.** The profile's gate must **execute the tests it
-   guards** — not merely build their modules — proven red-green once at wave 0 (the scaffold's
-   failing probe) and re-run **cache-bypassed** by the verifier at every D1: a cached green proves
-   *nothing changed*, not *the tests pass on this diff* (friction-log-4 #17/#31). Same doctrine
-   for `enforced_by` rules: prohibition vs presence (wave-gated), comment-stripped, shell-portable,
-   validated red AND green (friction-log-4 #19/#26/#35/#37/#49).
-9. **what crosses a seam is PINNED, never invented in parallel.** The manifest pins the minting
-   rule of every correlation key, the unit-vs-quantity granularity of what flows, the delivery
-   guarantee folds design against, the source of every view field — and derives an **owner block**
-   for every shared artifact ≥2 same-wave blocks consume (friction-log-4
-   #25/#34/#38/#40/#41/#47/#48/#50): N parallel workers left to invent a shared convention produce
-   N divergent ones, and the divergence detonates at the weld, not at the build.
+## The rules the flow enforces
+1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. In a
+   read-only harness mode, dispatch only read-only agents and materialize the pending files as the
+   first action once writes reopen. A non-obvious choice, its debate and who decided it →
+   `features/<feature>/decisions.md` (format: `.agents/skills/mismagent-worker-composer/references/CLI.md`).
+2. **State = folder.** A block's state is its folder (`todo/doing/done`); only the worker-composer
+   moves it and merges.
+3. **Re-entrance.** Every command re-reads the files and resumes at the first missing artifact; an
+   artifact that exists is stated and reopened only on request, never re-deliberated.
+4. **Reconciliation.** Two artifacts that disagree in silence are two sources of truth: the writer
+   who notices amends the loser in the same pass, or asks.
+5. **What crosses a seam is pinned** in the manifest (types, keys, view sources, owners of shared
+   artifacts) and the owner's ADRs (delivery guarantees), never invented by parallel workers.
+6. **No artifact without a reader**, except a view regenerated from its source (the block files, the
+   board).
+7. **A gate that cannot go red is not a gate.** It executes the tests it guards; its red-green proof
+   is recorded and renewed when its configuration changes.
+8. **Release = tag ↔ feature flag.** Never merge or push onto the base branch, and never tag a
+   release, without the user's explicit consent.
+9. **In doubt, stop and ask.** A slow or hanging step is a strategy to replace (back to the
+   architect), never something to wait out.

@@ -226,6 +226,8 @@ another feature's work for a gap in yours.
 
 - `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool's tests, including a check
   that every `MM …` command in the prompts is runnable as written.
+- `python3 bench/score.py <run-dir>…` — a zero-cost benchmark: compares runs of the same deliverable
+  built with different mismAgent versions (requirements coverage, tests, friction, process, git).
 - `.githooks/pre-commit` regenerates `codex/` and `pi/` whenever `plugins/` changes
   (`git config core.hooksPath .githooks` once per clone).
 - `.claude/settings.json` adds a Claude Code hook that refuses an agent's `git commit` without a

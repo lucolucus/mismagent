@@ -231,7 +231,7 @@ def parse(argv=None):
     ap.add_argument("--feature", required=True)
     ap.add_argument("--plugin-dir", required=True)
     ap.add_argument("--total-usd", type=float, required=True)
-    ap.add_argument("--per-firing-usd", type=float, required=True)
+    ap.add_argument("--per-firing-usd", type=float, help="cap per firing (default: the total); a cap below one dispatch wave's cost cuts the wave and wastes its work")
     ap.add_argument("--model")
     ap.add_argument("--permission-mode", help="passed to claude -p (headless runs need one that allows tools, "
                                                "e.g. bypassPermissions in an isolated project)")
@@ -244,6 +244,7 @@ def parse(argv=None):
     ap.add_argument("--feature-dir", help="F, when it cannot be found under --project")
     ap.add_argument("--claude-bin", default="claude", help=argparse.SUPPRESS)  # tests: a simulated CLI
     a = ap.parse_args(argv)
+    a.per_firing_usd = a.total_usd if a.per_firing_usd is None else a.per_firing_usd
     if not (a.total_usd > 0 and a.per_firing_usd > 0):
         ap.error("--total-usd and --per-firing-usd must be > 0")
     a.project, a.plugin_dir = os.path.abspath(a.project), os.path.abspath(a.plugin_dir)

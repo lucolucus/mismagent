@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.25.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.25.1 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -247,6 +247,9 @@ another feature's work for a gap in yours.
 > Workers write decision entries to a handoff file; `MM state commit` does the bookkeeping commits; the
 > composer asks `MM <command> --help` instead of reading whole docs, and ends each firing after one
 > completed dispatch wave (the next firing is a fresh session).
+>
+> **v0.25.1:** a worker commits at every green AC, so an interrupted session loses at most one AC and
+> its successor continues from the branch's commits instead of starting over.
 
 ## Going deeper
 

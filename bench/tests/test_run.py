@@ -145,6 +145,14 @@ class RunnerTest(Sim):
         self.assertEqual([a[a.index("--max-budget-usd") + 1] for a in argv], ["4.0000", "2.0000", "0.5000"])
         self.assertEqual(out["session_id"], "s-3")
 
+    def test_per_firing_cap_defaults_to_the_total(self):
+        self.scenario([{"out": res(1.0), "status": st("done")}])
+        args = ["--project", self.repo, "--feature", "shop", "--plugin-dir", self.plugin, "--total-usd", "7",
+                "--claude-bin", self.claude, "--resume-sessions"]
+        self.assertEqual(run.run(run.parse(args))["outcome"], "done")
+        argv = self.calls()[0]["argv"]
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "7.0000")
+
     def test_total_budget_stops(self):
         self.scenario([{"out": res(4.0), "write": self.progress(1)}, {"out": res(8.0), "write": self.progress(2)}])
         out = self.run_it(total=8, per=4)

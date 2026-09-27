@@ -77,13 +77,13 @@ the side's gate so it prints its ADR and result, and name it in a handoff entry.
 
 **Long sessions** (a manifest block with ACs open — never a release group or a spike): past
 about 30–40 turns, at a **green AC boundary** (never between a red and
-its green), commit everything and return `CHECKPOINT` — a context reset, not a failure: a fresh session
+its green), commit everything and return `CHECKPOINT` — a context reset: a fresh session
 continues in the same worktree from the pack's `## Checkpoint` (from `next`; never redo `done`).
 
 ## You do NOT touch state
 State is the **folder**; only the **worker-composer** moves it. You: **code + commits in your
-worktree** (the profile's commit format; everything committed before you return), never `git mv`,
-never merge, never the other side. Your
+worktree** (the profile's commit format; a commit at every green AC, everything committed before you return), never `git mv`,
+never merge. Your
 **block file** is **read-only spec** — its `## Tasks` list is your acceptance criteria; **never edit
 it, never tick a checkbox**: progress is your tests + the folder position.
 

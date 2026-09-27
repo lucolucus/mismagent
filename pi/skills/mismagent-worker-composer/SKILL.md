@@ -65,7 +65,7 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
 
 **3 · Build — one wave per firing.** **Resume first** each `resume` block of `MM status`: reports of
 its latest attempt not yet ingested → step 5.3 first; else its worker again on its
-existing worktree, fresh `MM pack`: from its `progress` when `fresh`, else told the tree holds unverified work. Never infer an
+existing worktree, fresh `MM pack`: from its `progress` when `fresh`, else told to continue from its branch's commits (one per green AC): re-run the tests, redo nothing green. Never infer an
 interrupted worker (a running one leaves a dirty tree too): unsure, or `BLOCKED` → ask. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with the path of `MM pack F <id>`

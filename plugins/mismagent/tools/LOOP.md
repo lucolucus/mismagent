@@ -18,7 +18,7 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 | file | meaning | written by |
 |---|---|---|
 | `blocks/<ctx>/{todo,doing,done}/<id>.md` | the block's phase | `MM move` |
-| `open-questions/<id>.md` | parked: a question for the user | composer; deleted by `build-manifest` when answered, after it records the answer in `decisions.md` |
+| `open-questions/<id>.md` | parked: a question for the user; `closed/` holds the answered ones (ignored by `status`/`ready`) | composer; once its answer is in `decisions.md`: `MM question close` (composer) or deleted by `build-manifest` |
 | `rework/<id>-<n>.md` | the failures and HIGH findings of rework cycle n, or a red candidate / merge conflict (the cap counts these files; a group's `-1` is its spec) | `MM review ingest` · `MM rework write` |
 | `review-ingest/<id>-<attempt>.json` | an ingested review attempt: its reports' hashes and result (an identical retry returns it) | `MM review ingest` |
 | `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM review ingest` (action `promote`) · `MM proof record F review <id> --sha S --spec-hash H` |
@@ -61,7 +61,9 @@ branch is `block/<id>`.
   `MM lint --adrs <dir>` checks ADRs before any manifest exists.
 - `MM manifest render F` — writes the block files from `building-blocks.yaml` (in place; refuses
   incomplete rows, duplicates, context changes — writing nothing).
-- `MM why append F/decisions.md --entry <file>` — the recorder's only way to add decision notes.
+- `MM why append F/decisions.md --entry <file>` — the recorder's only way to add decision notes
+  (`MM why template F/decisions.md`: a valid skeleton; `MM why append --help`: the rules).
+- `MM question close F <id> --decision D-NNNN` — an answered open question to `open-questions/closed/`.
 - `MM release list|group|close|waive|confirm F <Rn> …` — the release path (`CLI.md`, Releases):
   ONE evaluation (HIGH/FAIL and MED block, a MED freed only by a verified close or a recorded
   waiver, LOW advisory); records written only by the tool, the whole batch validated first (`--replace <finding>` repairs an invalid record);
@@ -79,13 +81,16 @@ branch is `block/<id>`.
   and its boundary neighbours as advisory notes (the rest counted in one line); a pre-release group id
   packs its `rework/<id>-<n>.md` files.
 - `MM diff-range --base B --head X` — the three-dot review range from the merge-base.
+- `MM review template F <id> --attempt N --reviewer verifier|code-review --sha S --spec-hash H --out <report>`
+  — the report skeleton at the reviewer's path, each placeholder stating its rule.
 - `MM review ingest F <id> --attempt N --depth standard|deep --file <report>… --sha S --spec-hash H` —
   validates the depth's full report set against the block, its branch tip and its current spec
   (else nothing written), files every MED/LOW deferral in `pre-release.md` (idempotent, every
   attempt), and returns ONE action: `promote` (review proof recorded) · `rework` (one
   `rework/<id>-<n>.md`) · `park` (rework cap) · `decide` (a human choice) · `blocked` (a verifier
   `SKIP`); precedence decide → blocked → rework/park → promote. A non-promote action drops the
-  review proof; an identical retry returns the recorded result. The composer acts on `action` and
+  review proof; an identical retry returns the recorded result. `--answered D-NNNN` (recorded notes)
+  re-ingests a `decide` attempt with its Decision findings answered: no new review. The composer acts on `action` and
   records the returned `objections` in the decision note — never reads the findings.
 - `MM rework write F <id> --reason candidate-red|merge-conflict|other --evidence <file|->` — the
   next rework file for a red candidate or a merge conflict, same numbering and cap (`park` at the
@@ -115,7 +120,8 @@ branch is `block/<id>`.
    Every dispatch (worker, rework, reviewer) runs in the **foreground** — independent ones in
    parallel, in one message, where possible.
 4. **As each worker returns:** `BOUNCED` → park (`move --to todo` + `open-questions/`; an answer
-   that needs no code → `move --to doing`, straight to step 5 on its branch).
+   that needs no code → `move --to doing`, straight to step 5 on its branch; once the answer is
+   recorded, `question close`).
    `BLOCKED` → report. `READY-FOR-REVIEW` → queue it for integration with its handoff file
    (`.worktrees/returns/…`, its decision entries), which the reviewers get by path, as it is. `CHECKPOINT` (a long session, stopped at a **green** AC boundary,
    its work committed) → `MM progress record` with its head, the pack's spec hash, the checkpoint
@@ -127,11 +133,12 @@ branch is `block/<id>`.
    the `resume` entry shows no `progress` or a stale one (a dirty tree included) — the tree holds
    unverified work.
 5. **Integrate, one at a time:** reviewers on `diff-range` + one pack, each writing its report to
-   its designated `.worktrees/reviews/…` path and returning a verdict line → `MM review ingest`
+   its designated `.worktrees/reviews/…` path (pre-filled by `review template`) and returning a verdict line → `MM review ingest`
    with the depth's reports, the attempt, `head_sha` and the pack's spec hash → act on `action`:
    `rework` → re-dispatch the worker on its existing worktree with the returned `rework` file (no
    `ready`, no `move`) · `decide` / `park` → park (`move --to todo` + `open-questions/<id>.md`
-   with `reason` and the report paths) · `blocked` → report it (a strategy problem, not the block's) ·
+   with `reason` and the report paths; answered with no code needed → ingest the same attempt
+   again with `--answered`) · `blocked` → report it (a strategy problem, not the block's) ·
    `promote` (the proof is recorded) → `state commit` → `compose start` (a merge conflict → `rework write --reason merge-conflict`) → in the candidate run the
    gate + the contract test of every owner↔consumer pair whose both sides are in the candidate →
    green: `compose promote`, then `MM why append F/decisions.md --entry <file>` for each of the block's

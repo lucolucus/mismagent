@@ -58,8 +58,9 @@ without pass 1 → checkpoint → pass 2 is a process defect, even if the choice
   the side's whole module graph), `gate_files` (required; the profile says which files), `toolchain`,
   and `gate_after_release` for checks that protect released versions — ask the user **when** each
   check starts to matter;
-- **for every UI side, its `run` binding** (launch command; its port only if it serves one), pinned now
-  as the wave-0 scaffold's contract.
+- **for every UI side, its `run` binding** (launch command with the pinned interpreter; its port only if
+  it serves one), the wave-0 scaffold's contract; **`ui_render_check` automated in the gate by default**
+  (a headless render test) — manual only where the build environment launches and captures the app unattended.
 
 ## Cheap, standard verification
 The gate runs on every dispatch. Prefer the stack's conventional mechanism; deliberate exceptions

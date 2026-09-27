@@ -665,7 +665,34 @@ def why_append(path, entry_path):
             "unchanged": same, "superseded": flipped}
 
 
+def why_template(path):
+    """A valid entry skeleton (it passes `why check` as printed): the next id of `path` (D-0001 when
+    none), today, scope feature; every `<…>` states its field's rule."""
+    ids = [int(e["id"][2:]) for e in parse_notes(path)[0]] if path and os.path.isfile(path) else []
+    caps = lambda k: "≤ %d words" % NOTE_FIELDS[k]
+    f = [("Meta", "%s; scope: feature; status: accepted" % datetime.date.today().isoformat()),
+         ("Question", "<the question, one line, %s>" % caps("Question")),
+         ("Options", "<2-3 real alternatives and why each loses, %s>" % caps("Options")),
+         ("Hypothesis", "<what should hold, %s>" % caps("Hypothesis")),
+         ("Check", "<how it was checked and what counts as success, %s>" % caps("Check")),
+         ("Result", "untested — <reason; or the result with a link to its evidence, %s>" % caps("Result")),
+         ("Debate", "none"),
+         ("Decision", "<the choice, %s>" % caps("Decision")),
+         ("By", "decided: <who>; recorded: <who>"),
+         ("Docs", "[<doc title>](https://example.invalid/replace-with-1-to-3-links)"),
+         ("Revisit", "<when to reopen it, %s>" % caps("Revisit"))]
+    return "### D-%04d · <title, ≤ %d words>\n%s" % (max(ids, default=0) + 1, TITLE_CAP,
+                                                    "".join("- %s: %s\n" % kv for kv in f))
+
+
 def cmd_why(a):
+    if a.op == "template":
+        if a.entry:
+            raise UsageError("why template takes no --entry")
+        sys.stdout.write(why_template(a.file))
+        return 0
+    if not a.file:
+        raise UsageError("why %s takes <file>" % a.op)
     if a.op == "append":
         if not a.entry:
             raise UsageError("why append takes --entry <file>")
@@ -1510,7 +1537,7 @@ PRE_LINE = re.compile(r"^(\s*[-*]\s+\[)([ xX~])(\]\s+)(.*\S)\s*$")
 
 # ---- findings and releases (F/pre-release.md; the format and the policy are CLI.md's) --------------
 SEVS, UNWAIVABLE = ("HIGH", "FAIL", "MED", "LOW"), ("HIGH", "FAIL")
-LOCATOR = re.compile(r"^(\S+?)(?::\d+(?:-\d+)?|#\S+)$")  # file:line[-line] · path#symbol
+LOCATOR = re.compile(r"^(\S+?)(?::\d+(?:-\d+)?|#\S+)$|^([^\s:#,]+)$")  # file:line[-line] · path#symbol · path
 MARKS = {" ": "open", "x": "closed", "X": "closed", "~": "waived"}
 FINDING_FIELDS = ("release", "block", "sev", "locator", "issue", "reviewer", "date")
 RECORD_KEYS = {"close": ("line", "finding", "sha", "by", "evidence"),
@@ -1540,7 +1567,7 @@ def parse_findings(feat):
         elif parts[2] not in SEVS:
             f["error"] = "severity %r is not %s" % (parts[2], " | ".join(SEVS))
         elif not LOCATOR.match(parts[3]):
-            f["error"] = "locator %r is not `file:line` or `path#symbol`" % parts[3]
+            f["error"] = "locator %r is not `file:line[-line]`, `path#symbol` or `path`" % parts[3]
         else:
             f.update(zip(FINDING_FIELDS, parts))
             f["finding"] = finding_id(parts[:len(FINDING_FIELDS)])
@@ -1610,7 +1637,7 @@ def on_line(feat, repo, line_sha, bid):
 
 def locator_path(locator):
     m = LOCATOR.match(locator)
-    return m.group(1) if m else locator
+    return (m.group(1) or m.group(2)) if m else locator
 
 
 def closure_problem(feat, repo, line_sha, f, r):
@@ -2591,7 +2618,8 @@ def report_problems(r, where):
             elif f["fix"] not in REVIEW_FIXES:
                 out.append("%s: fix %r is not %s" % (at, f["fix"], " | ".join(REVIEW_FIXES)))
             elif not LOCATOR.match(clean_field(f["at"])):
-                out.append("%s: at %r is not `file:line[-line]` or `path#symbol`" % (at, f["at"]))
+                out.append("%s: at %r is not ONE location: `file:line[-line]`, `path#symbol` or `path` (a list is one "
+                           "finding per location)" % (at, f["at"]))
     obj = r.get("objections", [])
     if not isinstance(obj, list):
         out.append("%s: objections is a list" % where)
@@ -2600,8 +2628,6 @@ def report_problems(r, where):
             if not isinstance(o, dict) or set(o) != {"about", "text"} or not nonempty(o["about"]) \
                     or not nonempty(o["text"]):
                 out.append("%s objection %d: exactly about and text, non-empty strings" % (where, k))
-            elif len(o["text"].split()) > OBJECTION_CAP:
-                out.append("%s objection %d: text over %d words" % (where, k, OBJECTION_CAP))
     return out
 
 
@@ -2686,7 +2712,9 @@ def review_ingest(feat, a):
     decide (a Decision finding, a code-review BLOCKED) · blocked (a verifier SKIP) · rework (a FAIL,
     a HIGH, a CHANGES: one rework/<id>-<n>.md; park once REWORK_CAP cycles exist) · promote (the
     review proof recorded, as `proof record review`). Every non-promote outcome drops the review
-    proof. The result is recorded per (id, attempt, reports): an identical retry returns it."""
+    proof. The result is recorded per (id, attempt, reports, answers): an identical retry returns it.
+    `--answered D-NNNN…` (notes of F/decisions.md): the Decision findings (and a code-review BLOCKED)
+    are answered — the only re-ingest of an attempt allowed is a `decide` one with answers."""
     repo, bid, problems = feat.repo(), a.id, []
     S = sha(repo, a.sha)
     problems += [] if S else ["--sha %s is not a commit" % a.sha]
@@ -2702,14 +2730,20 @@ def review_ingest(feat, a):
         except OSError as e:
             problems.append("%s: unreadable (%s)" % (path, e))
     hashes = sorted(hashlib.sha256(b).hexdigest() for _, b in raw)
-    mpath = ingest_marker(feat, bid, a.attempt)
+    mpath, answered = ingest_marker(feat, bid, a.attempt), sorted(set(a.answered or []))
     mark = load_json(mpath) if os.path.isfile(mpath) else None
     if mark and not problems:  # checked BEFORE the spec: a group's own rework file changes its spec
-        if mark.get("reports") == hashes and mark.get("sha") == S and mark.get("depth") == a.depth:
+        same = mark.get("reports") == hashes and mark.get("sha") == S and mark.get("depth") == a.depth
+        if same and sorted(mark.get("answered") or []) == answered:
             return dict(mark.get("result") or {}, repeat=True), 0
-        return {"ok": False, "refused": "nothing written", "problems": [
-            "attempt %d of %s was already ingested with other reports (or sha, depth): a new review is a new "
-            "attempt" % (a.attempt, bid)]}, 1
+        if not (same and answered and (mark.get("result") or {}).get("action") == "decide"):
+            return {"ok": False, "refused": "nothing written", "problems": [
+                "attempt %d of %s was already ingested with other reports (or sha, depth, answers): a new review "
+                "is a new attempt; only a `decide` result is ingested again, with --answered" % (a.attempt, bid)]}, 1
+    npath = os.path.join(feat.dir, "decisions.md")
+    have_notes = {e["id"] for e in parse_notes(npath)[0]} if answered and os.path.isfile(npath) else set()
+    problems += ["--answered %s: no such entry in F/decisions.md (record the answer first)" % d
+                 for d in answered if d not in have_notes]
     try:
         cur = spec_hash(feat, bid)
     except UsageError as e:
@@ -2747,6 +2781,9 @@ def review_ingest(feat, a):
                 if f["sev"] in ("MED", "LOW") and f["fix"] != "Decision"]
     if deferred and not rel:
         problems.append("%s has no release: its MED/LOW findings cannot be filed in pre-release.md" % bid)
+    if answered and not any(f["fix"] == "Decision" for _, r in reports for f in r["findings"]) and \
+            not any(r["reviewer"] == "code-review" and r["verdict"] == "BLOCKED" for _, r in reports):
+        problems.append("--answered: no Decision finding or code-review BLOCKED to answer")
     if problems:
         return {"ok": False, "refused": "nothing written", "problems": problems}, 1
 
@@ -2771,15 +2808,27 @@ def review_ingest(feat, a):
     counts["failures"] = len(fails)
     verdicts = {r["reviewer"]: r["verdict"] for _, r in reports}
     vtext = " · ".join("%s %s" % kv for kv in sorted(verdicts.items()))
+    objections, warnings = [], []
+    for path, r in reports:  # an objection over the cap is truncated, never refused
+        for k, o in enumerate(r.get("objections") or []):
+            words = one_line(o["text"]).split()
+            if len(words) > OBJECTION_CAP:
+                warnings.append("%s objection %d: %d words, truncated to %d" % (
+                    os.path.basename(path), k, len(words), OBJECTION_CAP))
+            objections.append(dict(reviewer=r["reviewer"], about=one_line(o["about"]),
+                                   text=" ".join(words[:OBJECTION_CAP])))
     out = {"ok": True, "action": None, "reason": None, "rework": None, "counts": counts, "appended": len(new),
-           "proof": False, "objections": [dict(reviewer=r["reviewer"], about=one_line(o["about"]), text=one_line(o["text"]))
-                                          for _, r in reports for o in r.get("objections") or []]}
+           "proof": False, "objections": objections}
+    if warnings:
+        out["warnings"] = warnings
+    if answered:
+        out["answered"] = answered
     brief = lambda items: "; ".join(("%s %s" % (w, clean_field(t))).strip()[:160] for w, t in items[:3]) + \
         (" (+%d more)" % (len(items) - 3) if len(items) > 3 else "")
-    decisions = [(f["at"], f["issue"]) for _, f in allf if f["fix"] == "Decision"]
-    high = [(rv, f) for rv, f in allf if f["sev"] == "HIGH"]
+    decisions = [(f["at"], f["issue"]) for _, f in allf if f["fix"] == "Decision" and not answered]
+    high = [(rv, f) for rv, f in allf if f["sev"] == "HIGH" and not (answered and f["fix"] == "Decision")]
     patch = [(rv, f) for rv, f in allf if f["sev"] != "HIGH" and f["fix"] == "Patch"]
-    if decisions or verdicts.get("code-review") == "BLOCKED":
+    if decisions or (verdicts.get("code-review") == "BLOCKED" and not answered):
         out.update(action="decide", reason="a human/product choice: " + (
             brief(decisions) or "code-review BLOCKED — see " + seen.get("code-review", "")))
     elif verdicts.get("verifier") == "SKIP":
@@ -2800,16 +2849,85 @@ def review_ingest(feat, a):
         out.update(rework_next(feat, bid, body, "%d failures, %d HIGH (%s)" % (len(fails), len(high), vtext)))
     else:
         record_review_proof(feat, bid, S, cur)
-        out.update(action="promote", reason="every report passes (%s), no HIGH" % vtext, proof=True)
+        out.update(action="promote", reason="every report passes (%s), no HIGH%s" % (
+            vtext, "; the Decision findings answered by " + ", ".join(answered) if answered else ""), proof=True)
     if out["action"] != "promote":
         out["proof_dropped"] = drop_review_proof(feat, bid)
     write_json(mpath, {"id": bid, "attempt": a.attempt, "depth": a.depth, "sha": S, "reports": hashes,
-                       "result": out})
+                       "answered": answered, "result": out})
     return out, 0
 
 
+def review_template(feat, a):
+    """The ready-to-fill report skeleton: the identity filled, every other value a placeholder that
+    states its rule (an unfilled placeholder is refused by ingest). --out writes it (the report path)."""
+    if a.reviewer not in REVIEW_VERDICTS:
+        raise UsageError("review template takes --reviewer %s" % " | ".join(REVIEW_VERDICTS))
+    if not (a.attempt and a.attempt >= 1):
+        raise UsageError("--attempt is a positive integer")
+    cur = spec_hash(feat, a.id)
+    if a.spec_hash != cur:
+        return {"ok": False, "refused": "--spec-hash is not the current spec hash (%s): re-pack" % cur[:12]}, 1
+    t = {"version": 1, "id": a.id, "attempt": a.attempt, "reviewer": a.reviewer, "sha": a.sha, "spec_hash": cur,
+         "verdict": " | ".join(REVIEW_VERDICTS[a.reviewer]) + " (keep exactly one)",
+         "checks": ["<what you ran and its result>"],
+         "failures": ["<one failed AC or check per string; [] with %s>" % REVIEW_VERDICTS[a.reviewer][0]],
+         "findings": [{"sev": "HIGH | MED | LOW (keep one)",
+                       "at": "<ONE location: path:12 or path:12-30 or path#Symbol or path; never a list "
+                             "(path:12,40): one finding per location>",
+                       "issue": "<the problem, one line>", "fix": "Patch | Defer | Decision (keep one)",
+                       "evidence": "<why: the line, the failing input; may be empty>"}],
+         "objections": [{"about": "<D-NNNN or a topic>",
+                         "text": "<your objection to a decision, at most %d words>" % OBJECTION_CAP}],
+         "notes": "<optional; replace every <...> placeholder, [] for an empty list>"}
+    if not a.out:
+        print(json.dumps(t, indent=2, ensure_ascii=False))
+        return None, 0
+    write_text(os.path.abspath(a.out), json.dumps(t, indent=2, ensure_ascii=False) + "\n")
+    return {"ok": True, "file": os.path.abspath(a.out)}, 0
+
+
 def cmd_review(a):
-    return emit(*review_ingest(Feature(a.feature_dir), a))
+    feat = Feature(a.feature_dir)
+    if a.op == "template":
+        if a.file or a.depth or a.answered:
+            raise UsageError("review template takes no --file, --depth or --answered")
+        out, code = review_template(feat, a)
+        return code if out is None else emit(out, code)
+    if not a.file or not a.depth:
+        raise UsageError("review ingest takes --depth and --file")
+    if a.reviewer or a.out:
+        raise UsageError("review ingest takes no --reviewer or --out")
+    return emit(*review_ingest(feat, a))
+
+
+# ---- open questions: F/open-questions/<id>.md, closed by a recorded decision ------------------------
+def question_close(feat, a):
+    """Move F/open-questions/<id>.md to F/open-questions/closed/ (git mv if tracked) with a trailer
+    naming the decision that answers it; `status`/`ready` read only the top-level files."""
+    src = os.path.join(feat.dir, "open-questions", a.id + ".md")
+    if not os.path.isfile(src):
+        return {"ok": False, "refused": "no open question %s" % os.path.relpath(src, feat.dir)}, 1
+    npath = os.path.join(feat.dir, "decisions.md")
+    if a.decision not in {e["id"] for e in (parse_notes(npath)[0] if os.path.isfile(npath) else [])}:
+        return {"ok": False, "refused": "%s is not an entry of F/decisions.md: record the answer first "
+                "(`why append`)" % a.decision}, 1
+    cdir, n = os.path.join(feat.dir, "open-questions", "closed"), 1
+    dst = os.path.join(cdir, a.id + ".md")
+    while os.path.exists(dst):  # the same id parked and closed again
+        n += 1
+        dst = os.path.join(cdir, "%s-%d.md" % (a.id, n))
+    os.makedirs(cdir, exist_ok=True)
+    tracked = git(feat.dir, "ls-files", "--error-unmatch", src, check=False).returncode == 0
+    git(feat.dir, "mv", src, dst) if tracked else shutil.move(src, dst)
+    day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    text = read(dst)
+    write_text(dst, text + ("" if text.endswith("\n") else "\n") + "\nClosed by %s on %s\n" % (a.decision, day))
+    return {"ok": True, "id": a.id, "decision": a.decision, "path": dst, "git": tracked}, 0
+
+
+def cmd_question(a):
+    return emit(*question_close(Feature(a.feature_dir), a))
 
 
 def rework_write(feat, a):
@@ -2878,7 +2996,23 @@ HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact 
     "lint": "Read-only. The exact structural checks of the manifest, block files, ADRs, decisions.md and\n"
             "pre-release.md; each gap names its bounce_to. --adrs DIR: the ADRs alone. Exit 1 on a gap.",
     "why": "check: validate a decision-notes file (read-only). append: add an entry file's D-NNNN entries only\n"
-           "if the whole file still passes (identical = no-op; only Debate/Result/ADR updates); else nothing written.",
+           "if the whole file still passes (identical = no-op; only Debate/Result/ADR updates); else nothing written.\n"
+           "template [file]: print a valid entry skeleton with the file's next id.\n\nThe rules `check` enforces:\n"
+           "- an entry = `### D-NNNN · <title, ≤ %d words>`, then `- <Field>: <value>` lines: EVERY field is ONE\n"
+           "  physical line (never wrapped), given once, non-empty; any other line is an error.\n"
+           "- required: %s; optional: %s.\n"
+           "- word caps (links count their text, URLs excluded): %s; the whole entry ≤ %d.\n"
+           "- Meta = `YYYY-MM-DD; scope: feature|block:<id>|boundary:<id>|release:<Rn>; status: accepted|superseded\n"
+           "  [; sha: <hex>]`, nothing else; beside a manifest the scope names a row or release of it.\n"
+           "- Hypothesis, Check, Result: ALL THREE `n/a — decided by <reference>` (an id like REQ-3/ADR-0002 or a\n"
+           "  link), or none of them.\n"
+           "- Result: a link to its evidence, or `untested — <reason>` / `inconclusive — <reason>`.\n"
+           "- By = `decided: <who>; recorded: <who>`; Docs = 1-3 links; ADR = a link; Confidence = `low|medium|high\n"
+           "  — <why>`; every local link exists (relative to the file).\n"
+           "- ids ascending: a new entry takes the highest id + 1, appended at the end; Supersedes names one\n"
+           "  earlier id (which becomes superseded); an existing entry changes only Debate/Result/ADR." % (
+               TITLE_CAP, ", ".join(k for k in NOTE_FIELDS if k not in NOTE_OPTIONAL), ", ".join(NOTE_OPTIONAL),
+               ", ".join("%s %d" % (k, c) for k, c in NOTE_FIELDS.items() if c), NOTE_CAP),
     "manifest": "render: write every block file from its building-blocks.yaml row (state folder kept, identical\n"
                 "files untouched); an incomplete row, a duplicate or a context change refuses, writing nothing.",
     "ready": "Read-only. Blocks in todo/ whose dependencies are integrated, in build order (scaffold first),\n"
@@ -2896,11 +3030,15 @@ HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact 
                "candidate is open). promote: fast-forward the line, write integrated/<id>.json. abort: remove it.",
     "release": "list: the release evaluation (read-only). group: write rework/pre-<Rn>-<k>-1.md. close|waive:\n"
                "append records + flip marks, the whole batch validated first. confirm: ff the base + tag (consent).",
-    "review": "ingest: validate the reviewers' JSON reports (full set for --depth, same id/attempt/sha/spec_hash;\n"
+    "question": "close: move F/open-questions/<id>.md to open-questions/closed/ with `Closed by D-NNNN on <date>`\n"
+                "(git mv if tracked); refused unless the question exists and --decision is an entry of F/decisions.md.",
+    "review": "template: print (or --out: write) a report skeleton for --reviewer, its placeholders stating each rule.\n"
+              "ingest: validate the reviewers' JSON reports (full set for --depth, same id/attempt/sha/spec_hash;\n"
               "--sha the tip of block/<id>, --spec-hash current), else nothing written. Files MED/LOW in pre-release.md\n"
               "(idempotent), then ONE action: promote (review proof written) | rework (rework/<id>-<n>.md) | park\n"
               "(rework cap) | decide | blocked; a non-promote action drops the review proof. An identical retry\n"
-              "of an attempt returns its recorded result.",
+              "of an attempt returns its recorded result. --answered D-NNNN (repeatable, notes of F/decisions.md): the\n"
+              "Decision findings are answered — re-ingest a `decide` attempt with them to promote without code.",
     "rework": "write: the next rework/<id>-<n>.md (same numbering and 2-cycle cap as review ingest; a group's -1\n"
               "is its spec) from --evidence; at the cap: action park, nothing written. Drops the review proof.",
     "state": "commit: on the checkout of F, on --integration only, no candidate open: stage every change under\n"
@@ -2923,7 +3061,9 @@ def build_parser():
     p = cmd("lint", cmd_lint, "exact structural checks (F, or --adrs DIR before any manifest)")
     p.add_argument("feature_dir", nargs="?")
     p.add_argument("--adrs")
-    cmd("why", cmd_why, "check | append decision notes", ("op", ("check", "append")), "file").add_argument("--entry")
+    p = cmd("why", cmd_why, "check | append | template decision notes", ("op", ("check", "append", "template")))
+    p.add_argument("file", nargs="?")
+    p.add_argument("--entry")
     cmd("manifest", cmd_manifest, "render the block files from the manifest", ("op", ("render",)), "feature_dir")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
@@ -2953,14 +3093,20 @@ def build_parser():
         p.add_argument(opt)
     p.add_argument("--lines", nargs="*")
     p.add_argument("--replace", nargs="+")
-    p = cmd("review", cmd_review, "ingest the reviewers' reports into one action", ("op", ("ingest",)), "feature_dir",
-            "id")
+    p = cmd("review", cmd_review, "a report template | ingest the reviewers' reports into one action",
+            ("op", ("ingest", "template")), "feature_dir", "id")
     p.add_argument("--attempt", type=int, required=True, help="the review attempt the reports carry")
-    p.add_argument("--depth", choices=tuple(DEPTH_REVIEWERS), required=True,
-                   help="standard: a verifier report; deep: verifier + code-review")
-    p.add_argument("--file", action="extend", nargs="+", required=True, help="a reviewer's report (one per reviewer)")
+    p.add_argument("--depth", choices=tuple(DEPTH_REVIEWERS),
+                   help="ingest: standard = a verifier report; deep = verifier + code-review")
+    p.add_argument("--file", action="extend", nargs="+", help="ingest: a reviewer's report (one per reviewer)")
+    p.add_argument("--answered", action="append", metavar="D-NNNN",
+                   help="ingest: a decision note answering the Decision findings (repeatable)")
+    p.add_argument("--reviewer", choices=tuple(REVIEW_VERDICTS), help="template: whose report")
+    p.add_argument("--out", help="template: write the skeleton here (the report path)")
     p.add_argument("--sha", required=True, help="the reviewed head: the tip of block/<id>")
     p.add_argument("--spec-hash", required=True, help="the reviewed pack's spec_hash")
+    cmd("question", cmd_question, "close an answered open question", ("op", ("close",)), "feature_dir",
+        "id").add_argument("--decision", required=True, metavar="D-NNNN")
     p = cmd("rework", cmd_rework, "write the next rework file (a red candidate, a merge conflict)",
             ("op", ("write",)), "feature_dir", "id")
     p.add_argument("--reason", choices=REWORK_REASONS, required=True)

@@ -59,11 +59,9 @@ design problem, judge it with the one `craft` reference that fits it — `clean-
 - **Only HIGH blocks** the merge: severity is the harm, not the convenience.
 
 ## Outcome — the report
-Write to `REPORT_PATH` (named `<id>-<attempt>-code-review.json`) the JSON `{version: 1, id,
-attempt, reviewer: "code-review", sha: HEAD_SHA, spec_hash: the pack's, verdict:
-APPROVE|CHANGES|BLOCKED, checks: {}, failures: [], findings: [{sev, at: <file:line>, issue, fix:
-Patch|Defer|Decision, evidence: <lens + scenario>}], objections: [{about: <D-NNNN|topic>, text: ≤40
-words}], notes}` (`objections`: your disagreements with a worker's decision). Return ≤ 5 lines: `VERDICT`, `HEAD_SHA`, counts by severity, `REPORT: <path>`.
+Fill the JSON template at `REPORT_PATH` (`<id>-<attempt>-code-review.json`): replace every `<…>`
+placeholder, following the rule it states; a finding's `evidence` = lens + scenario; `objections`:
+your disagreements with a worker's decision. Return ≤ 5 lines: `VERDICT`, `HEAD_SHA`, counts by severity, `REPORT: <path>`.
 - `APPROVE` — no `HIGH` finding and every AC satisfied in spirit.
 - `CHANGES` — ≥1 `HIGH` (or an AC not truly satisfied): the worker reworks the HIGH `Patch`
   findings only (max 2 cycles). MED/LOW alone → `APPROVE`.

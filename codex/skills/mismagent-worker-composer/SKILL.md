@@ -13,7 +13,7 @@ You are a **thin coordinator**: you write **no code and no tests**; follow this 
 ask** — never guess, never repair state by hand.
 
 **Computation is a tool call.** `MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`
-(JSON out; exit `1` = refused, the JSON says why) — an abbreviation: run the full command, never a
+(JSON; exit `1` = refused, the JSON says why) — an abbreviation: run the full command, never a
 shell variable; never re-derive its output. **Never read `CLI.md`, `LOOP.md` or the
 manifest whole**: ask `MM <command> --help` and the JSON commands; pass packs by path.
 `F` = `<output_dir>/features/<feature>/` (from `<the argument this skill was invoked with>`). `B` = the profile's integration branch
@@ -58,7 +58,7 @@ Bounce targets: `$mismagent-build-manifest`, the `mismagent-architect` subagent,
 with the user), `recorder` (`why.*`: fix `F/decisions.md`) or `composer` (`release.*`: `release
 close|waive --replace <finding>`); then re-lint.
 
-**2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is done).
+**2 · Scaffold** (greenfield; `MM ready F` holds the rest until done).
 `MM move F <id> --to doing`, its worktree, a worker with `realize-scaffold`. Accepted by **the gate
 alone** (no review): the worker records the gate proof; then `MM state commit`, `MM compose start F <id> --integration B --branch block/<id>`,
 the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to done`, `MM state commit`.
@@ -67,17 +67,17 @@ the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to don
 its latest attempt not yet ingested → step 5.3 first; else its worker again on its
 existing worktree, fresh `MM pack`: from its `progress` when `fresh`, else told to continue from its branch's commits (one per green AC): re-run the tests, redo nothing green. Never infer an
 interrupted worker (a running one leaves a dirty tree too): unsure, or `BLOCKED` → ask. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
-(default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
+(default 4) minus those building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with the path of `MM pack F <id>`
-(`--extra` the authored dev-architecture doc, if any), the block-type skill, the worktree, the side's gate and its handoff. Never assemble context by hand.
+(`--extra` the authored dev-architecture doc, if any), the block-type skill, the worktree, the side's gate and its handoff.
 **Every dispatch** runs in the **foreground**, parallel ones in one message; no second wave.
 
 **4 · As each worker returns.**
 - `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, signature, key, declared guarantee) →
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
-  `build-manifest` folds it). An answer needing no code → `MM move F <id> --to doing`, then step 5,
-  against the current spec;
-- `BLOCKED` → report its cause; it stays in `doing/`;
+  `build-manifest` folds it). An answer recorded → `MM question close F <id> --decision <D-NNNN>`; needing
+  no code → `MM move F <id> --to doing`, then step 5, against the current spec;
+- `BLOCKED` → report its cause (stays in `doing/`);
 - `CHECKPOINT` → `MM progress record F <id> --head <block tip> --spec-hash <spec_hash> --json -` with
   its checkpoint and `--extra` each extra of the first dispatch, then a
   fresh worker, **same** worktree and handoff, fresh `MM pack`, no new slot, no review. Refused
@@ -89,24 +89,25 @@ from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-wo
    a manual-`ui_render_check` side: `run-app-smoke` first, unless deferred to its release's `composition` block or `render-proof/<id>/sha.txt` holds `head_sha`; that composition
    block runs it for every deferred `ui` block at its `head_sha`. `RENDER-FAIL` = FAIL.
 2. **Review** at the block's depth, each reviewer with `range`, `head_sha`, one `MM pack F <id>`
-   (note its `spec_hash`), every handoff of the block, the `DEVIATIONS`, its report path. A
+   (note its `spec_hash`), every handoff of the block, the `DEVIATIONS`, its report path pre-filled by `MM review
+   template F <id> --attempt <n> --reviewer <verifier|code-review> --sha <head_sha> --spec-hash <spec_hash> --out <path>`. A
    `HEAD_SHA` that is not `head_sha` → re-run it.
 3. `MM review ingest F <id> --attempt <n> --depth standard|deep --file <report>… --sha <head_sha>
-   --spec-hash <spec_hash>`; refused over a missing or malformed report → that reviewer once more,
-   same path, then `BLOCKED` (never the verdict line). Record its `objections` (below). Act on
-   `action`: `rework` → the worker again on its **existing** worktree (it stays in `doing/`), a new
+   --spec-hash <spec_hash>`; refused over a report → its reviewer once more,
+   then `BLOCKED` (never the verdict line). Record its `objections` (below). Act on
+   `action`: `rework` → the worker again on its **existing** worktree (stays in `doing/`), a new
    `n`, every handoff of the block, the step-3 pack `--extra` its `rework` file; `park` or `decide`
-   → **park**, `reason` the question; `blocked` → as `BLOCKED`; `promote` → `MM state commit` →
+   → **park**, `reason` the question (answered, no code needed → re-ingest `--answered <D-NNNN>`); `blocked` → as `BLOCKED`; `promote` → `MM state commit` →
    `MM compose start F <id> --integration B --branch block/<id>`. A merge conflict → `MM rework
    write F <id> --reason merge-conflict --evidence <excerpt>`, act on its `action` likewise.
 4. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair on a touched boundary with both sides in the candidate.
-   **Green** → `MM compose promote F <id>`, `MM why append` every handoff of the block (links now
-   resolve; also for a promoted block whose handoffs were not), finish as in step 0, `MM state commit`. **Red** → `MM compose abort F <id>`, `MM rework write F <id> --reason candidate-red --evidence <excerpt>`, act on its `action`; which side reworks follows the evidence, never the consumer by default.
-   A refused promote → `MM compose abort F <id>` and start step 5 again from the new tip.
+   **Green** → `MM compose promote F <id>`, `MM why append` every handoff of the block (also for a
+   promoted block whose handoffs were not), finish as in step 0, `MM state commit`. **Red** → `MM compose abort F <id>`, `MM rework write F <id> --reason candidate-red --evidence <excerpt>`, act on its `action`; which side reworks follows the evidence, never the consumer by default.
+   A refused promote → `MM compose abort F <id>`, step 5 again from the new tip.
 
 **6 · Report and end** — once every dispatched block is integrated, parked or blocked and no
-candidate is open. The next firing is a fresh session: state is on disk.
+candidate is open.
 
 ## Decision notes — `F/decisions.md`
 You are the **recorder**, not the decider (`MM why --help`): the workers' handoffs; ingest's `objections` and a rework's evidence into

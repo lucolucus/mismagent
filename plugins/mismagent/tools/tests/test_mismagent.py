@@ -1167,7 +1167,7 @@ class TestV023(Base):
     # -- core ----------------------------------------------------------------------------------------
     def test_findings_identity_is_the_seven_fields_not_the_line(self):
         self.put("pre-release.md", "x\n" + fline("R0", "agg-order", "MED", "src/a.py#Order.total", "i")[0] +
-                 "- [ ] R0 · agg-order · MED · src/a.py · no anchor · v · d\n- [ ] R0 · agg-order · MED · a.py:1\n"
+                 "- [ ] R0 · agg-order · MED · src/a.py:3,9 · a list · v · d\n- [ ] R0 · agg-order · MED · a.py:1\n"
                  "- [x] R0 · agg-order · MID · a.py:1 · i · v · d\n")
         f = mismagent.parse_findings(mismagent.Feature(self.feat))
         self.assertEqual((f[0]["line"], f[0]["locator"]), (2, "src/a.py#Order.total"))
@@ -1884,7 +1884,7 @@ class TestV025(Base):
                      dict(findings=[{"sev": 1, "at": "a:1", "issue": "i", "fix": "Defer", "evidence": ""}]),
                      dict(findings=[{"sev": "LOW", "at": "a:1", "issue": "i", "fix": "Defer", "evidence": None}]),
                      dict(id=3), dict(sha=None), dict(objections="x"), dict(objections=[{"about": "D-0001"}]),
-                     dict(objections=[{"about": "D-0001", "text": "w " * 41}])):
+                     dict(findings=[{"sev": "LOW", "at": "a.py:127,142", "issue": "i", "fix": "Defer", "evidence": ""}])):
             path = self.report("verifier", "PASS")
             with open(path) as f:
                 r = dict(json.load(f), **over)
@@ -1998,6 +1998,127 @@ class TestV025(Base):
         self.assertEqual(self.state(0), {"ok": True, "committed": False})
 
 
+class TestV0252(Base):
+    """v0.25.2: open questions close, report templates, lenient `at`/objections, --answered, why rules."""
+    report, ingest, pre = TestV025.report, TestV025.ingest, TestV025.pre
+
+    def setUp(self):
+        Base.setUp(self)
+        self.wt = self.block_wt("svc-order")
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc\n")
+        self.rdir = os.path.join(self.tmp, "reviews")
+
+    def notes(self, *ids):
+        return self.put("decisions.md", "# Decision notes — shop\n\n" + "\n".join(note(i) for i in ids))
+
+    # -- 1 · open questions close --------------------------------------------------------------------
+    def test_a_question_closes_on_a_recorded_decision_and_stops_waiting_or_parking(self):
+        for q in ("ui-turno", "catalogo-categorie-cmd", "scaffold-app"):
+            self.put("open-questions/%s.md" % q, "# Open question — %s\n\n## Decision — user\n- chosen: A\n" % q)
+        status = lambda: self.run_tool("status", self.feat, "--integration", "feature/shop")["waiting"]
+        self.assertIn("open question: open-questions/ui-turno.md", status())
+        self.assertIn({"id": "scaffold-app", "reason": "parked: open-questions/scaffold-app.md"},
+                      self.run_tool("ready", self.feat)["excluded"])
+        close = lambda q, d, expect: self.run_tool("question", "close", self.feat, q, "--decision", d, expect=expect)
+        self.assertIn("record the answer first", close("ui-turno", "D-0023", 1)["refused"])   # no decisions.md
+        self.notes("D-0020", "D-0023")
+        self.assertIn("not an entry", close("ui-turno", "D-0099", 1)["refused"])
+        self.assertIn("no open question", close("nope", "D-0020", 1)["refused"])
+        sh(self.repo, "git", "add", ".")
+        sh(self.repo, "git", "commit", "-q", "-m", "questions")
+        out = close("ui-turno", "D-0023", 0)
+        self.assertEqual((out["path"], out["git"]), (os.path.join(self.feat, "open-questions", "closed", "ui-turno.md"),
+                                                    True))
+        self.assertRegex(mismagent.read(out["path"]), r"chosen: A\n\nClosed by D-0023 on \d{4}-\d{2}-\d{2}\n$")
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "open-questions", "ui-turno.md")))
+        self.assertEqual(close("catalogo-categorie-cmd", "D-0020", 0)["git"], True)
+        close("scaffold-app", "D-0020", 0)
+        self.assertFalse([w for w in status() if w.startswith("open question")])
+        self.assertIn("scaffold-app", [r["id"] for r in self.run_tool("ready", self.feat)["ready"]])
+        self.assertIn("no open question", close("ui-turno", "D-0023", 1)["refused"])      # closed once
+        self.put("open-questions/ui-turno.md", "parked again\n")
+        self.assertTrue(close("ui-turno", "D-0023", 0)["path"].endswith("closed/ui-turno-2.md"))
+
+    # -- 2 · report templates and lenient ingest -----------------------------------------------------
+    def template(self, reviewer, *extra, expect=0, attempt=1):
+        return self.run_tool("review", "template", self.feat, "svc-order", "--attempt", str(attempt), "--reviewer",
+                             reviewer, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"), *extra,
+                             expect=expect)
+
+    def test_a_filled_template_ingests_on_the_first_attempt_an_unfilled_one_never(self):
+        t = self.template("code-review")
+        self.assertEqual(set(t), set(mismagent.REPORT_KEYS + mismagent.REPORT_OPTIONAL))
+        self.assertEqual((t["id"], t["attempt"], t["sha"], t["reviewer"]), ("svc-order", 1, self.tip, "code-review"))
+        self.assertIn("never a list", t["findings"][0]["at"])
+        self.assertIn("at most 40 words", t["objections"][0]["text"])
+        path = os.path.join(self.rdir, "svc-order-1-verifier.json")
+        self.assertEqual(self.template("verifier", "--out", path)["file"], path)
+        self.assertEqual(self.ingest(path, expect=1)["refused"], "nothing written")    # placeholders refused
+        with open(path) as f:
+            r = json.load(f)
+        r.update(verdict="PASS", failures=[], notes="")
+        r["findings"][0].update(sev="LOW", at="src/svc.txt", issue="naming", fix="Defer")
+        r["objections"][0].update(about="D-0003", text="w " * 45)
+        with open(path, "w") as f:
+            json.dump(r, f)
+        out = self.ingest(path)
+        self.assertEqual((out["action"], out["appended"]), ("promote", 1))
+        self.assertEqual(out["warnings"], ["svc-order-1-verifier.json objection 0: 45 words, truncated to 40"])
+        self.assertEqual(len(out["objections"][0]["text"].split()), 40)
+        self.assertIn(" · LOW · src/svc.txt · naming · ", self.pre()[0])                # a path alone is a locator
+        self.run_tool("lint", self.feat, expect=0)
+        self.template("verifier", "--spec-hash", "0" * 64, expect=1)                     # last --spec-hash wins
+        self.run_tool("review", "template", self.feat, "svc-order", "--attempt", "1", "--sha", self.tip,
+                      "--spec-hash", self.spec_hash("svc-order"), expect=2)             # no --reviewer
+
+    # -- 3 · an answered decision promotes without a new review --------------------------------------
+    def test_answered_decide_promotes_the_same_attempt(self):
+        f = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "loosen rule 5?", "Decision")])
+        self.assertEqual(self.ingest(f)["action"], "decide")
+        ans = lambda *d, expect=0: self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "1", "--depth",
+                                                 "standard", "--file", f, "--sha", self.tip, "--spec-hash",
+                                                 self.spec_hash("svc-order"), *[x for i in d for x in ("--answered", i)],
+                                                 expect=expect)
+        self.assertIn("no such entry", ans("D-0023", expect=1)["problems"][0])          # record it first
+        self.notes("D-0022", "D-0023")
+        out = ans("D-0023", "D-0022")
+        self.assertEqual((out["action"], out["proof"], out["answered"]), ("promote", True, ["D-0022", "D-0023"]))
+        self.assertIn("answered by D-0022, D-0023", out["reason"])
+        self.assertEqual(ans("D-0022", "D-0023"), dict(out, repeat=True))                # recorded with its answers
+        self.assertIn("already ingested", ans("D-0022", expect=1)["problems"][0])        # promote is final
+        self.assertIn("already ingested", self.ingest(f, expect=1)["problems"][0])      # answers dropped: refused
+        self.compose("start", "svc-order", expect=0)
+        mark = mismagent.load_json(os.path.join(self.feat, "review-ingest", "svc-order-1.json"))
+        self.assertEqual(mark["answered"], ["D-0022", "D-0023"])
+
+    def test_answered_needs_a_decision_and_leaves_other_failures(self):
+        self.notes("D-0023")
+        p = self.report("verifier", "PASS")
+        out = self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "1", "--depth", "standard",
+                            "--file", p, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"),
+                            "--answered", "D-0023", expect=1)
+        self.assertIn("no Decision finding", out["problems"][0])
+        self.assertEqual(self.pre(), [])
+        p = self.report("verifier", "FAIL", [finding("HIGH", "a.py:1", "which store?", "Decision")],
+                        failures=["AC2 red"], attempt=2)
+        out = self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "2", "--depth", "standard",
+                            "--file", p, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"),
+                            "--answered", "D-0023", expect=0)
+        self.assertEqual(out["action"], "rework")                                      # the failure still counts
+
+    # -- 4 · why rules discoverable --------------------------------------------------------------------
+    def test_why_help_states_the_rules_and_the_template_appends(self):
+        p = subprocess.run([sys.executable, TOOL, "why", "append", "--help"], capture_output=True, text=True)
+        for s in ("ONE", "physical line", "ALL THREE", "Revisit 20", "highest id + 1", "≤ 220"):
+            self.assertIn(s, p.stdout)
+        path = self.notes("D-0001", "D-0004")
+        tpl = subprocess.run([sys.executable, TOOL, "why", "template", path], capture_output=True, text=True).stdout
+        self.assertTrue(tpl.startswith("### D-0005 · "))
+        entry = self.put("entry.md", tpl, base=self.tmp)
+        self.assertEqual(self.run_tool("why", "append", path, "--entry", entry, expect=0)["appended"], ["D-0005"])
+        self.run_tool("why", "check", expect=2)
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 
@@ -2033,7 +2154,7 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress", "review", "state", "rework") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress", "review", "state", "rework", "question") else 1):
                 continue  # a name reference (`MM status`), not an invocation
             if "--help" in argv or "-h" in argv:
                 continue  # a pointer to a command's help, not an invocation

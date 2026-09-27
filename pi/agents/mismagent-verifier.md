@@ -64,11 +64,9 @@ steps 1–9.
    `Patch` finding; MED/LOW → `Defer` findings; a human/product question → a `Decision` finding.
 
 ## Outcome
-Write the full result to `REPORT_PATH` (named `<id>-<attempt>-verifier.json`) as JSON:
-`{version: 1, id, attempt, reviewer: "verifier", sha: HEAD_SHA, spec_hash: the pack's, verdict:
-PASS|FAIL|SKIP, checks: {<step's check>: ✓|✗|n-a|deferred}, failures: ["<check>: <command/excerpt/
-AC/ADR>"], findings: [{sev, at: <file:line>, issue, fix: Patch|Defer|Decision, evidence}], objections: [{about: <D-NNNN|topic>, text: ≤40 words}], notes}`
-(`objections`: your disagreements with a worker's decision). Return ≤ 5 lines: `VERDICT`, `HEAD_SHA`, counts
+Fill the JSON template at `REPORT_PATH` (`<id>-<attempt>-verifier.json`): replace every `<…>`
+placeholder, following the rule it states; `checks: {<step's check>: ✓|✗|n-a|deferred}`, each failure
+`"<check>: <command/excerpt/AC/ADR>"`, `objections`: your disagreements with a worker's decision. Return ≤ 5 lines: `VERDICT`, `HEAD_SHA`, counts
 (failures, findings by severity), `REPORT: <path>`.
 
 `PASS` — all green. `FAIL` — any red, listed precisely (max 2 rework cycles). `SKIP` — cannot

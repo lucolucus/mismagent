@@ -16,7 +16,9 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
-| `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
+| `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` — `MM why append --help` lists the rules |
+| `MM why template [<file>]` | Markdown: a valid entry skeleton, the file's next id |
+| `MM question close F <id> --decision D-NNNN` | `{ok:true, id, decision, path, git}` or `{ok:false, refused}` |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
@@ -31,7 +33,8 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM release close F <Rn> --entries <json> [--replace <finding>…]` · `MM release waive F <Rn> --entries <json> [--replace <finding>…]` | `{ok:true, release, action, lines, findings, replaced, file}` or `{ok:false, refused, problems}` |
 | `MM release group F <Rn> --id pre-<Rn>-<k> --lines <line>:<finding>…` | `{ok:true, id, file, blocks, findings, context, unchanged}` or `{ok:false, refused, problems}` |
 | `MM release confirm F <Rn> --integration B --sha S --tag TAG --merge-to BASE --base-sha T --by <user> --consent <ref>` | `{ok:true, confirmed, release, sha, tag, merge_to, base_sha_before, partial, unchanged}` or `{ok:false, refused, problems}` |
-| `MM review ingest F <id> --attempt N --depth standard\|deep --file <report> [--file <report>] --sha S --spec-hash H` | `{ok:true, action: promote\|rework\|park\|decide\|blocked, reason, rework: <path>\|null, counts:{HIGH, MED, LOW, failures}, appended, proof, objections:[{reviewer, about, text}][, proof_dropped][, repeat]}` or `{ok:false, refused:"nothing written", problems}` |
+| `MM review template F <id> --attempt N --reviewer verifier\|code-review --sha S --spec-hash H [--out <path>]` | the report skeleton (JSON; `--out`: written there, `{ok:true, file}`) or `{ok:false, refused}` |
+| `MM review ingest F <id> --attempt N --depth standard\|deep --file <report> [--file <report>] --sha S --spec-hash H [--answered D-NNNN]…` | `{ok:true, action: promote\|rework\|park\|decide\|blocked, reason, rework: <path>\|null, counts:{HIGH, MED, LOW, failures}, appended, proof, objections:[{reviewer, about, text}][, warnings][, answered][, proof_dropped][, repeat]}` or `{ok:false, refused:"nothing written", problems}` |
 | `MM rework write F <id> --reason candidate-red\|merge-conflict\|other --evidence <file>\|-` | `{ok:true, action: rework\|park, rework: <path>\|null, reason, proof_dropped}` or `{ok:false, refused:"nothing written", problems}` |
 | `MM state commit F -m <message> --integration B` | `{ok:true, committed:false}` · `{ok:true, committed:true, sha, paths:[…]}` or `{ok:false, refused[, outside\|open\|paths]}` |
 
@@ -80,6 +83,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   file, **no progress** (`no progress since attempt N`: the head is the previous record's and `done`
   is unchanged). An integrated block's progress is ignored; `move --to done` deletes it
   (`git rm` if tracked; `progress_removed`).
+- **question close** moves `F/open-questions/<id>.md` to `F/open-questions/closed/<id>.md` (`<id>-2.md`… if
+  closed before; `git mv` if tracked) and appends `Closed by D-NNNN on <date>` (UTC). Refused, nothing
+  moved: no such top-level question, `D-NNNN` not an entry of `F/decisions.md` (record the answer
+  first). `status` and `ready` read only the top-level files: a closed question neither waits nor parks.
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
@@ -169,7 +176,8 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   result). The same id + attempt with the same reports, sha and depth returns that result again
   (`repeat: true`), writing nothing — checked **before** the spec, so a group whose own rework file
   moved its spec hash is retried identically; the same attempt with other reports is refused (a new
-  review is a new attempt). **Validated first, whole** (any problem → `{ok:false, refused:"nothing
+  review is a new attempt) — except a `decide` result ingested again with `--answered` (below); the
+  record keeps the answers, so the same answers retry identically. **Validated first, whole** (any problem → `{ok:false, refused:"nothing
   written", problems}`, exit 1; every field type-checked before use — a malformed report is refused,
   never a crash): each `--file` parses and matches the report schema (below); the set is exactly
   the depth's reviewers, each once (`standard`: `verifier`; `deep`: `verifier` + `code-review`);
@@ -186,7 +194,9 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   the line later. **Idempotent**: a line with the same release, block, sev, at and issue (any mark)
   is not appended again (`appended` = the new lines). Then ONE `action`, the first that applies:
   1. `decide` — a finding with `fix: Decision` or a code-review `BLOCKED`: a human/product choice
-     (`reason` = the questions);
+     (`reason` = the questions). `--answered D-NNNN` (repeatable; each an entry of `F/decisions.md`,
+     at least one Decision finding or `BLOCKED` to answer, else refused) marks them answered: a HIGH
+     `Decision` then counts as no HIGH, the next actions apply, and `answered` lists the notes;
   2. `blocked` — a verifier `SKIP`: a strategy problem outside the block (`reason` = its failures);
   3. `rework` — any failure, a `FAIL`, a HIGH, a `CHANGES`: ONE `F/rework/<id>-<n>.md` (`n` = the
      highest existing + 1) with the verdicts, the report paths, every failure, every HIGH finding
@@ -198,7 +208,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   Every other action **drops** `F/review-proof/<id>.json` (`proof_dropped`: whether one existed), so
   `proof check` and `compose start` refuse until a later attempt promotes. `counts` sums every
   report's findings by severity and its failures; `objections` = every report's objections, each on
-  one line with its reviewer — the composer records them in the decision note's `Debate`/`Result`
+  one line with its reviewer (a text over 40 words truncated to 40, with a `warnings` entry) — the composer records them in the decision note's `Debate`/`Result`
   without reading the reports. Exit 0 whatever the action.
 - **rework write** — a rework cycle that is not a review's: a red candidate (gate or contract test),
   a merge conflict at `compose start`, `other`. Writes the next `F/rework/<id>-<n>.md` (`reason:` +
@@ -220,7 +230,8 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 
 One JSON file per reviewer, written by the reviewer to the path the composer designates
 (`<repo>/.worktrees/reviews/<feature>/<id>-<attempt>-<verifier|code-review>.json`, ignored, never
-committed) — its only write:
+committed) — its only write. `review template` with `--out <path>` writes the skeleton below, identity
+filled and each value a placeholder stating its rule (left unfilled, it is refused):
 ```json
 {"version": 1, "id": "<block or group id>", "attempt": 1, "reviewer": "verifier",
  "sha": "<the reviewed head>", "spec_hash": "<the reviewed pack's>", "verdict": "PASS",
@@ -230,19 +241,19 @@ committed) — its only write:
  "objections": [{"about": "D-0003", "text": "<the objection, ≤ 40 words>"}],
  "notes": "<anything else, e.g. D-NNNN cited>"}
 ```
-`objections` (optional) = `[{"about": "D-NNNN" | "<topic>", "text": "<≤ 40 words>"}]`: the
+`objections` (optional) = `[{"about": "D-NNNN" | "<topic>", "text": "<≤ 40 words; longer is truncated>"}]`: the
 reviewer's objections to a recorded or proposed decision, returned by `review ingest`.
 `verdict`: verifier `PASS | FAIL | SKIP`, code-review `APPROVE | CHANGES | BLOCKED`; `SKIP` = the
 check cannot run for a reason outside the block (a strategy problem). `failures`: non-empty strings,
 none with `PASS`/`APPROVE`. Each finding has exactly `sev` (`HIGH | MED | LOW`), `at`
-(`file:line[-line]` or `path#symbol`), `issue`, `fix` (`Patch` = fix it now · `Defer` = file it for
+(ONE location: `file:line[-line]`, `path#symbol` or `path`; a list such as `a.py:3,9` is refused), `issue`, `fix` (`Patch` = fix it now · `Defer` = file it for
 the release · `Decision` = a human/product choice), `evidence` (a string, may be empty). `checks`
 and `notes` are optional (any JSON), `objections` optional (shape above); any other key is refused.
 
 ## Releases — `F/pre-release.md`, records, confirm
 
 **Line** (one per deferred finding; `review ingest` appends them, idempotently): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
-`<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]` or `path#symbol` (a symbol does not
+`<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]`, `path#symbol` or `path` (a symbol does not
 rot). Marks: `[ ]` open · `[x]` closed · `[~]` waived — flipped only by `release close|waive`; text
 after the seventh field is an annotation. **Identity** = a hash of the seven fields (`finding`, 12
 hex), never the mark, the line number or an annotation: the line number only **selects**, and every
@@ -343,7 +354,8 @@ the decider by writing. Build: during review/rework the composer only **collects
 objections and the rework's evidence; it **records** them once the block is promoted (its links then
 resolve on the line), `Debate`/`Result` already filled from what it collected. Explore/model: the conductor records the
 challenger's debate and the user's choice at each checkpoint (`KILL`/`RESHAPE` included);
-`build-manifest` records an open question's answer before deleting `open-questions/<id>.md`.
+`build-manifest` records an open question's answer before deleting `open-questions/<id>.md`; the
+composer, having recorded one, closes it with `MM question close F <id> --decision D-NNNN`.
 Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`. The recorder
 writes each returned entry to a file and adds it with `MM why append F/decisions.md --entry <file>`
 (never a hand edit of the file); an allowed edit below is the same command with the whole updated

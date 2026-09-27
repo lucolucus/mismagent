@@ -27,7 +27,8 @@ You realize **ONE scaffold**: the minimal project skeleton for a **side**, so th
 - if the side renders UI: **honor the profile's `run` binding** — create exactly what it names (the
   launch task/entry point, and its port only if it names one), so the command launches on the empty skeleton. It
   is a **contract you satisfy**, not a value you choose — if the skeleton can't honor it, report
-  it. *(Proving it renders stays `run-app-smoke`'s job.)*
+  it. A **manual** `ui_render_check`: run `run-app-smoke` once on the skeleton; no launch or no capture →
+  report it (the check must become automated).
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
   lint**: wire its config, and the published-surface check (public signatures against the Published
   Language) with it, so the **gate executes them from wave 0** — the lint config is the *executable

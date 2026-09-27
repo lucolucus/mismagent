@@ -1,4 +1,4 @@
-# The build loop — design (v0.22)
+# The build loop — design (v0.23)
 
 **The tool computes; the composer follows a short, linear procedure; in doubt it stops and asks.**
 No state engine, no automatic crash recovery: safety comes from refusing, not from guessing.
@@ -23,6 +23,8 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 | `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM proof record F review <id> --sha S --spec-hash H` |
 | `integrated/<id>.json` | promoted: the block's sha is on the integration line | `MM compose promote F <id>` |
 | `gate-proof/<side>/proof.json` | the gate's red-green proof (project fact) | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` |
+| `pre-release.md` | deferred MED/LOW findings, one line each (format in `CLI.md`); marks `[x]`/`[~]` | composer appends lines; marks only by `MM release close\|waive` |
+| `release-decisions/<Rn>.md` · `release-evidence/<Rn>.md` | the close/waive records (one JSON block) · the verifier's per-finding evidence | `MM release close\|waive` · composer (from the verifier's return) |
 | `decisions.md` | the why: non-obvious choices, debates, deciders (history, not state; out of `spec_hash`; format in `CLI.md`) | composer after the block's promote (what review/rework produced is collected until then, never written before); new evidence later completes `Debate`/`Result` only; explore/model at the checkpoints; checked by `MM why check F/decisions.md` and `MM lint` |
 
 ## Worktrees and packs
@@ -40,13 +42,19 @@ branch is `block/<id>`.
 - `MM status F --integration B` — read-only; lists **anomalies**: a block in `doing/`, not yet
   integrated, with no worktree; a registered worktree whose directory is gone; a leftover candidate; an `integrated/` block not an ancestor of
   the line; a `review-proof` whose `spec_hash` no longer matches; a block in `done/` that is not finishable.
-  Exit 1 if any. Plus `outcome` (`done` · `work` · `idle` · `anomaly`, `CLI.md`): what a runner reads.
+  Exit 1 if any. Plus `outcome` (`done` · `work` · `idle` · `anomaly`, `CLI.md`): what a runner reads
+  — a release with no blocks, or awaiting the user's confirmation, is `idle`, one with record ↔ mark gaps `work`; and `resume`: the
+  blocks in `doing/` not integrated (facts about their worktrees, never "interrupted").
 - `MM lint F` — exact structural checks (listed in `CLI.md`); each gap names its `bounce_to`;
   `manifest` says `legacy` (hand-written block files) or `rendered`.
   `MM lint --adrs <dir>` checks ADRs before any manifest exists.
 - `MM manifest render F` — writes the block files from `building-blocks.yaml` (in place; refuses
   incomplete rows, duplicates, context changes — writing nothing).
 - `MM why append F/decisions.md --entry <file>` — the recorder's only way to add decision notes.
+- `MM release list|group|close|waive|confirm F <Rn> …` — the release path (`CLI.md`, Releases):
+  ONE evaluation (HIGH/FAIL and MED block, a MED freed only by a verified close or a recorded
+  waiver, LOW advisory); records written only by the tool, the whole batch validated first (`--replace <finding>` repairs an invalid record);
+  `confirm` fast-forwards the base and tags, on the user's consent, never a push.
 - `MM ready F` — while a scaffold of the feature is not integrated and `done`, only the scaffold;
   then blocks in `todo/`, not parked, whose consumed boundaries' owners and `after:` blocks are
   `integrated/`, not named (a `- <id>` line) in an open spike's `Unblocks`; ordered by wave, release, manifest order. Plus
@@ -75,7 +83,8 @@ branch is `block/<id>`.
 1. Readiness, every firing: `MM lint` + the judgment checks.
 2. Greenfield: the scaffold first (`MM ready` offers nothing else until it is integrated and done) —
    build, gate only, `proof record gate`, compose (no review).
-3. **Build:** for each block of `MM ready` up to the cap: `move --to doing`, worktree
+3. **Build:** first each `resume` block — its worker again on its existing worktree with a fresh
+   pack, told the tree holds unverified work (unsure whether one still runs → ask); then for each block of `MM ready` up to the cap: `move --to doing`, worktree
    `.worktrees/<feature>/<id>` from the line tip (an un-parked block reuses its branch and
    worktree), dispatch the worker with `MM pack` saved under `.worktrees/packs/<feature>/`.
    Every dispatch (worker, rework, reviewer) runs in the **foreground** — independent ones in
@@ -94,7 +103,8 @@ branch is `block/<id>`.
 6. Report; end — only once **every** dispatch of this firing has returned and been handled:
    nothing is left running. The next firing starts again from 0.
 
-Out of this procedure, in prose: central-risk spikes (wave 0), releases and pre-release fixes (they
-go through step 5 like any change: an id that is not a block — a pre-release group — has its
-`rework/<id>-<n>.md` as its spec and its pack, so its review proof goes stale when those files
-change), lessons harvest.
+Out of this procedure, in the composer's prose: central-risk spikes (wave 0), lessons harvest, and
+releases — their procedure lives in the composer's `Releases` section only, their exact semantics in
+`CLI.md`. A pre-release group goes through step 5 like any change: its spec and ONE pack are its
+`rework/<id>-<n>.md` plus the blocks it names (dependencies once), so its review proof goes stale
+when any of them changes.

@@ -52,7 +52,7 @@ release. Nothing else stops for you.
    board).
 7. **A gate that cannot go red is not a gate.** It executes the tests it guards; its red-green proof
    is recorded and renewed when its configuration changes.
-8. **Release = tag ↔ feature flag.** Never merge or push onto the base branch, and never tag a
-   release, without the user's explicit consent.
+8. **Release = a tag and a merge onto the base branch**, both only with the user's explicit
+   consent naming commit and destination; never a push unasked.
 9. **In doubt, stop and ask.** A slow or hanging step is a strategy to replace (back to the
    architect), never something to wait out.

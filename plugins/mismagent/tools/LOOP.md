@@ -1,4 +1,4 @@
-# The build loop — design (v0.23)
+# The build loop — design (v0.24)
 
 **The tool computes; the composer follows a short, linear procedure; in doubt it stops and asks.**
 No state engine, no automatic crash recovery: safety comes from refusing, not from guessing.
@@ -22,6 +22,7 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 | `rework/<id>-<n>.md` | the findings of rework cycle n (the cap counts these files) | composer |
 | `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM proof record F review <id> --sha S --spec-hash H` |
 | `integrated/<id>.json` | promoted: the block's sha is on the integration line | `MM compose promote F <id>` |
+| `progress/<id>.json` | a worker's checkpoint at a green AC boundary: `head`, `spec_hash`, `attempt`, what is done, what is next | `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…`; deleted by `MM move F <id> --to done` |
 | `gate-proof/<side>/proof.json` | the gate's red-green proof (project fact) | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` |
 | `pre-release.md` | deferred MED/LOW findings, one line each (format in `CLI.md`); marks `[x]`/`[~]` | composer appends lines; marks only by `MM release close\|waive` |
 | `release-decisions/<Rn>.md` · `release-evidence/<Rn>.md` | the close/waive records (one JSON block) · the verifier's per-finding evidence | `MM release close\|waive` · composer (from the verifier's return) |
@@ -44,7 +45,13 @@ branch is `block/<id>`.
   the line; a `review-proof` whose `spec_hash` no longer matches; a block in `done/` that is not finishable.
   Exit 1 if any. Plus `outcome` (`done` · `work` · `idle` · `anomaly`, `CLI.md`): what a runner reads
   — a release with no blocks, or awaiting the user's confirmation, is `idle`, one with record ↔ mark gaps `work`; and `resume`: the
-  blocks in `doing/` not integrated (facts about their worktrees, never "interrupted").
+  blocks in `doing/` not integrated (facts about their worktrees, never "interrupted"; with a
+  recorded checkpoint, its `progress` and whether it is still `fresh`).
+- `MM progress record F <id> --head <sha> --spec-hash <h> --json <path|-> [--extra <path>]…` — the
+  composer records a worker's `CHECKPOINT` (atomic; refused unless `<id>` is a manifest block in
+  `doing/`, `--head` is `block/<id>`'s tip, its worktree clean, the spec hash current, and something
+  progressed since the last record); `attempt` counts the checkpoints; the dispatch's `--extra` files
+  are stored and re-packed with the checkpoint.
 - `MM lint F` — exact structural checks (listed in `CLI.md`); each gap names its `bounce_to`;
   `manifest` says `legacy` (hand-written block files) or `rendered`.
   `MM lint --adrs <dir>` checks ADRs before any manifest exists.
@@ -64,7 +71,8 @@ branch is `block/<id>`.
   only if finishable); also spike nodes. Read `ok`: a refusal is `ok:false` + `refused` (exit 1). An
   integrated owner waits in `doing/` for its consumers — normal, not unfinished work.
 - `MM pack F <id>` — the worker's (and reviewers') context, headed by its `spec_hash` (the same
-  dependency resolution) + the open `pre-release.md` lines as advisory notes; a pre-release group id
+  dependency resolution) + a fresh checkpoint first + the open `pre-release.md` lines of the block
+  and its boundary neighbours as advisory notes (the rest counted in one line); a pre-release group id
   packs its `rework/<id>-<n>.md` files.
 - `MM diff-range --base B --head X` — the three-dot review range from the merge-base.
 - `MM proof record F review <id> --sha S --spec-hash H` (refused unless `H`, the reviewed pack's, is
@@ -92,7 +100,15 @@ branch is `block/<id>`.
 4. **As each worker returns:** `BOUNCED` → park (`move --to todo` + `open-questions/`; an answer
    that needs no code → `move --to doing`, straight to step 5 on its branch).
    `BLOCKED` → report. `READY-FOR-REVIEW` → queue it for integration with its `DECISIONS`, which
-   the reviewers get as they are.
+   the reviewers get as they are. `CHECKPOINT` (a long session, stopped at a **green** AC boundary,
+   its work committed) → `MM progress record` with its head, the pack's spec hash, the checkpoint
+   and the dispatch's `--extra` files, then dispatch a **fresh** worker in the same worktree with a fresh `MM pack` (it carries the
+   checkpoint): a context reset, not a watchdog — one active session per block; gate, verifier and
+   review still run once, at `READY-FOR-REVIEW`. Refused `no progress since attempt N` → treat it
+   as `BLOCKED` (ask the user). Refused otherwise (head moved, dirty tree, spec changed) → the work is
+   unverified: inspect the worktree, never record by hand. A crash before the record is the same:
+   the `resume` entry shows no `progress` or a stale one (a dirty tree included) — the tree holds
+   unverified work.
 5. **Integrate, one at a time:** reviewers on `diff-range` + one pack → FAIL/HIGH: write
    `rework/<id>-<n+1>.md`, re-dispatch the worker on its existing worktree with it (no `ready`, no
    `move`; after cycle 2 → park) · PASS: `proof record review --spec-hash <the pack's>` →
@@ -102,6 +118,12 @@ branch is `block/<id>`.
    red: `compose abort`, rework with the red (the reviewers say whether owner, consumer or contract).
 6. Report; end — only once **every** dispatch of this firing has returned and been handled:
    nothing is left running. The next firing starts again from 0.
+
+A release is a **tag on the line, never a layer in the code**: its one `composition` block
+(`composition: true`, after every other block of its release and side and after the previous
+release's composition block) extends the composition root
+named in `architecture.md` (`composition_root:`) in place; the others publish their pieces from
+their own dirs.
 
 Out of this procedure, in the composer's prose: central-risk spikes (wave 0), lessons harvest, and
 releases — their procedure lives in the composer's `Releases` section only, their exact semantics in

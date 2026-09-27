@@ -4,7 +4,7 @@ idle, or a dollar cap is reached. Runner-side, never part of the core. Stdlib on
 
 Serial firings of
     claude -p --plugin-dir <plugin> --output-format json --max-budget-usd <min(per_firing, remaining)>
-           [--model M] [--resume <session_id>] "/mismagent:worker-composer <feature>[\\n\\n<prompt-file>]"
+           [--model M] [--resume <session_id> only with --resume-sessions] "/mismagent:worker-composer <feature>[\\n\\n<prompt-file>]"
 with CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1. After each firing it reads `mismagent.py status`
 (never the report text). No timeout, no polling, no sleep, no automatic recovery: any doubt stops.
 
@@ -179,13 +179,16 @@ def run(a):
         with open(a.prompt_file, encoding="utf-8") as f:
             prompt += "\n\n" + f.read().strip()
     env = dict(os.environ, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS="1")
-    firings, spent, cum, session, still = [], 0.0, 0.0, None, 0
+    firings, spent, cum, session, still, last_session = [], 0.0, 0.0, None, 0, None
     summary = lambda outcome, reason: {"outcome": outcome, "reason": reason, "firings": len(firings),
-                                       "total_cost_usd": round(spent, 6), "session_id": session, "log": firings}
+                                       "total_cost_usd": round(spent, 6), "session_id": last_session, "log": firings}
     try:
         cli_version(a.claude_bin)
-        st = status(tool, fdir, integration)
-        if st["outcome"] in STOP_OUTCOMES:
+        # a fresh build has no integration line yet: the composer's first firing cuts it
+        fresh = subprocess.run(["git", "-C", a.project, "rev-parse", "--verify", "-q", "refs/heads/" + integration],
+                               capture_output=True).returncode != 0
+        st = None if fresh else status(tool, fdir, integration)
+        if st and st["outcome"] in STOP_OUTCOMES:
             return summary(st["outcome"], "before any firing: " + why_stop(st))
         before = snapshot(fdir)
         while True:
@@ -195,11 +198,15 @@ def run(a):
             cap = min(a.per_firing_usd, remaining)
             p = subprocess.run(firing_cmd(a, cap, session, prompt), cwd=a.project, env=env, capture_output=True, text=True)
             out = parse_result(p)
+            if not a.resume_sessions:   # a fresh session per firing: its total is its own cost
+                cum, session = 0.0, None
             if out["total_cost_usd"] < cum:
                 raise Stop("cost-invalid", "cumulative total_cost_usd went down: %s < %s" % (out["total_cost_usd"], cum))
-            delta, cum, session = out["total_cost_usd"] - cum, out["total_cost_usd"], out["session_id"]
+            delta, cum = out["total_cost_usd"] - cum, out["total_cost_usd"]
+            session = out["session_id"] if a.resume_sessions else None
+            last_session = out["session_id"]
             spent += delta
-            rec = {"n": len(firings) + 1, "cap_usd": round(cap, 6), "cost_usd": round(delta, 6),
+            rec = {"n": len(firings) + 1, "session_id": last_session, "cap_usd": round(cap, 6), "cost_usd": round(delta, 6),
                    "subtype": out.get("subtype"), "is_error": bool(out.get("is_error"))}
             firings.append(rec)
             if (p.returncode != 0 or out.get("is_error")) and not budget_exhausted(out):
@@ -228,6 +235,10 @@ def parse(argv=None):
     ap.add_argument("--model")
     ap.add_argument("--permission-mode", help="passed to claude -p (headless runs need one that allows tools, "
                                                "e.g. bypassPermissions in an isolated project)")
+    ap.add_argument("--resume-sessions", action="store_true",
+                    help="resume ONE composer session across firings (old behavior); default: a fresh session "
+                         "per firing — the composer re-reads its state from disk, and a resumed context grows "
+                         "and is re-read on every turn")
     ap.add_argument("--prompt-file", help="extra instructions appended to the command (e.g. simulated-user rules)")
     ap.add_argument("--integration", help="the integration branch (default integration/<feature>)")
     ap.add_argument("--feature-dir", help="F, when it cannot be found under --project")

@@ -49,8 +49,9 @@ without pass 1 → checkpoint → pass 2 is a process defect, even if the choice
   documents over ~15KB into sections with stable anchors — then
   `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py" lint --adrs <output_dir>/decisions/`: zero gaps
   before any manifest; `infra-notes.md` via `write-infra-notes`;
-- `<output_dir>/architecture.md` — the structure: style, module map, allowed dependency directions (the scaffold
-  derives the skeleton from it; the gate's dependency lint is its executable form);
+- `<output_dir>/architecture.md` — the structure: style, module map, allowed dependency directions,
+  a `composition_root: <path>` line for the app's wiring (the scaffold derives the skeleton from it;
+  the gate's dependency lint is its executable form);
 - `<output_dir>/code-rules.md` via `write-code-rules` — mechanical rules → the gate's dependency
   lint, discursive → code-review criteria, structural → citations; point the profile's
   `architecture:` and `code_rules:` at both files;
@@ -58,8 +59,8 @@ without pass 1 → checkpoint → pass 2 is a process defect, even if the choice
   the side's whole module graph), `gate_files` (required; the profile says which files), `toolchain`,
   and `gate_after_release` for checks that protect released versions — ask the user **when** each
   check starts to matter;
-- **for every UI side, its `run` binding** (launch command; its port only if it serves one), pinned now: the wave-0 scaffold
-  receives it as a contract to satisfy.
+- **for every UI side, its `run` binding** (launch command; its port only if it serves one), pinned now
+  as the wave-0 scaffold's contract.
 
 ## Cheap, standard verification
 The gate runs on every dispatch. Prefer the stack's conventional mechanism; deliberate exceptions
@@ -68,9 +69,10 @@ with the user:
   decides no persisted data needs keeping;
 - tests hit the **cheapest faithful substrate** (in-memory or embedded; a container only where
   fidelity demands it; never a shared external service);
-- the gate may be incremental and scoped by module where the build tool supports it — the project's
-  gate defines execution; if it can skip an up-to-date test phase, set `gate_verify` (the gate with the
-  stack's re-run switch);
+- the build tool's standard parallel execution and build cache on (`gate_verify` still forces
+  execution);
+- the gate may be incremental and scoped by module where supported; if it can skip an up-to-date
+  test phase, set `gate_verify` (the gate with the stack's re-run switch);
 - one conventional tool per concern.
 
 A step reported slow or hanging comes back **here**: replace the strategy, never add patience.
@@ -99,8 +101,8 @@ contract test; default to shared-kernel VOs for correctness-critical types (mone
   decision: an ADR, its code rules, its gate checks.
 
 ## ADRs
-Format, numbering, `supersedes`, spike closure and the mechanical-check form
-(`enforced_by: [{check: <repo path>, from: <block-id>}]`) are `write-adr`'s. A mechanical
+Format, numbering, `supersedes`, spike closure and the mechanical-check form are
+`write-adr`'s. A mechanical
 constraint gets a check; a judgment gets a discursive ADR the code review verifies. A deferred
 decision lives in **one** ADR that other documents reference. **NFRs** are pinned as verifiable:
 an ADR with a check, or a measurable AC on a block.
@@ -116,6 +118,6 @@ context-map's open spikes with `central: true` and `owner: <feature>` — it bec
 For a second, adversarial look at the architecture, invoke `mismagent-challenger`.
 
 ## Outcome
-Files written; boundaries; ADRs (which carry checks); decisions deliberated with the
-user; the gate fields and `run` bindings; strategies chosen; central risks; ambiguous requirements
+Files written; boundaries; ADRs (with checks); decisions deliberated with the
+user; gate fields and `run` bindings; strategies chosen; central risks; ambiguous requirements
 and unverifiable NFRs.

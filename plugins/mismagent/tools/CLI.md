@@ -13,14 +13,15 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 
 | Command | Output |
 |---|---|
-| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted}]}` — exit 1 if any anomaly |
+| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
 | `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
-| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
+| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
+| `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…` | `{ok:true, id, file, attempt}` or `{ok:false, refused, problems}` |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
 | `MM proof record F review <id> --sha S --spec-hash H` · `MM proof check F review <id> --sha S` | `{recorded, sha}` or `{refused, reviewed, current}` · `{fresh, stale_because}` |
 | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` · `MM proof check F gate <side> --gate TEXT --gate-files GLOB…` | `{recorded, proof[, warnings]}` · `{fresh, stale_because, proof}` |
@@ -45,7 +46,7 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   anomaly) · `integrated_not_on_line` (the recorded `sha` is not an ancestor of `B`) ·
   `stale_review_proof` (its `spec_hash` differs from the current one) · `done_unwelded` (in `done/`,
   not finishable) · `lint_gap` (checked only before `done`/`idle`: a `lint` gap of rule `ids.*`,
-  `consumes.boundary`, `boundary.owner`, `after.*`, `blockfile.exists|unique|orphan`, `spikes.*` —
+  `consumes.boundary`, `boundary.owner`, `after.*`, `blockfile.exists|unique|orphan`, `spikes.*`, `composition.*` —
   `id` = the rule). Read-only. **outcome** (for a runner; computed with `ready`'s rules and the ONE
   release evaluation below): `anomaly`
   (any of the above) · `work` — something to do now (`work` lists it): a `ready` or `finishable`
@@ -59,7 +60,23 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `done/`, no open question (open LOW lines never prevent it). `ready: []` alone is never `idle`.
 - **resume** (`status` and `ready`) = each block in `doing/` not integrated, with its branch, its
   worktree (null if none) and the count of uncommitted changes there: facts, never a diagnosis — a
-  dirty tree with no commit also describes a worker still running.
+  dirty tree with no commit also describes a worker still running. With `F/progress/<id>.json`, the
+  entry gains `progress: {attempt, head, next, fresh}` — `fresh` ⇔ its `head` is still `block/<id>`'s
+  tip, its `spec_hash` the current one and the block's worktree clean (a change after the checkpoint
+  is unverified work); a stale one is reported (`fresh: false`), never an anomaly.
+- **progress record** writes `F/progress/<id>.json` = `{head, spec_hash, attempt, checkpoint, extras}`
+  atomically (tmp + rename): `head` resolved, `attempt` = the previous file's + 1 (else 1),
+  `checkpoint` = the `--json` object (`-` stdin, a file, or inline): `done` (list) and `next`
+  (non-empty string) required; `tests`, `decisions`, `deviations`, `notes` (string or list) allowed;
+  nothing else. `extras` = the `--extra` paths (absolute, each once): the dispatch's extras (a rework
+  file, an authored doc) that must survive the checkpoint. Refused (`ok:false`, nothing written):
+  `<id>` not a block of the manifest (checkpoints are for manifest blocks only: not a pre-release
+  group, not a spike), not in `doing/` or already integrated, `--head` not the tip of `block/<id>`,
+  its worktree with uncommitted or untracked-not-ignored changes (commit everything before a
+  checkpoint), `--spec-hash` not the current one, a malformed checkpoint, an `--extra` that is not a
+  file, **no progress** (`no progress since attempt N`: the head is the previous record's and `done`
+  is unchanged). An integrated block's progress is ignored; `move --to done` deletes it
+  (`git rm` if tracked; `progress_removed`).
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
@@ -73,7 +90,13 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 - **manifest render** writes every block file from its row: frontmatter = the row minus `what`,
   `sources`, `tests_nl`, `notes`; body = `## What to do` (`what`), `## Invariants` (the row's),
   `## Tasks` (`tests_nl`), `## Dependencies` (each touched boundary: role, consumers,
-  `contract_test`, pinned types and keys inlined), `## Notes`, `Sources:` (`sources`). A block keeps
+  `contract_test`, pinned types and keys inlined), `## Notes`, `Sources:` (`sources`); a
+  `composition: true` row gains, under `## What to do`, the line `Composition: extend the existing
+  composition at <root> in place — never wrap it; the other blocks of this release publish what you
+  wire.` (`<root>` = `composition_root:` of `<output_dir>/architecture.md`, else
+  `<composition_root in architecture.md>`: the root is part of the render). The root is read from
+  the first non-heading line holding `composition_root:` followed, on the same line, by a path
+  token (bullet, `**` or backticks allowed); a blank value is no root. A block keeps
   its state folder (a new one lands in `todo/`); an identical file is not rewritten. Refuses,
   writing nothing, on: a non-scaffold row missing `what`, `sources` or `tests_nl` (blank = missing),
   an empty criterion, a touched boundary whose `pinned_types`/`keys` is not a mapping, an `INV-n`
@@ -98,11 +121,17 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   integrated = any feature's `integrated/<from>.json` or `blocks/*/done/<from>.md`; an entry that is not `{check: <repo-relative path>, from: <block>}`
   is listed `LEGACY` (never executed). Then the block type's `## <type>` section of
   `<output_dir>/architetture/lessons-by-block-type.md` (struck `~~…~~` lessons skipped), and each
-  active decision notes (below), and each
-  **open finding** of `F/pre-release.md` (each `- [ ]` line with its line number; `[x]` fixed and
-  `[~]` waived left out; advisory, a block's pack only), and each
-  `--extra` file, under a first line `spec_hash: <h>`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
-  never makes a proof stale; `after:` is build order, not spec: out of the row's hash and of the rendered file. An id that is not a block (a pre-release group) has its
+  active decision notes (below), and the **open findings** of `F/pre-release.md` relevant to the
+  block (each `- [ ]` line with its line number — its `<id>` is the block, a block sharing a boundary
+  with it (owner or consumer of one it touches) or such a boundary; `[x]` fixed and `[~]` waived left
+  out; advisory, a block's pack only), the others as one line `N other open findings in the feature
+  (not relevant to this block)` — a `composition` block also gets the lines of every earlier
+  composition block of its side (the shared root's debt) —, and each
+  `--extra` file, under a first line `spec_hash: <h>`. A block with a **fresh** progress (above)
+  gets `## Checkpoint — attempt N` first (head, done, next, tests, pending DECISIONS/DEVIATIONS,
+  notes) and its recorded `extras` as `--extra` files (each once, also when passed again); a stale
+  one is left out, with its extras. Neither findings nor checkpoint are in `spec_hash`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
+  never makes a proof stale; `after:` is build order, not spec: out of the row's hash and of the rendered file (`composition` is spec: in both). An id that is not a block (a pre-release group) has its
   `F/rework/<id>-*.md` files as its spec plus — when `<id>-1.md` has `blocks:` frontmatter (`release group`) —
   those blocks' files and rows and the boundaries and ADRs they resolve, **each once**; its ONE pack
   is the rework files, those blocks, boundaries, ADRs and types' lessons (each once), and the notes
@@ -208,6 +237,10 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `render.input` · `blockfile.render` | `manifest: rendered` (some row has `what:`), for every row: its render inputs are complete and its file equals `manifest render`'s output. `legacy` (no row has `what:`): hand-written files, no render check — never forced to render |
 | `after.block` · `after.cycle` | `after` is a list of other block ids; no cycle in the "waits for" graph (`after` ∪ the owners of consumed boundaries) |
 | `manifest.build_order` | no `build_order:` (read by nothing; order with `after:`) |
+| `composition.valid` | `composition` is `true \| false`, never `true` on a `scaffold` |
+| `composition.unique` · `composition.last` | at most one `composition: true` block per (`release`, `side`); its `after:` lists every other non-scaffold block of that (`release`, `side`) — the single writer of the composition root, last by construction. A manifest without the flag: no gap |
+| `composition.root` | a `composition: true` block exists → `<output_dir>/architecture.md` holds `composition_root: <path>` on one non-heading line, the path non-empty (bullet or backticks allowed) → `architect` |
+| `composition.chain` | a `composition: true` block's `after:` lists the composition block of the nearest earlier release (release order: `releases:` keys, then other labels) that has one on the same `side` |
 | `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:`/`release:` scope names a row / a release of the manifest → `recorder` (who wrote the entry) |
 | `release.finding` | every `- [ ]` line of `pre-release.md` has the seven fields, a severity, a locator → `composer` |
 | `release.record` · `release.unverified` · `release.record_orphan` | `release-decisions/<Rn>.md` holds at most one readable ```json block of valid records; every `[x]`/`[~]` line's last record is a `close`/`waive` (a legacy mark with none: kept, flagged unverified); every record names a line of its release carrying its mark → `composer` |

@@ -724,10 +724,45 @@ def boundary_shape(bd):
                 str(n).strip() and not isinstance(v, (dict, list)) for n, v in bd[k].items()))]
 
 
+COMP_ROOT = re.compile(r"composition_root:[ \t*_`'\"]*([^\s`'\"*#][^\s`'\"*]*)")  # same line, a path token
+COMP_LINE = ("Composition: extend the existing composition at %s in place — never wrap it; the other blocks of "
+             "this release publish what you wire.")
+
+
+def composition_root(feat):
+    """The project's composition root: `composition_root: <path>` in the trunk's architecture.md
+    (`<output_dir>/architecture.md`, the architect's); None when absent."""
+    p = os.path.join(feat.odir, "architecture.md")
+    for line in read(p).splitlines() if os.path.isfile(p) else []:
+        m = None if line.lstrip().startswith("#") else COMP_ROOT.search(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def compositions(feat):
+    """The valid `composition: true` rows (a scaffold never is one)."""
+    return [b for b in feat.blocks if b.get("composition") is True and b.get("type") != "scaffold"]
+
+
+def earlier_compositions(feat, b):
+    """[id] — the composition blocks of the same side in releases before `b`'s, nearest release first
+    (release order: the `releases:` keys, then the other labels)."""
+    order = release_names(feat)
+    rel = str(b.get("release"))
+    if rel not in order:
+        return []
+    out = [x for x in compositions(feat) if x.get("side") == b.get("side") and str(x.get("release")) in order
+           and order.index(str(x.get("release"))) < order.index(rel)]
+    return [str(x.get("id")) for x in sorted(out, key=lambda x: -order.index(str(x.get("release"))))]
+
+
 def render_block(feat, b):
     """(text, [missing input]) — the block file `manifest render` writes for manifest row `b`."""
     i, t, missing = str(b.get("id") or ""), b.get("type"), []
     tests = b.get("tests_nl") or []
+    if b.get("composition") is not None and not isinstance(b["composition"], bool):
+        missing.append("composition %r is not true | false" % (b["composition"],))
     if not SLUG.match(i):
         missing.append("id %r is not a slug" % i)
     if t not in BLOCK_TYPES:
@@ -763,7 +798,10 @@ def render_block(feat, b):
             fm.append("%s: %s" % (k, "[]" if v == [] else yaml_scalar(v)))
     out = fm + ["---", "# %s" % i, ""]
     if b.get("what") or t != "scaffold":
-        out += ["## What to do", str(b.get("what") or "").strip(), ""]
+        out += ["## What to do", str(b.get("what") or "").strip()]
+        if b.get("composition") is True and t != "scaffold":  # the wiring obligation reaches the worker via the spec
+            out.append(COMP_LINE % (composition_root(feat) or "<composition_root in architecture.md>"))
+        out.append("")
     if b.get("invariants"):
         out += ["## Invariants"] + ["- %s" % x for x in b["invariants"]] + [""]
     if tests or t != "scaffold":
@@ -972,6 +1010,7 @@ def lint(feat):
                 gap("after.block", i, "after %r is not another block id" % (x,))
     for cyc in dep_cycles(feat):
         gap("after.cycle", " → ".join(cyc), "a cycle of after/boundary dependencies: nothing in it can ever be ready")
+    gaps += composition_gaps(feat)
     files, rendered = feat.files(), manifest_mode(feat) == "rendered"
     for i, locs in files.items():
         if i not in feat.row:
@@ -1048,6 +1087,52 @@ def lint(feat):
                 gap("why.scope", "decisions.md " + e["id"], why, "recorder")
     gaps += release_gaps(feat)
     return gaps, deferred
+
+
+def composition_gaps(feat):
+    """lint's composition rules: `composition` is a boolean, never on a scaffold; at most one
+    `composition: true` block per (release, side), whose `after:` lists every other non-scaffold block
+    of that (release, side); any such block needs `composition_root:` in architecture.md. A manifest
+    without the flag has none of these gaps."""
+    gaps, comps = [], []
+
+    def gap(rule, where, text, to="build-manifest"):
+        gaps.append({"rule": rule, "where": where, "gap": text, "bounce_to": to})
+    for b in feat.blocks:
+        i, v = str(b.get("id")), b.get("composition")
+        if v is None:
+            continue
+        if not isinstance(v, bool):
+            gap("composition.valid", i, "composition %r is not true | false" % (v,))
+        elif v and b.get("type") == "scaffold":
+            gap("composition.valid", i, "a scaffold is never the composition block: the composition wires a release")
+        elif v:
+            comps.append(b)
+    key = lambda b: (str(b.get("release")), str(b.get("side")) if b.get("side") is not None else "(no side)")
+    groups = {}
+    for b in comps:
+        groups.setdefault(key(b), []).append(str(b.get("id")))
+    for (rel, side), ids in sorted(groups.items()):
+        if len(ids) > 1:
+            gap("composition.unique", ", ".join(ids), "release %s, side %s: %d composition blocks — exactly one "
+                "wires a release into the app" % (rel, side, len(ids)))
+    for b in comps:
+        i = str(b.get("id"))
+        sibs = [str(x.get("id")) for x in feat.blocks if x is not b and x.get("type") != "scaffold"
+                and x.get("composition") is not True and key(x) == key(b)]
+        missing = [s for s in sibs if s not in after_of(feat, i)]
+        if missing:
+            gap("composition.last", i, "after: lacks %s — the composition block comes after every other block of "
+                "its (release, side)" % ", ".join(missing))
+    for b in comps:
+        prev = earlier_compositions(feat, b)
+        if prev and prev[0] not in after_of(feat, str(b.get("id"))):
+            gap("composition.chain", str(b.get("id")), "after: lacks %s — the composition block of the nearest "
+                "earlier release on the same side: the root is extended release after release, in order" % prev[0])
+    if comps and not composition_root(feat):
+        gap("composition.root", "architecture.md", "a block has composition: true but <output_dir>/architecture.md "
+            "names no `composition_root: <path>` (the project location the composition extends)", "architect")
+    return gaps
 
 
 def scope_problem(feat, scope):
@@ -1423,11 +1508,6 @@ def cmd_ready(a):
 PRE_LINE = re.compile(r"^(\s*[-*]\s+\[)([ xX~])(\]\s+)(.*\S)\s*$")
 
 
-def open_findings(feat):
-    """[(line number, text)] — the open `- [ ]` lines of F/pre-release.md (`[x]` closed, `[~]` waived)."""
-    return [(f["line"], f["text"]) for f in parse_findings(feat) if f["mark"] == "open"]
-
-
 # ---- findings and releases (F/pre-release.md; the format and the policy are CLI.md's) --------------
 SEVS, UNWAIVABLE = ("HIGH", "FAIL", "MED", "LOW"), ("HIGH", "FAIL")
 LOCATOR = re.compile(r"^(\S+?)(?::\d+(?:-\d+)?|#\S+)$")  # file:line[-line] · path#symbol
@@ -1687,7 +1767,8 @@ def release_gaps(feat, only=None):
 # lint rules whose gap makes a terminal outcome false (nothing can become ready, or work is unseen)
 TERMINAL_LINT = ("ids.present", "ids.unique", "consumes.boundary", "boundary.owner", "after.block", "after.cycle",
                  "blockfile.exists", "blockfile.unique", "blockfile.orphan", "spikes.central_node",
-                 "spikes.central_flag")
+                 "spikes.central_flag", "composition.valid", "composition.unique", "composition.last",
+                 "composition.root", "composition.chain")
 
 
 def spike_dir_state(feat, repo, sid):
@@ -1699,15 +1780,117 @@ def spike_dir_state(feat, repo, sid):
 
 
 def resume_candidates(feat, repo):
-    """[{id, branch, worktree, uncommitted}] — blocks in doing/, not integrated: facts for resuming
-    them (never a diagnosis: a dirty tree also describes a worker still running)."""
+    """[{id, branch, worktree, uncommitted[, progress]}] — blocks in doing/, not integrated: facts for
+    resuming them (never a diagnosis: a dirty tree also describes a worker still running). `progress`
+    when a checkpoint was recorded: {attempt, head, next, fresh} (a stale one is reported, not an anomaly)."""
     out = []
     for b in feat.blocks:
         bid = str(b.get("id"))
         if feat.state_of(bid) == "doing" and not feat.integrated(bid):
             wt = worktree_of(repo, PREFIX + bid) if repo else None
-            out.append({"id": bid, "branch": PREFIX + bid, "worktree": wt, "uncommitted": len(dirty(wt)) if wt else None})
+            r = {"id": bid, "branch": PREFIX + bid, "worktree": wt, "uncommitted": len(dirty(wt)) if wt else None}
+            rec, fresh = progress_of(feat, repo, bid)
+            if rec:
+                r["progress"] = {"attempt": rec.get("attempt"), "head": rec.get("head"),
+                                 "next": (rec.get("checkpoint") or {}).get("next"), "fresh": fresh}
+            out.append(r)
     return out
+
+
+# ---- progress: a worker's checkpoint at a green AC boundary (F/progress/<id>.json) ------------------
+CHECKPOINT_REQUIRED, CHECKPOINT_OPTIONAL = ("done", "next"), ("tests", "decisions", "deviations", "notes")
+
+
+def progress_path(feat, bid):
+    return os.path.join(feat.dir, "progress", bid + ".json")
+
+
+def progress_of(feat, repo, bid):
+    """(record, fresh) of F/progress/<bid>.json — (None, False) when absent, unreadable, or the block is
+    integrated (then it is history, ignored). fresh ⇔ its head is still block/<bid>'s tip, its
+    spec_hash the current one, and the block's worktree clean (a change after it = unverified work)."""
+    rec = load_json(progress_path(feat, bid))
+    if not isinstance(rec, dict) or not isinstance(rec.get("checkpoint"), dict) or feat.integrated(bid):
+        return None, False
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError:
+        cur = None
+    tip = sha(repo, PREFIX + bid) if repo else None
+    wt = worktree_of(repo, PREFIX + bid) if repo else None
+    return rec, bool(tip and rec.get("head") == tip and cur and rec.get("spec_hash") == cur
+                     and not (wt and dirty(wt)))
+
+
+def load_checkpoint(raw):
+    """(checkpoint, problem) — --json: `-` (stdin), a file, or the JSON object inline."""
+    try:
+        text = sys.stdin.read() if raw == "-" else raw if raw.lstrip().startswith("{") else \
+            read(raw) if os.path.isfile(raw) else None
+    except OSError as e:
+        return None, "--json %s: %s" % (raw, e)
+    if text is None:
+        return None, "--json %s: neither `-`, a file, nor a JSON object" % raw
+    try:
+        cp = json.loads(text)
+    except ValueError as e:
+        return None, "--json does not parse: %s" % e
+    if not isinstance(cp, dict):
+        return None, "--json is not a JSON object"
+    extra = sorted(set(cp) - set(CHECKPOINT_REQUIRED + CHECKPOINT_OPTIONAL))
+    if extra:
+        return None, "unknown keys %s (allowed: %s)" % (", ".join(extra), ", ".join(CHECKPOINT_REQUIRED + CHECKPOINT_OPTIONAL))
+    if not isinstance(cp.get("done"), list):
+        return None, "`done` is missing or not a list (the acceptance criteria done, green)"
+    if not isinstance(cp.get("next"), str) or not cp["next"].strip():
+        return None, "`next` is missing or not a non-empty string (the next action)"
+    bad = [k for k in CHECKPOINT_OPTIONAL if k in cp and not isinstance(cp[k], (str, list))]
+    return (None, "%s: a string or a list" % ", ".join(bad)) if bad else (cp, None)
+
+
+def cmd_progress(a):
+    """Record a worker's checkpoint: refused — nothing written — unless the block is a manifest row in
+    doing/, --head is block/<id>'s tip, its worktree clean, --spec-hash the current one, the checkpoint
+    well-formed, every --extra a file, and there is progress since the previous record."""
+    feat = Feature(a.feature_dir)
+    repo, bid = feat.repo(), a.id
+    if bid not in feat.row:
+        return emit({"ok": False, "refused": "nothing written", "problems": [
+            "%s is not a block of the manifest: checkpoints are for manifest blocks only" % bid]}, 1)
+    problems = [] if feat.state_of(bid) == "doing" else ["block %s is in %s, not doing/" % (bid, feat.state_of(bid))]
+    problems += ["block %s is already integrated" % bid] if feat.integrated(bid) else []
+    tip, head = sha(repo, PREFIX + bid), sha(repo, a.head)
+    if not tip:
+        problems.append("no branch %s%s" % (PREFIX, bid))
+    elif head != tip:
+        problems.append("--head %s is not the tip of %s%s (%s): commit, then record the tip" % (a.head, PREFIX, bid, tip[:12]))
+    wt = worktree_of(repo, PREFIX + bid)
+    if wt and dirty(wt):
+        problems.append("the worktree %s has uncommitted or untracked changes: commit everything before a "
+                        "checkpoint" % wt)
+    extras = [os.path.abspath(x) for x in dict.fromkeys(a.extra or [])]
+    problems += ["--extra %s not found" % x for x in extras if not os.path.isfile(x)]
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError as e:
+        cur = None
+        problems.append(str(e))
+    if cur and a.spec_hash != cur:
+        problems.append("--spec-hash is not the block's current spec hash %s: the spec changed, re-pack" % cur)
+    cp, why = load_checkpoint(a.json)
+    problems += [why] if why else []
+    path = progress_path(feat, bid)
+    old = load_json(path)
+    old = old if isinstance(old, dict) else {}
+    n = old.get("attempt")
+    n = n if isinstance(n, int) and not isinstance(n, bool) and n > 0 else 0
+    if cp and tip and old.get("head") == tip and (old.get("checkpoint") or {}).get("done") == cp["done"]:
+        problems.append("no progress since attempt %d: same head, same done list" % n)
+    if problems:
+        return emit({"ok": False, "refused": "nothing written", "problems": problems}, 1)
+    attempt = n + 1
+    write_json(path, {"head": tip, "spec_hash": cur, "attempt": attempt, "checkpoint": cp, "extras": extras})
+    return emit({"ok": True, "id": bid, "file": path, "attempt": attempt})
 
 
 def outcome(feat, anomalies, repo=None, line_sha=None):
@@ -1719,8 +1902,10 @@ def outcome(feat, anomalies, repo=None, line_sha=None):
     r, work, waiting = ready_state(feat), [], []
     work += ["ready: " + x["id"] for x in r["ready"]] + ["finishable: " + x for x in r["finishable"]]
     for x in resume_candidates(feat, repo):
-        work.append("resume: %s (doing, not integrated; worktree %s, %s uncommitted)" % (
-            x["id"], x["worktree"] or "none", "?" if x["uncommitted"] is None else x["uncommitted"]))
+        p = x.get("progress")
+        work.append("resume: %s (doing, not integrated; worktree %s, %s uncommitted%s)" % (
+            x["id"], x["worktree"] or "none", "?" if x["uncommitted"] is None else x["uncommitted"],
+            "; checkpoint attempt %s, %s" % (p["attempt"], "fresh" if p["fresh"] else "stale") if p else ""))
     waiting += ["%s: %s" % (x["id"], x["reason"]) for x in r["excluded"]]
     for p in sorted(glob.glob(os.path.join(feat.dir, "open-questions", "*.md"))):
         if os.path.basename(p)[:-3] not in feat.row or feat.state_of(os.path.basename(p)[:-3]) != "todo":
@@ -1786,17 +1971,37 @@ def cmd_move(a):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tracked = git(os.path.dirname(src), "ls-files", "--error-unmatch", src, check=False).returncode == 0
     git(os.path.dirname(src), "mv", src, dst) if tracked else shutil.move(src, dst)
-    return emit({"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked})
+    out = {"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked}
+    prog = progress_path(feat, a.id)
+    if legal is BLOCK_MOVES and a.to == "done" and os.path.isfile(prog):  # a finished block's checkpoint is spent
+        if git(feat.dir, "ls-files", "--error-unmatch", prog, check=False).returncode == 0:
+            git(feat.dir, "rm", "-q", "-f", prog)
+        else:
+            os.remove(prog)
+        out["progress_removed"] = prog
+    return emit(out)
 
 
 def cmd_pack(a):
     feat = Feature(a.feature_dir)
     h = spec_hash(feat, a.id)  # refuses an id that is neither a block nor has rework/<id>-<n>.md
     root, out = os.path.dirname(feat.odir), []
+    extras = list(dict.fromkeys(os.path.abspath(x) for x in a.extra or []))
 
     def add(title, path, body):
         out.append("## %s\n\nsource: `%s`\n\n%s\n" % (title, os.path.relpath(path, root), body.strip()))
 
+    if a.id in feat.row:  # a fresh checkpoint first: the re-dispatched worker resumes from it
+        try:
+            repo = feat.repo()
+        except UsageError:
+            repo = None
+        rec, fresh = progress_of(feat, repo, a.id)
+        if rec and fresh:  # the dispatch's extras survive the checkpoint: packed below, each once
+            extras = list(dict.fromkeys([os.path.abspath(x) for x in a.extra or []] +
+                                        [x for x in rec.get("extras") or [] if isinstance(x, str)]))
+            add("Checkpoint — attempt %s (resume from it; never in spec_hash)" % rec.get("attempt"),
+                progress_path(feat, a.id), checkpoint_md(rec))
     brief = os.path.join(feat.dir, "product-brief.md")
     if os.path.isfile(brief):
         add("Goal — product brief", brief, read(brief))
@@ -1808,16 +2013,49 @@ def cmd_pack(a):
             add("Rework %s" % os.path.basename(p)[:-3], p, read(p))
         pack_deps(feat, fm["blocks"], add, out, writer=None)
     pack_notes(feat, a.id, add)
-    found = open_findings(feat) if a.id in feat.row else []
-    if found:  # advisory: never in spec_hash, never a contract change
-        add("Open findings (advisory: deferred MED/LOW of the feature; they change no contract)",
-            os.path.join(feat.dir, "pre-release.md"), "\n".join("- line %d: %s" % (n, t) for n, t in found))
-    for x in a.extra or []:
+    if a.id in feat.row:  # advisory: never in spec_hash, never a contract change
+        mine, others = block_findings(feat, a.id)
+        if mine or others:
+            add("Open findings (advisory: deferred MED/LOW of this block and its boundary neighbours; they change "
+                "no contract)", os.path.join(feat.dir, "pre-release.md"), "\n".join(
+                    ["- line %d: %s" % (f["line"], f["text"]) for f in mine] +
+                    ["%d other open findings in the feature (not relevant to this block)" % others] * bool(others)))
+    for x in extras:
         if not os.path.isfile(x):
             raise UsageError("--extra %s not found" % x)
         add("Extra — %s" % os.path.basename(x), os.path.abspath(x), read(x))
     print("spec_hash: %s\n\n# Context pack — %s\n\n%s" % (h, a.id, "\n".join(out)))
     return 0
+
+
+def checkpoint_md(rec):
+    """A progress record as the pack's `## Checkpoint` body."""
+    cp = rec["checkpoint"]
+    item = lambda x: x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)
+    rows = ["- head: `%s` · attempt %s" % (rec.get("head"), rec.get("attempt"))]
+    for k, label in (("done", "done"), ("next", "next"), ("tests", "tests"), ("decisions", "pending DECISIONS"),
+                     ("deviations", "pending DEVIATIONS"), ("notes", "notes")):
+        v = cp.get(k)
+        if isinstance(v, list):
+            rows += ["- %s:%s" % (label, "" if v else " none")] + ["  - %s" % item(x) for x in v]
+        elif v is not None:
+            rows.append("- %s: %s" % (label, item(v)))
+    return "\n".join(rows)
+
+
+def block_findings(feat, bid):
+    """([finding], n_others) — the open pre-release.md lines relevant to block `bid`: its own, those of
+    a block sharing a boundary with it (owner or consumer of one it touches) or scoped to such a
+    boundary, and — for a composition block — those of every earlier composition block of its side (the
+    shared root's debt); the rest of the feature's open lines only counted."""
+    touched = feat.touched(bid)
+    near = {bid} | {str(bd.get("id")) for bd in touched} | {str(bd.get("owner")) for bd in touched} | \
+        {c for bd in touched for c in feat.consumers(bd)}
+    if feat.row[bid].get("composition") is True and feat.row[bid].get("type") != "scaffold":
+        near |= set(earlier_compositions(feat, feat.row[bid]))
+    open_ = [f for f in parse_findings(feat) if f["mark"] == "open"]
+    mine = [f for f in open_ if f.get("block") in near]
+    return mine, len(open_) - len(mine)
 
 
 def pack_deps(feat, bids, add, out, writer):
@@ -2309,7 +2547,12 @@ def build_parser():
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)
-    cmd("pack", cmd_pack, "the worker's context (Markdown)", "feature_dir", "id").add_argument("--extra", nargs="+")
+    cmd("pack", cmd_pack, "the worker's context (Markdown)", "feature_dir", "id").add_argument(
+        "--extra", action="extend", nargs="+")
+    p = cmd("progress", cmd_progress, "record a worker's checkpoint", ("op", ("record",)), "feature_dir", "id")
+    for opt in ("--head", "--spec-hash", "--json"):
+        p.add_argument(opt, required=True)
+    p.add_argument("--extra", action="extend", nargs="+")
     p = cmd("diff-range", cmd_diff_range, "the review range from the merge-base")
     p.add_argument("--base", required=True)
     p.add_argument("--head", required=True)

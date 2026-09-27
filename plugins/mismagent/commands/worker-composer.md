@@ -5,7 +5,7 @@ argument-hint: "[feature | <output_dir>/features/<feature>/]"
 
 # Worker-Composer — the build loop
 
-You are a **thin coordinator**: you write **no code and no tests** (`mismagent-worker` does). The design is `${CLAUDE_PLUGIN_ROOT}/tools/LOOP.md`;
+You are a **thin coordinator**: you write **no code and no tests**. The design is `${CLAUDE_PLUGIN_ROOT}/tools/LOOP.md`;
 follow its procedure **literally**. **Build in parallel, integrate in series. In doubt, stop and
 ask** — never guess, never repair state by hand.
 
@@ -25,7 +25,7 @@ absolute paths.
 `F/blocks/<context>/{todo,doing,done}/<id>.md` (read-only spec; the folder is the state), and the
 profile (`<output_dir>/profile.md`). Work in **one
 checkout of `B`** and commit `F` there: state and code
-share one line. The project is not a git repository → **ask the user** before
+share one line. Not a git repository → **ask the user** before
 `git init`.
 
 ## The procedure (one firing)
@@ -35,13 +35,13 @@ Then `MM status F --integration B`: any anomaly → report it
 with its `detail` and **ask the user; end the firing.**
 
 **1 · Readiness.** `MM lint F` (every firing): every gap → bounce to its `bounce_to`
-with the gap named (regenerate, never hand-patch; `recorder` below). Then the judgment items, yours:
+with the gap named (regenerate, never hand-patch; `recorder` below). Then your judgment items:
 - a **high-value block with no `tests_nl`** → ask the user;
 - the gate is **executable and discriminating**: `MM proof check F gate <side> --gate "<gate>"
   --gate-files <gate_files>` fresh → accept. Stale or absent on a built
   side → a worker re-runs the red-green probe and records it with `MM proof record`, same
   arguments; a greenfield side owes it at the scaffold. No
-  `gate_files` in the profile → ask the user for them (a profile edit);
+  `gate_files` → ask the user (a profile edit);
 - a gate step guarding only released versions, on a side not yet released → the profile's
   `gate_after_release`; a slow or hanging step → `/mismagent:architect` (a strategy, never a wait);
 - greenfield, ≥2 parallel domain blocks next, `dev_architecture: none` → an architect style
@@ -55,13 +55,13 @@ Bounce targets: `/mismagent:build-manifest`, `/mismagent:architect`, **the profi
 with the user), `recorder` (`why.*`: you fix `F/decisions.md`) or `composer` (`release.*`: re-record
 with `release close|waive --replace <finding>`); then re-lint.
 
-**2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is integrated and done).
+**2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is done).
 `MM move F <id> --to doing`, its worktree, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
 the worker records the gate proof; then `MM compose start F <id> --integration B --branch block/<id>`,
 the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to done`.
 
 **3 · Build.** **Resume first** each `resume` block of `MM status`: its worker again on its
-existing worktree with a fresh `MM pack`, told the tree holds unverified work. Never infer that a
+existing worktree with a fresh `MM pack`: from its `progress` when `fresh`, else told the tree holds unverified work. Never infer that a
 worker was interrupted (a dirty tree also describes a running one): unsure, or `BLOCKED` → ask. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
@@ -74,16 +74,20 @@ from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-wo
   `build-manifest` folds it in). An answer needing no code → `MM move F <id>
   --to doing`, then step 5 on its branch and worktree, reviewed against the current spec;
 - `BLOCKED` → report its cause; it stays in `doing/`;
+- `CHECKPOINT` → `MM progress record F <id> --head <block tip> --spec-hash <spec_hash> --json -` with
+  its checkpoint and `--extra` each extra of the first dispatch (its `DECISIONS` kept), then a
+  fresh worker, **same** worktree, fresh `MM pack`: same block, no new slot, no review. Refused
+  `no progress` → as `BLOCKED`, never re-dispatch;
 - `READY-FOR-REVIEW` → queue it for step 5 with its `DECISIONS`/`DEVIATIONS`.
 
 **5 · Integrate, one block at a time.**
 1. `MM diff-range --base B --head block/<id>` (run in the repo) → `range`, `head_sha`. A `ui` block on
-   a manual-`ui_render_check` side: `run-app-smoke` first, unless `render-proof/<id>/sha.txt` already
-   holds `head_sha`; `RENDER-FAIL` = FAIL.
+   a manual-`ui_render_check` side: `run-app-smoke` first, unless its release has a `composition` block (deferred there) or `render-proof/<id>/sha.txt` holds `head_sha`; at that composition
+   block, `run-app-smoke` for every deferred `ui` block at its `head_sha`. `RENDER-FAIL` = FAIL.
 2. **Review** at the block's depth, each reviewer with `range`, `head_sha`, one `MM pack F <id>`
    (note its `spec_hash`) and the worker's `DECISIONS`/`DEVIATIONS`. A verdict whose
    `HEAD_SHA` is not `head_sha` → re-run it.
-3. **FAIL, or any HIGH** → write `F/rework/<id>-<n+1>.md` (the FAILs and the HIGHs only) and
+3. **FAIL, or any HIGH** → write `F/rework/<id>-<n+1>.md` (FAILs and HIGHs only) and
    re-dispatch the worker on its **existing** worktree (no `ready`, no `move`: it stays in `doing/`),
    the step-3 pack `--extra` that file. With `n = 2` already → **park**, the findings in
    `open-questions/<id>.md`. A finding that needs a **human/product choice** (a code-review `BLOCKED`, a verifier `SKIP` with
@@ -99,7 +103,7 @@ from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-wo
    finish as in step 0. **Red** → `MM compose abort F <id>` and rework with the red; the reviewers say whether the owner, the consumer or the contract reworks — never the consumer by default.
    A refused promote → `MM compose abort F <id>` and start step 5 again from the new tip.
 
-**6 · Report and end** — once every dispatch has returned and been handled.
+**6 · Report and end** — once every dispatch is handled.
 
 Commit `F`'s changes at the end of the firing — never between `compose start` and `compose promote`.
 
@@ -110,28 +114,21 @@ before committing `F`, if it exists: `MM why check F/decisions.md`.
 
 ## Model routing — the model follows the action
 Tiers `light` · `standard` · `deep` (the Agent tool's `model`; the profile's `build.model_routing`
-binds them and overrides rows).
-| action | tier |
-|---|---|
-| `run-app-smoke` | light |
-| worker · `scaffold`, `application-service`, `adapter`, `read-model`, `ui` | standard |
-| worker · `aggregate`, `port` | deep |
-| reviewers | the review depth: `deep` → verifier + code-review both on deep · `standard` → the verifier on standard |
+binds them and overrides an entry): `run-app-smoke` light; worker on `aggregate`, `port` deep,
+on any other type standard; reviewers on their review depth.
 
 Worker modifiers, in order, capped at `deep`: `model_hint: deep`
-→ deep; **rework cycle 2** (the second `rework/<id>-*.md`) → +1 — already at `deep`, tell the worker
+→ deep; **rework cycle 2** → +1 — already at `deep`, tell the worker
 it is the last cycle and to re-read both findings files.
 
 ## Review depth by block type
-| block type | depth | review |
-|---|---|---|
-| `ui` · `adapter` · `read-model` | standard | ONE `mismagent-verifier` with `REVIEW_DEPTH: standard` |
-| `aggregate` · `port` · `application-service` | deep | `mismagent-verifier` + a separate `code-review` |
+`ui` · `adapter` · `read-model` → standard: ONE `mismagent-verifier` with `REVIEW_DEPTH: standard`.
+`aggregate` · `port` · `application-service` → deep: `mismagent-verifier` + a separate `code-review`.
 Escalate to `deep` when the block carries `model_hint: deep` or is in rework. The profile's `build.review_depth_by_type` overrides a row.
 
 ## Spikes — wave 0
 An open `type: spike` node with `central: true` (`MM ready F` → `open_spikes`) runs **at wave 0,
-beside the scaffold**: `MM move F <id> --to doing` (the node), a worker (tier deep) on a
+beside the scaffold**: `MM move F <id> --to doing` a worker (tier deep) on a
 `spike/<id>` branch building a **throwaway prototype, never integrated**. On return write the
 evidence to `F/spikes/<id>.md`, remove the worktree, report. Closure is the **user's** decision (an ADR via `write-adr`, or the consumers' ACs via `build-manifest`), then
 `MM move F <id> --to done`; the blocks in its `## Unblocks` wait until then. Negative evidence →

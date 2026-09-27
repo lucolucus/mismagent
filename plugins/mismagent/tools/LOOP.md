@@ -1,4 +1,4 @@
-# The build loop — design (v0.24)
+# The build loop — design (v0.25)
 
 **The tool computes; the composer follows a short, linear procedure; in doubt it stops and asks.**
 No state engine, no automatic crash recovery: safety comes from refusing, not from guessing.
@@ -19,19 +19,23 @@ No state engine, no automatic crash recovery: safety comes from refusing, not fr
 |---|---|---|
 | `blocks/<ctx>/{todo,doing,done}/<id>.md` | the block's phase | `MM move` |
 | `open-questions/<id>.md` | parked: a question for the user | composer; deleted by `build-manifest` when answered, after it records the answer in `decisions.md` |
-| `rework/<id>-<n>.md` | the findings of rework cycle n (the cap counts these files) | composer |
-| `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM proof record F review <id> --sha S --spec-hash H` |
+| `rework/<id>-<n>.md` | the failures and HIGH findings of rework cycle n, or a red candidate / merge conflict (the cap counts these files; a group's `-1` is its spec) | `MM review ingest` · `MM rework write` |
+| `review-ingest/<id>-<attempt>.json` | an ingested review attempt: its reports' hashes and result (an identical retry returns it) | `MM review ingest` |
+| `review-proof/<id>.json` | reviewed `sha` + `spec_hash` | `MM review ingest` (action `promote`) · `MM proof record F review <id> --sha S --spec-hash H` |
 | `integrated/<id>.json` | promoted: the block's sha is on the integration line | `MM compose promote F <id>` |
 | `progress/<id>.json` | a worker's checkpoint at a green AC boundary: `head`, `spec_hash`, `attempt`, what is done, what is next | `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…`; deleted by `MM move F <id> --to done` |
 | `gate-proof/<side>/proof.json` | the gate's red-green proof (project fact) | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` |
-| `pre-release.md` | deferred MED/LOW findings, one line each (format in `CLI.md`); marks `[x]`/`[~]` | composer appends lines; marks only by `MM release close\|waive` |
+| `pre-release.md` | deferred MED/LOW findings, one line each (format in `CLI.md`); marks `[x]`/`[~]` | `MM review ingest` appends lines (idempotent); marks only by `MM release close\|waive` |
 | `release-decisions/<Rn>.md` · `release-evidence/<Rn>.md` | the close/waive records (one JSON block) · the verifier's per-finding evidence | `MM release close\|waive` · composer (from the verifier's return) |
 | `decisions.md` | the why: non-obvious choices, debates, deciders (history, not state; out of `spec_hash`; format in `CLI.md`) | composer after the block's promote (what review/rework produced is collected until then, never written before); new evidence later completes `Debate`/`Result` only; explore/model at the checkpoints; checked by `MM why check F/decisions.md` and `MM lint` |
 
-## Worktrees and packs
+## Worktrees, packs and handoffs
 Inside the repository, never a sibling folder: a block's worktree is `.worktrees/<feature>/<id>`
 (branch `block/<id>`), the packs handed to workers are saved under `.worktrees/packs/<feature>/`
-(`<id>.md`). Paths are relative to the repository root; `.worktrees/` is added to `.gitignore`
+(`<id>.md`). Handoffs are files at paths the composer designates per dispatch (ignored, never
+committed), so a return stays a few lines: each reviewer writes its full report to
+`.worktrees/reviews/<feature>/<id>-<attempt>-<verifier|code-review>.json` (schema in `CLI.md`); a
+worker writes its decision-note entries to `.worktrees/returns/<feature>/<id>-<attempt>.md`. Paths are relative to the repository root; `.worktrees/` is added to `.gitignore`
 **before** the first worktree is created. Candidates stay where `compose` puts them (the
 git-common-dir). Pass every path to a worker absolute.
 
@@ -75,6 +79,19 @@ branch is `block/<id>`.
   and its boundary neighbours as advisory notes (the rest counted in one line); a pre-release group id
   packs its `rework/<id>-<n>.md` files.
 - `MM diff-range --base B --head X` — the three-dot review range from the merge-base.
+- `MM review ingest F <id> --attempt N --depth standard|deep --file <report>… --sha S --spec-hash H` —
+  validates the depth's full report set against the block, its branch tip and its current spec
+  (else nothing written), files every MED/LOW deferral in `pre-release.md` (idempotent, every
+  attempt), and returns ONE action: `promote` (review proof recorded) · `rework` (one
+  `rework/<id>-<n>.md`) · `park` (rework cap) · `decide` (a human choice) · `blocked` (a verifier
+  `SKIP`); precedence decide → blocked → rework/park → promote. A non-promote action drops the
+  review proof; an identical retry returns the recorded result. The composer acts on `action` and
+  records the returned `objections` in the decision note — never reads the findings.
+- `MM rework write F <id> --reason candidate-red|merge-conflict|other --evidence <file|->` — the
+  next rework file for a red candidate or a merge conflict, same numbering and cap (`park` at the
+  cap); drops the review proof.
+- `MM state commit F -m <msg> --integration B` — commits exactly the changes under `<output_dir>`
+  on the integration checkout (refuses another branch, an open candidate, anything else staged).
 - `MM proof record F review <id> --sha S --spec-hash H` (refused unless `H`, the reviewed pack's, is
   still the current one) · `MM proof check F review <id> --sha S` · `MM proof record|check F gate <side> --gate TEXT
   --gate-files GLOB…`.
@@ -99,8 +116,8 @@ branch is `block/<id>`.
    parallel, in one message, where possible.
 4. **As each worker returns:** `BOUNCED` → park (`move --to todo` + `open-questions/`; an answer
    that needs no code → `move --to doing`, straight to step 5 on its branch).
-   `BLOCKED` → report. `READY-FOR-REVIEW` → queue it for integration with its `DECISIONS`, which
-   the reviewers get as they are. `CHECKPOINT` (a long session, stopped at a **green** AC boundary,
+   `BLOCKED` → report. `READY-FOR-REVIEW` → queue it for integration with its handoff file
+   (`.worktrees/returns/…`, its decision entries), which the reviewers get by path, as it is. `CHECKPOINT` (a long session, stopped at a **green** AC boundary,
    its work committed) → `MM progress record` with its head, the pack's spec hash, the checkpoint
    and the dispatch's `--extra` files, then dispatch a **fresh** worker in the same worktree with a fresh `MM pack` (it carries the
    checkpoint): a context reset, not a watchdog — one active session per block; gate, verifier and
@@ -109,15 +126,26 @@ branch is `block/<id>`.
    unverified: inspect the worktree, never record by hand. A crash before the record is the same:
    the `resume` entry shows no `progress` or a stale one (a dirty tree included) — the tree holds
    unverified work.
-5. **Integrate, one at a time:** reviewers on `diff-range` + one pack → FAIL/HIGH: write
-   `rework/<id>-<n+1>.md`, re-dispatch the worker on its existing worktree with it (no `ready`, no
-   `move`; after cycle 2 → park) · PASS: `proof record review --spec-hash <the pack's>` →
-   `compose start` → in the candidate run the gate + the contract test of every owner↔consumer pair
-   whose both sides are in the candidate → green: `compose promote`, record the `DECISIONS`
-   (`MM why append`: their links now resolve on the line), then step 0's finish ·
-   red: `compose abort`, rework with the red (the reviewers say whether owner, consumer or contract).
-6. Report; end — only once **every** dispatch of this firing has returned and been handled:
-   nothing is left running. The next firing starts again from 0.
+5. **Integrate, one at a time:** reviewers on `diff-range` + one pack, each writing its report to
+   its designated `.worktrees/reviews/…` path and returning a verdict line → `MM review ingest`
+   with the depth's reports, the attempt, `head_sha` and the pack's spec hash → act on `action`:
+   `rework` → re-dispatch the worker on its existing worktree with the returned `rework` file (no
+   `ready`, no `move`) · `decide` / `park` → park (`move --to todo` + `open-questions/<id>.md`
+   with `reason` and the report paths) · `blocked` → report it (a strategy problem, not the block's) ·
+   `promote` (the proof is recorded) → `state commit` → `compose start` (a merge conflict → `rework write --reason merge-conflict`) → in the candidate run the
+   gate + the contract test of every owner↔consumer pair whose both sides are in the candidate →
+   green: `compose promote`, then `MM why append F/decisions.md --entry <file>` for each of the block's
+   `.worktrees/returns/<feature>/<id>-<attempt>.md` files (every attempt's; their links now resolve
+   on the line), step 0's finish, `state commit` · red: `compose abort`, then `rework write --reason candidate-red`
+   with the red output (the reviewers say whether owner, consumer or contract); `park` at the cap.
+   `objections` from the ingest go to the decision note's `Debate`/`Result`.
+6. Report; end — once **the dispatch wave** of this firing is complete: every block dispatched in it
+   integrated, parked or blocked, nothing left running, no candidate open. **One completed wave per
+   firing**; the next firing starts fresh from 0 (state is on disk).
+
+**Commits.** The composer commits `F` only with `MM state commit` — before `compose start` and after
+`compose promote`, never between (a commit on the line moves it and the promote refuses); also at
+the end of the firing. Never a hand `git add`/`commit` of state.
 
 A release is a **tag on the line, never a layer in the code**: its one `composition` block
 (`composition: true`, after every other block of its release and side and after the previous

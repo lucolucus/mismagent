@@ -7,7 +7,7 @@ write the full command the calling prompt resolved — `python3 "@@MISMAGENT_SKI
 the path quoted — so each Bash call stands alone (no word splitting, nothing kept between calls). `F` = `<output_dir>/features/<feature>/`
 (a project root with a single feature resolves to it). **One repository per project**: the repo is the
 git toplevel of `F` (for `diff-range`, of the working directory). A block's branch is `block/<id>`.
-Output: JSON on stdout (`pack`: Markdown). Exit `0` ok · `1` refused / anomaly / gap (the JSON says
+`MM <command> --help` states what each command reads, writes and refuses. Output: JSON on stdout (`pack`: Markdown). Exit `0` ok · `1` refused / anomaly / gap (the JSON says
 why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 `python3 -m unittest discover -s tools/tests`.
 
@@ -31,6 +31,9 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM release close F <Rn> --entries <json> [--replace <finding>…]` · `MM release waive F <Rn> --entries <json> [--replace <finding>…]` | `{ok:true, release, action, lines, findings, replaced, file}` or `{ok:false, refused, problems}` |
 | `MM release group F <Rn> --id pre-<Rn>-<k> --lines <line>:<finding>…` | `{ok:true, id, file, blocks, findings, context, unchanged}` or `{ok:false, refused, problems}` |
 | `MM release confirm F <Rn> --integration B --sha S --tag TAG --merge-to BASE --base-sha T --by <user> --consent <ref>` | `{ok:true, confirmed, release, sha, tag, merge_to, base_sha_before, partial, unchanged}` or `{ok:false, refused, problems}` |
+| `MM review ingest F <id> --attempt N --depth standard\|deep --file <report> [--file <report>] --sha S --spec-hash H` | `{ok:true, action: promote\|rework\|park\|decide\|blocked, reason, rework: <path>\|null, counts:{HIGH, MED, LOW, failures}, appended, proof, objections:[{reviewer, about, text}][, proof_dropped][, repeat]}` or `{ok:false, refused:"nothing written", problems}` |
+| `MM rework write F <id> --reason candidate-red\|merge-conflict\|other --evidence <file>\|-` | `{ok:true, action: rework\|park, rework: <path>\|null, reason, proof_dropped}` or `{ok:false, refused:"nothing written", problems}` |
+| `MM state commit F -m <message> --integration B` | `{ok:true, committed:false}` · `{ok:true, committed:true, sha, paths:[…]}` or `{ok:false, refused[, outside\|open\|paths]}` |
 
 ## Exact semantics
 
@@ -160,10 +163,85 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   removes whatever exists of the candidate (worktree, directory, metadata) — also a half-created one
   — and keeps `candidate/<id>` as evidence. No revert, no timeout. Candidates live in the
   git-common-dir; block worktrees and packs do not (`LOOP.md`, Worktrees).
+- **review ingest** — the composer's one step from the reviewers' reports to an action; it never
+  reads the findings. **Retry first**: each accepted ingestion is recorded in
+  `F/review-ingest/<id>-<attempt>.json` (the sha, the depth, the reports' content hashes, the
+  result). The same id + attempt with the same reports, sha and depth returns that result again
+  (`repeat: true`), writing nothing — checked **before** the spec, so a group whose own rework file
+  moved its spec hash is retried identically; the same attempt with other reports is refused (a new
+  review is a new attempt). **Validated first, whole** (any problem → `{ok:false, refused:"nothing
+  written", problems}`, exit 1; every field type-checked before use — a malformed report is refused,
+  never a crash): each `--file` parses and matches the report schema (below); the set is exactly
+  the depth's reviewers, each once (`standard`: `verifier`; `deep`: `verifier` + `code-review`);
+  every report's `id`, `attempt`, `sha` (resolved) and `spec_hash` equal the arguments; `S` is the
+  tip of `block/<id>` (a pre-release group `pre-<Rn>-<k>` too: its branch is `block/pre-<Rn>-<k>`);
+  `H` is the id's **current** spec hash (never substituted: a changed spec is reviewed again); a
+  block with MED/LOW findings has a release. Then, for **every** attempt (a failed one's deferrals
+  are real too): each MED/LOW finding whose `fix` is not `Decision` is appended to
+  `F/pre-release.md` as `- [ ] <release> · <block> · <sev> · <at> · <issue> · <reviewer> · <date>`
+  (`<release>` = the block's row, or the group's `rework/<id>-1.md` frontmatter; `<date>` = today
+  UTC; `·` in a field becomes `-`). For a group, `<block>` is one of its `blocks:` — the one whose
+  grouped lines cite the finding's file, when exactly one does, else the first (a legacy group with
+  no `blocks:`: the group id) — and `<issue>` starts `[pre-<Rn>-<k>] `, so `release group` accepts
+  the line later. **Idempotent**: a line with the same release, block, sev, at and issue (any mark)
+  is not appended again (`appended` = the new lines). Then ONE `action`, the first that applies:
+  1. `decide` — a finding with `fix: Decision` or a code-review `BLOCKED`: a human/product choice
+     (`reason` = the questions);
+  2. `blocked` — a verifier `SKIP`: a strategy problem outside the block (`reason` = its failures);
+  3. `rework` — any failure, a `FAIL`, a HIGH, a `CHANGES`: ONE `F/rework/<id>-<n>.md` (`n` = the
+     highest existing + 1) with the verdicts, the report paths, every failure, every HIGH finding
+     (with its fix and evidence) and the MED/LOW `Patch` ones. **Cap**: rework cycles = the id's
+     `rework/<id>-<n>.md` files (a group's `-1` is its spec, not a cycle); with 2 already → `park`
+     (`reason` starts `rework cap`, no file written): the composer parks it;
+  4. `promote` — every report passes, no HIGH, no failure: the review proof is recorded exactly as
+     `proof record F review <id> --sha S --spec-hash H` does (`proof: true`).
+  Every other action **drops** `F/review-proof/<id>.json` (`proof_dropped`: whether one existed), so
+  `proof check` and `compose start` refuse until a later attempt promotes. `counts` sums every
+  report's findings by severity and its failures; `objections` = every report's objections, each on
+  one line with its reviewer — the composer records them in the decision note's `Debate`/`Result`
+  without reading the reports. Exit 0 whatever the action.
+- **rework write** — a rework cycle that is not a review's: a red candidate (gate or contract test),
+  a merge conflict at `compose start`, `other`. Writes the next `F/rework/<id>-<n>.md` (`reason:` +
+  `## Evidence` = the `--evidence` file, or stdin with `-`; non-empty) under the **same** numbering
+  and cap as `review ingest` — at the cap `{ok:true, action:"park", rework:null, reason:"rework
+  cap…"}`, nothing written; a group's `-1` is its spec. Drops the review proof (`proof_dropped`).
+  Refused, nothing written: an id that is neither a block nor a group, unreadable or empty evidence.
+- **state commit** — the composer's bookkeeping, nothing else. Refused (`ok:false`, nothing staged,
+  exit 1): the checkout that owns `F` is not on `--integration` (`B`); a candidate is open (commit
+  before `compose start` or after `compose promote`, never between); `<output_dir>` (the trunk that
+  holds `F`, e.g. `.mismagent/`) is the repository root or outside it; anything **outside**
+  `<output_dir>` is already staged (`outside`: unstage it). Otherwise it stages every changed, new
+  (not ignored) and deleted path under `<output_dir>` (`git add -A -- <output_dir>`) — never a path
+  outside it, which stays as it was — and commits them with `-m` under the repository's configured
+  identity: `{committed:true, sha, paths}`; nothing to commit → `{ok:true, committed:false}`. A
+  failing commit (e.g. a hook) → `refused` with git's message, the paths left staged.
+
+## Review reports — `review ingest`'s input
+
+One JSON file per reviewer, written by the reviewer to the path the composer designates
+(`<repo>/.worktrees/reviews/<feature>/<id>-<attempt>-<verifier|code-review>.json`, ignored, never
+committed) — its only write:
+```json
+{"version": 1, "id": "<block or group id>", "attempt": 1, "reviewer": "verifier",
+ "sha": "<the reviewed head>", "spec_hash": "<the reviewed pack's>", "verdict": "PASS",
+ "checks": ["what was run and its result"], "failures": ["<an AC or check that failed>"],
+ "findings": [{"sev": "MED", "at": "src/a.py:12", "issue": "<what>", "fix": "Defer",
+               "evidence": "<why: the line, the failing input>"}],
+ "objections": [{"about": "D-0003", "text": "<the objection, ≤ 40 words>"}],
+ "notes": "<anything else, e.g. D-NNNN cited>"}
+```
+`objections` (optional) = `[{"about": "D-NNNN" | "<topic>", "text": "<≤ 40 words>"}]`: the
+reviewer's objections to a recorded or proposed decision, returned by `review ingest`.
+`verdict`: verifier `PASS | FAIL | SKIP`, code-review `APPROVE | CHANGES | BLOCKED`; `SKIP` = the
+check cannot run for a reason outside the block (a strategy problem). `failures`: non-empty strings,
+none with `PASS`/`APPROVE`. Each finding has exactly `sev` (`HIGH | MED | LOW`), `at`
+(`file:line[-line]` or `path#symbol`), `issue`, `fix` (`Patch` = fix it now · `Defer` = file it for
+the release · `Decision` = a human/product choice), `evidence` (a string, may be empty). `checks`
+and `notes` are optional (any JSON), `objections` optional (shape above); any other key is refused.
 
 ## Releases — `F/pre-release.md`, records, confirm
 
-**Line** (one per deferred finding): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
+**Line** (one per deferred finding; `review ingest` appends them, idempotently): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
 `<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]` or `path#symbol` (a symbol does not
 rot). Marks: `[ ]` open · `[x]` closed · `[~]` waived — flipped only by `release close|waive`; text
 after the seventh field is an annotation. **Identity** = a hash of the seven fields (`finding`, 12

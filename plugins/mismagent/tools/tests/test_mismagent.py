@@ -1732,6 +1732,272 @@ class TestV024(Base):
         self.run_tool("lint", self.feat, expect=0)
 
 
+def finding(sev, at, issue, fix="Defer", evidence="seen in the diff"):
+    return {"sev": sev, "at": at, "issue": issue, "fix": fix, "evidence": evidence}
+
+
+class TestV025(Base):
+    """v0.25: `review ingest` (reports → one action) and `state commit` (the bookkeeping, exactly)."""
+
+    def setUp(self):
+        super().setUp()
+        self.wt = self.block_wt("svc-order")
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc\n")
+        self.rdir = os.path.join(self.tmp, "reviews")
+
+    def report(self, reviewer, verdict, findings=(), failures=(), attempt=1, bid="svc-order", **over):
+        r = dict(version=1, id=bid, attempt=attempt, reviewer=reviewer, sha=self.tip,
+                 spec_hash=self.spec_hash(bid), verdict=verdict, checks=["gate green"], failures=list(failures),
+                 findings=list(findings), notes="")
+        r.update(over)
+        path = os.path.join(self.rdir, "%s-%d-%s.json" % (bid, attempt, reviewer))
+        os.makedirs(self.rdir, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(r, f)
+        return path
+
+    def ingest(self, *files, bid="svc-order", depth="standard", attempt=1, sha=None, h=None, expect=0):
+        args = ["review", "ingest", self.feat, bid, "--attempt", str(attempt), "--depth", depth,
+                "--sha", sha or self.tip, "--spec-hash", h or self.spec_hash(bid)]
+        for f in files:
+            args += ["--file", f]
+        return self.run_tool(*args, expect=expect)
+
+    def pre(self):
+        p = os.path.join(self.feat, "pre-release.md")
+        return [l for l in mismagent.read(p).splitlines() if l.startswith("- [")] if os.path.isfile(p) else []
+
+    # -- review ingest -------------------------------------------------------------------------------
+    def test_standard_pass_promotes_records_the_proof_and_files_deferrals_once(self):
+        f = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "naming · unclear"),
+                                             finding("LOW", "src/svc.txt#Svc.run", "a comment")])
+        out = self.ingest(f)
+        self.assertEqual((out["ok"], out["action"], out["rework"], out["proof"], out["appended"]),
+                         (True, "promote", None, True, 2))
+        self.assertEqual(out["counts"], {"HIGH": 0, "MED": 1, "LOW": 1, "failures": 0})
+        self.assertTrue(self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip,
+                                      expect=0)["fresh"])
+        lines = self.pre()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("- [ ] R0 · svc-order · MED · src/svc.txt:1 · naming - unclear · verifier · "))
+        self.run_tool("lint", self.feat, expect=0)                                  # well-formed seven-field lines
+        again = self.ingest(f)                                                       # an identical retry
+        self.assertEqual(again, dict(out, repeat=True))                              # the recorded result
+        self.assertEqual(self.pre(), lines)
+        f2 = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "naming · unclear")], attempt=2)
+        self.assertEqual(self.ingest(f2, attempt=2)["appended"], 0)                  # a finding is filed once
+        self.assertEqual(self.pre(), lines)
+        self.compose("start", "svc-order", expect=0)                                 # the proof is the real one
+
+    def test_deep_needs_both_reports_and_everything_must_match(self):
+        v = self.report("verifier", "PASS", [finding("MED", "a.py:1", "x")])
+        out = self.ingest(v, depth="deep", expect=1)
+        self.assertEqual(out["refused"], "nothing written")
+        self.assertIn("depth deep requires a code-review report", out["problems"])
+        self.assertEqual(self.pre(), [])
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "review-proof", "svc-order.json")))
+        self.assertIn("depth standard takes no code-review report",
+                      self.ingest(v, self.report("code-review", "APPROVE"), expect=1)["problems"])
+        parent = sh(self.wt, "git", "rev-parse", "HEAD~1")
+        self.assertIn("not the tip of block/svc-order", self.ingest(v, sha=parent, expect=1)["problems"][0])
+        self.assertIn("not the current spec hash", self.ingest(v, h="0" * 64, expect=1)["problems"][0])
+        bad = self.report("verifier", "PASS", sha=parent)
+        self.assertIn("is not --sha", " ".join(self.ingest(bad, expect=1)["problems"]))
+        bad = self.report("verifier", "PASS", attempt=2)
+        self.assertIn("attempt 2, not 1", " ".join(self.ingest(bad, expect=1)["problems"]))
+        bad = self.report("verifier", "APPROVE", findings=[{"sev": "MED", "at": "a.py", "issue": "x"}])
+        probs = " ".join(self.ingest(bad, expect=1)["problems"])
+        self.assertIn("verdict 'APPROVE'", probs)
+        self.assertIn("keys must be exactly", probs)
+        self.assertEqual(self.pre(), [])
+        v = self.report("verifier", "PASS", [finding("MED", "a.py:1", "x")])        # the bad ones overwrote it
+        c = self.report("code-review", "APPROVE", [finding("LOW", "b.py:2", "y")])
+        out = self.ingest(v, c, depth="deep")
+        self.assertEqual((out["action"], out["appended"]), ("promote", 2))
+        self.assertTrue(self.pre()[1].endswith(" · code-review · " + self.pre()[1].split(" · ")[-1]))
+
+    def test_fail_writes_one_rework_file_per_cycle_then_parks_at_the_cap(self):
+        v = self.report("verifier", "FAIL", [finding("HIGH", "src/svc.txt:1", "total can go negative", "Patch"),
+                                             finding("MED", "src/svc.txt:2", "dup")], failures=["AC2 red"])
+        out = self.ingest(v)
+        self.assertEqual((out["action"], out["proof"], out["appended"]), ("rework", False, 1))
+        self.assertEqual(out["rework"], os.path.join(self.feat, "rework", "svc-order-1.md"))
+        text = mismagent.read(out["rework"])
+        for s in ("AC2 red", "total can go negative", "## HIGH findings"):
+            self.assertIn(s, text)
+        self.assertNotIn("dup", text)                                                # a Defer stays in pre-release
+        self.assertEqual(self.ingest(v)["rework"], out["rework"])                    # same attempt: same file
+        other = self.report("verifier", "FAIL", failures=["another"])                # same attempt, other report
+        self.assertIn("already ingested", self.ingest(other, expect=1)["problems"][0])
+        self.assertEqual(len(self.pre()), 1)
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "review-proof", "svc-order.json")))
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc 2\n")
+        c = self.report("code-review", "CHANGES", [finding("HIGH", "src/svc.txt:1", "still", "Patch")], attempt=2)
+        v2 = self.report("verifier", "PASS", attempt=2)
+        out = self.ingest(v2, c, depth="deep", attempt=2)
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "svc-order-2.md"))
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc 3\n")
+        out = self.ingest(self.report("verifier", "FAIL", failures=["AC2 red"], attempt=3), attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("park", None))
+        self.assertIn("rework cap", out["reason"])
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "rework", "svc-order-3.md")))
+        ev = self.put("red.txt", "contract test b-order red\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual((out["ok"], out["action"], out["rework"]), (True, "park", None))   # the same cap
+
+    def test_rework_write_numbers_like_ingest_and_drops_the_proof(self):
+        self.ingest(self.report("verifier", "PASS"))
+        ev = self.put("red.txt", "gate red: 2 failing tests\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "svc-order-1.md"))
+        self.assertIn("gate red: 2 failing tests", mismagent.read(out["rework"]))
+        self.assertIn("candidate-red", mismagent.read(out["rework"]))
+        self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=1)
+        self.compose("start", "svc-order", expect=1)
+        out = self.ingest(self.report("verifier", "FAIL", failures=["x"], attempt=2), attempt=2)
+        self.assertEqual(os.path.basename(out["rework"]), "svc-order-2.md")
+        self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "merge-conflict", "--evidence",
+                      os.path.join(self.tmp, "none.txt"), expect=1)
+        self.run_tool("rework", "write", self.feat, "nope", "--reason", "other", "--evidence", ev, expect=1)
+
+    def test_a_non_promote_outcome_invalidates_the_review_proof(self):
+        cases = [("FAIL", self.report, dict(failures=["AC1 red"]), "rework"),
+                 ("PASS", self.report, dict(findings=[finding("LOW", "a.py:1", "which?", "Decision")]), "decide"),
+                 ("SKIP", self.report, dict(failures=["no runner"]), "blocked")]
+        n = 0
+        for verdict, rep_, kw, action in cases:
+            n += 1
+            out = self.ingest(rep_("verifier", "PASS", attempt=n), attempt=n)
+            self.assertEqual(out["action"], "promote")
+            self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=0)
+            n += 1
+            out = self.ingest(rep_("verifier", verdict, attempt=n, **kw), attempt=n)
+            self.assertEqual((out["action"], out["proof_dropped"]), (action, True), verdict)
+            self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=1)
+            self.compose("start", "svc-order", expect=1)
+
+    def test_malformed_types_are_refused_never_a_crash(self):
+        for over in (dict(reviewer=["verifier"]), dict(reviewer=None), dict(verdict=["PASS"]), dict(attempt="1"),
+                     dict(version="1"), dict(failures="x"), dict(failures=[1]), dict(findings="x"),
+                     dict(findings=[{"sev": 1, "at": "a:1", "issue": "i", "fix": "Defer", "evidence": ""}]),
+                     dict(findings=[{"sev": "LOW", "at": "a:1", "issue": "i", "fix": "Defer", "evidence": None}]),
+                     dict(id=3), dict(sha=None), dict(objections="x"), dict(objections=[{"about": "D-0001"}]),
+                     dict(objections=[{"about": "D-0001", "text": "w " * 41}])):
+            path = self.report("verifier", "PASS")
+            with open(path) as f:
+                r = dict(json.load(f), **over)
+            with open(path, "w") as f:
+                json.dump(r, f)
+            out = self.ingest(path, expect=1)
+            self.assertEqual(out["refused"], "nothing written", over)
+        path = os.path.join(self.rdir, "list.json")
+        with open(path, "w") as f:
+            f.write("[1, 2]")
+        self.assertIn("not a JSON object", self.ingest(path, expect=1)["problems"][0])
+
+    def test_objections_are_returned_compact(self):
+        f = self.report("verifier", "PASS", objections=[{"about": "D-0003", "text": "the cache  key\nignores the tenant"}])
+        out = self.ingest(f)
+        self.assertEqual(out["objections"], [{"reviewer": "verifier", "about": "D-0003",
+                                              "text": "the cache key ignores the tenant"}])
+
+    def test_decision_decides_first_and_skip_is_blocked(self):
+        out = self.ingest(self.report("verifier", "PASS", [finding("MED", "a.py:1", "which rounding?", "Decision")]))
+        self.assertEqual((out["action"], out["proof"], out["appended"]), ("decide", False, 0))
+        self.assertIn("which rounding?", out["reason"])
+        out = self.ingest(self.report("verifier", "PASS", attempt=2), self.report("code-review", "BLOCKED", attempt=2),
+                          depth="deep", attempt=2)
+        self.assertEqual(out["action"], "decide")
+        out = self.ingest(self.report("verifier", "SKIP", failures=["the gate cannot run here"], attempt=3), attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("blocked", None))
+        self.assertIn("the gate cannot run here", out["reason"])
+        out = self.ingest(self.report("verifier", "SKIP", [finding("HIGH", "a.py:1", "which store?", "Decision")],
+                                      failures=["no runner"], attempt=4), attempt=4)
+        self.assertEqual(out["action"], "decide")                                    # a Decision comes first
+        self.assertEqual(glob.glob(os.path.join(self.feat, "rework", "*")), [])
+
+    def group(self):
+        self.put("rework/pre-R0-1-1.md", "---\nrelease: R0\nblocks: [agg-order, svc-order]\nfindings: [abcdefabcdef]"
+                 "\n---\n- [ ] R0 · agg-order · MED · src/a.txt:1 · naming · verifier · 2026-09-24\n"
+                 "- [ ] R0 · svc-order · MED · src/svc.txt:3 · naming · verifier · 2026-09-24\n")
+        wt = self.block_wt("pre-R0-1")
+        self.tip = self.commit(wt, "src/g.txt", "g\n")
+        return wt
+
+    def test_a_release_group_id_is_ingested_on_its_branch_and_retried_identically(self):
+        wt = self.group()
+        f = self.report("verifier", "FAIL", [finding("HIGH", "src/g.txt:1", "broken", "Patch"),
+                                             finding("LOW", "src/svc.txt:9", "style"),
+                                             finding("LOW", "src/other.txt:1", "wording")], bid="pre-R0-1")
+        out = self.ingest(f, bid="pre-R0-1")
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "pre-R0-1-2.md"))
+        self.assertIn("cycle 1 of 2", out["reason"])                                 # -1 is the group's spec
+        pre = self.pre()
+        self.assertTrue(pre[0].startswith("- [ ] R0 · svc-order · LOW · src/svc.txt:9 · [pre-R0-1] style · verifier"))
+        self.assertTrue(pre[1].startswith("- [ ] R0 · agg-order · LOW · src/other.txt:1 · [pre-R0-1] wording"))
+        again = self.ingest(f, bid="pre-R0-1", h="0" * 64)                          # the spec moved with its rework file
+        self.assertEqual(again, dict(out, repeat=True))
+        self.assertEqual(self.pre(), pre)
+        self.assertEqual(len(glob.glob(os.path.join(self.feat, "rework", "pre-R0-1-*.md"))), 2)
+        stale = self.report("verifier", "PASS", bid="pre-R0-1", attempt=2, spec_hash="0" * 64)
+        self.assertIn("not the current spec hash", self.ingest(stale, bid="pre-R0-1", attempt=2, h="0" * 64,
+                                                               expect=1)["problems"][0])
+        self.tip = self.commit(wt, "src/g.txt", "g2\n")
+        out = self.ingest(self.report("verifier", "PASS", bid="pre-R0-1", attempt=2), bid="pre-R0-1", attempt=2)
+        self.assertEqual((out["action"], out["proof"]), ("promote", True))
+        self.review("pre-R0-1", h=self.spec_hash("pre-R0-1"))                        # same proof path as `proof record`
+        h = self.findings_of_release()
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-2", "--lines", h, expect=0)
+
+    def findings_of_release(self):
+        f = [x for x in mismagent.parse_findings(mismagent.Feature(self.feat)) if "[pre-R0-1] style" in x["text"]][0]
+        return "%d:%s" % (f["line"], f["finding"])
+
+    def test_a_release_group_parks_after_two_rework_cycles(self):
+        wt = self.group()
+        for n in (1, 2):
+            out = self.ingest(self.report("verifier", "FAIL", failures=["red %d" % n], bid="pre-R0-1", attempt=n),
+                              bid="pre-R0-1", attempt=n)
+            self.assertEqual(os.path.basename(out["rework"]), "pre-R0-1-%d.md" % (n + 1))
+            self.tip = self.commit(wt, "src/g.txt", "g%d\n" % n)
+        out = self.ingest(self.report("verifier", "FAIL", failures=["red 3"], bid="pre-R0-1", attempt=3),
+                          bid="pre-R0-1", attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("park", None))
+        ev = self.put("red.txt", "red\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "pre-R0-1", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual(out["action"], "park")
+
+    # -- state commit --------------------------------------------------------------------------------
+    def state(self, expect, msg="state"):
+        return self.run_tool("state", "commit", self.feat, "-m", msg, "--integration", "feature/shop", expect=expect)
+
+    def test_state_commit_only_the_output_dir_on_the_integration_checkout(self):
+        self.assertIn("not feature/shop", self.state(1)["refused"])                  # the checkout is on main
+        sh(self.repo, "git", "checkout", "-q", "feature/shop")
+        self.assertEqual(self.state(0), {"ok": True, "committed": False})
+        self.put("gone.md", "x\n")
+        sh(self.repo, "git", "add", ".mismagent")
+        sh(self.repo, "git", "commit", "-q", "-m", "gone")
+        os.remove(os.path.join(self.feat, "gone.md"))
+        self.put("rework/svc-order-1.md", "new\n")
+        self.put("README", "changed\n", base=self.repo)
+        sh(self.repo, "git", "add", "README")
+        out = self.state(1)
+        self.assertEqual(out["outside"], ["README"])
+        sh(self.repo, "git", "reset", "-q", "README")                                # unstaged: left alone
+        out = self.state(0, "bookkeeping")
+        self.assertTrue(out["committed"])
+        self.assertEqual(sorted(out["paths"]), [".mismagent/features/shop/gone.md",
+                                                ".mismagent/features/shop/rework/svc-order-1.md"])
+        self.assertEqual(sh(self.repo, "git", "log", "-1", "--format=%s"), "bookkeeping")
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "feature/shop"), out["sha"])
+        self.assertEqual(sh(self.repo, "git", "status", "--porcelain"), "M README")
+        self.assertEqual(self.state(0), {"ok": True, "committed": False})
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 
@@ -1749,14 +2015,15 @@ class TestPromptInvocations(unittest.TestCase):
 
     @staticmethod
     def argv(rest):
-        """Placeholders → dummies: `<a|b>` → a, `<…>` → x, `record|check` → record, `[opt]` → opt, `GLOB…` → GLOB."""
+        """Placeholders → dummies: `<a|b>` → a, `<…>` → x (`1` after an integer option such as
+        `--attempt`), `record|check` → record, `[opt]` → opt, `GLOB…` → GLOB."""
         rest = re.sub(r"<([^>]*)>", lambda m: m.group(1).split("|")[0] if "|" in m.group(1) else "x", rest)
         out = []
         for tok in shlex.split(rest.replace("[", " ").replace("]", " ")):
             tok = tok.rstrip("…")
             if tok:
                 out.append(tok.split("|")[0] if not tok.startswith("-") else tok)
-        return out
+        return [("1" if out[k - 1] in ("--attempt",) and not t.isdigit() else t) if k else t for k, t in enumerate(out)]
 
     def test_every_invocation_parses(self):
         parser, seen, bad = mismagent.build_parser(), 0, []
@@ -1766,8 +2033,10 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress", "review", "state", "rework") else 1):
                 continue  # a name reference (`MM status`), not an invocation
+            if "--help" in argv or "-h" in argv:
+                continue  # a pointer to a command's help, not an invocation
             seen += 1
             try:
                 with open(os.devnull, "w") as null, redirect_stderr(null):

@@ -9,12 +9,13 @@ autonomously (no interactive confirmations).
 
 ## Input
 - the block's **pack** (`MM pack`): the goal, your block file, the **interfaces of the boundaries**
-  you touch — **only the signature**, **never** the other side's source — the ADRs you must honour
-  with their checks, the lessons for your type, the open
-  MED/LOW findings relevant to your block (advisory, never a contract change);
-- on a rework, the latest `rework/<id>-<n>.md`: fix **those** findings, nothing else — for a release
+  you touch — **only the signature**, never the other side's source — the ADRs to honour with
+  their checks, your type's lessons, the open MED/LOW findings on your block (advisory, never a
+  contract change);
+- on a rework, the latest `rework/<id>-<n>.md` (and the earlier handoffs): fix **those** findings, nothing else — for a release
   group (`pre-<Rn>-<k>`), only in the dirs of the blocks it lists (decision scope `release:<Rn>`);
-- the **working dir** (your block's worktree, on `block/<id>`) and the **side's gate** commands;
+- the **working dir** (your block's worktree, on `block/<id>`), the **side's gate** commands and
+  your **handoff** path;
 - the **profile's `code_rules`** (→ `<output_dir>/code-rules.md`): you **apply** them — the mechanical ones bite in the **gate**
   (its dependency lint, whose config you maintain),
   the discursive ones are the code-review's criteria;
@@ -72,10 +73,10 @@ green: run the **side's gate commands** and re-read the diff against every AC.
 
 **ADR checks the pack marks "THIS block writes it":** write the check at its path with a
 violating fixture it fails and a conforming one it passes (code, not comments), register it in
-the side's gate so it prints its ADR and result, and name it in `DECISIONS`.
+the side's gate so it prints its ADR and result, and name it in a handoff entry.
 
-**Long sessions** (a manifest block with ACs still open — never a release group or a spike; all done
-→ `READY-FOR-REVIEW`): past about 30–40 turns, at a **green AC boundary** (never between a red and
+**Long sessions** (a manifest block with ACs open — never a release group or a spike): past
+about 30–40 turns, at a **green AC boundary** (never between a red and
 its green), commit everything and return `CHECKPOINT` — a context reset, not a failure: a fresh session
 continues in the same worktree from the pack's `## Checkpoint` (from `next`; never redo `done`).
 
@@ -87,20 +88,23 @@ never merge, never the other side. Your
 it, never tick a checkbox**: progress is your tests + the folder position.
 
 ## A slow or hanging build step
-Don't wait it out, loop on it or kill other workers' processes. A step that never returns is a
-**strategy problem**, not a code one: return `BLOCKED` naming the step and what you observed.
+Don't wait it out, loop on it or kill other workers' processes: it is a **strategy problem**, not a
+code one — return `BLOCKED` naming the step and what you observed.
 
-## Outcome (tight return)
+## Handoff and return
+Append each non-obvious choice the spec left open to the **handoff** file, as a decision-note
+entry (`@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md` "Decision notes": title ≤8 words, Question ≤25,
+Decision ≤35, entry ≤220; links relative to `decisions.md`) — no handoff given → in the return.
+Return ≤ 8 short lines:
 ```
 RESULT: READY-FOR-REVIEW | CHECKPOINT | BLOCKED | BOUNCED
 BLOCK: <id>
-BOUNDARY_HONORED: <agg|port|...> (fields confined? predicate exposed? gates honored? yes/no)
 TESTS: <n> green
-PUBLIC_API: <public signatures other blocks use — aggregate/port>
-DECISIONS: <each non-obvious choice the spec left open, as a decision-note entry (`@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md` "Decision notes": title ≤8 words, Question ≤25, Decision ≤35, entry ≤220; links relative to `decisions.md`) | none>
-DEVIATIONS: <where you departed from the spec/pack, one line each | none>
+BOUNDARY_HONORED: <yes/no — fields confined, gates honored>
+DEVIATIONS: <each departure from the spec/pack, one line | none>
 CHECKPOINT: <only with that RESULT — JSON {done: [ACs], next, tests, decisions, deviations}>
-NOTE: <1 sentence — on BLOCKED: the step/cause outside the block>
+NOTE: <1 sentence — the BLOCKED/BOUNCED cause outside the block>
+HANDOFF: <path | none>
 ```
 
 '''

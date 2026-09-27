@@ -2145,6 +2145,13 @@ def cmd_diff_range(a):
     return emit({"base_sha": b, "head_sha": h, "merge_base": mb, "range": "%s..%s" % (mb, h), "files": files})
 
 
+def record_review_proof(feat, bid, s, cur):
+    """F/review-proof/<bid>.json = the reviewed sha + the spec hash (the caller checked it is current)."""
+    path = os.path.join(feat.dir, "review-proof", bid + ".json")
+    write_json(path, {"id": bid, "sha": s, "spec_hash": cur})
+    return path
+
+
 def cmd_proof(a):
     feat = Feature(a.feature_dir)
     repo = feat.repo()
@@ -2152,14 +2159,12 @@ def cmd_proof(a):
         if not a.sha or a.gate is not None or a.gate_files or (a.op == "record") != bool(a.spec_hash):
             raise UsageError("proof record review takes --sha and --spec-hash (the pack's); check takes --sha")
         s = need_sha(repo, a.sha)
-        path = os.path.join(feat.dir, "review-proof", a.id + ".json")
         if a.op == "record":
             cur = spec_hash(feat, a.id)
             if cur != a.spec_hash:  # the reviewers judged another spec than the current one
                 return emit({"refused": "the spec changed since the reviewed pack: re-pack, review again",
                              "reviewed": a.spec_hash, "current": cur}, 1)
-            write_json(path, {"id": a.id, "sha": s, "spec_hash": cur})
-            return emit({"recorded": path, "sha": s})
+            return emit({"recorded": record_review_proof(feat, a.id, s, cur), "sha": s})
         why = review_stale(feat, a.id, s)
         return emit({"fresh": not why, "stale_because": why}, 1 if why else 0)
     if a.gate is None or not a.gate_files or a.sha or a.spec_hash:
@@ -2527,13 +2532,389 @@ def cmd_release(a):
     return emit(r, code)
 
 
+# ---- review ingest: the reviewers' reports → one action (the composer never reads the findings) ------
+REVIEW_VERDICTS = {"verifier": ("PASS", "FAIL", "SKIP"), "code-review": ("APPROVE", "CHANGES", "BLOCKED")}
+DEPTH_REVIEWERS = {"standard": ("verifier",), "deep": ("verifier", "code-review")}
+REPORT_KEYS = ("version", "id", "attempt", "reviewer", "sha", "spec_hash", "verdict", "failures", "findings")
+REPORT_OPTIONAL = ("checks", "notes", "objections")
+REVIEW_FINDING_KEYS = ("sev", "at", "issue", "fix", "evidence")
+REVIEW_SEVS, REVIEW_FIXES = ("HIGH", "MED", "LOW"), ("Patch", "Defer", "Decision")
+REWORK_CAP = 2  # rework cycles per block; a third failed review parks it
+REWORK_REASONS = ("candidate-red", "merge-conflict", "other")
+OBJECTION_CAP = 40  # words
+
+
+def is_int(x):
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def nonempty(x):
+    return isinstance(x, str) and bool(x.strip())
+
+
+def report_problems(r, where):
+    """Shape and type problems of one review report (the schema is CLI.md's): every field is
+    type-checked before it is used, so a malformed report is refused, never a crash."""
+    if not isinstance(r, dict):
+        return ["%s: not a JSON object" % where]
+    out = ["%s: missing %s" % (where, k) for k in REPORT_KEYS if k not in r]
+    out += ["%s: unknown key %s" % (where, k) for k in r if k not in REPORT_KEYS + REPORT_OPTIONAL]
+    if out:
+        return out
+    if not is_int(r["version"]) or r["version"] != 1:
+        out.append("%s: version %r, not 1" % (where, r["version"]))
+    if not is_int(r["attempt"]) or r["attempt"] < 1:
+        out.append("%s: attempt is a positive integer" % where)
+    for k in ("id", "sha", "spec_hash", "reviewer", "verdict"):
+        if not nonempty(r[k]):
+            out.append("%s: %s is a non-empty string" % (where, k))
+    if not isinstance(r["reviewer"], str) or r["reviewer"] not in REVIEW_VERDICTS:
+        return out + ["%s: reviewer %r is not %s" % (where, r["reviewer"], " | ".join(REVIEW_VERDICTS))]
+    if not isinstance(r["verdict"], str) or r["verdict"] not in REVIEW_VERDICTS[r["reviewer"]]:
+        out.append("%s: %s verdict %r is not %s" % (where, r["reviewer"], r["verdict"],
+                                                    " | ".join(REVIEW_VERDICTS[r["reviewer"]])))
+    if not isinstance(r["failures"], list) or not all(nonempty(x) for x in r["failures"]):
+        out.append("%s: failures is a list of non-empty strings" % where)
+    elif r["failures"] and r["verdict"] in ("PASS", "APPROVE"):
+        out.append("%s: verdict %s with %d failures" % (where, r["verdict"], len(r["failures"])))
+    if not isinstance(r["findings"], list):
+        out.append("%s: findings is a list" % where)
+    else:
+        for k, f in enumerate(r["findings"]):
+            at = "%s finding %d" % (where, k)
+            if not isinstance(f, dict) or set(f) != set(REVIEW_FINDING_KEYS):
+                out.append("%s: keys must be exactly %s" % (at, ", ".join(REVIEW_FINDING_KEYS)))
+            elif not isinstance(f["evidence"], str) or not all(nonempty(f[x]) for x in ("sev", "at", "issue", "fix")):
+                out.append("%s: every field is a string; sev, at, issue, fix non-empty" % at)
+            elif f["sev"] not in REVIEW_SEVS:
+                out.append("%s: sev %r is not %s" % (at, f["sev"], " | ".join(REVIEW_SEVS)))
+            elif f["fix"] not in REVIEW_FIXES:
+                out.append("%s: fix %r is not %s" % (at, f["fix"], " | ".join(REVIEW_FIXES)))
+            elif not LOCATOR.match(clean_field(f["at"])):
+                out.append("%s: at %r is not `file:line[-line]` or `path#symbol`" % (at, f["at"]))
+    obj = r.get("objections", [])
+    if not isinstance(obj, list):
+        out.append("%s: objections is a list" % where)
+    else:
+        for k, o in enumerate(obj):
+            if not isinstance(o, dict) or set(o) != {"about", "text"} or not nonempty(o["about"]) \
+                    or not nonempty(o["text"]):
+                out.append("%s objection %d: exactly about and text, non-empty strings" % (where, k))
+            elif len(o["text"].split()) > OBJECTION_CAP:
+                out.append("%s objection %d: text over %d words" % (where, k, OBJECTION_CAP))
+    return out
+
+
+def clean_field(s):
+    """One line, no field separator: safe inside a seven-field pre-release.md line."""
+    return one_line(s).replace("·", "-")
+
+
+def rework_cycles(feat, bid):
+    """([(n, path)] of the rework cycles written, the next n). A pre-release group's rework/<id>-1.md
+    is its spec (`release group`), not a cycle: its cycles are n ≥ 2."""
+    got = []
+    for p in glob.glob(os.path.join(feat.dir, "rework", bid + "-*.md")):
+        m = re.match(r"^%s-(\d+)\.md$" % re.escape(bid), os.path.basename(p))
+        if m:
+            got.append((int(m.group(1)), p))
+    got.sort()
+    cycles = [(n, p) for n, p in got if bid in feat.row or n >= 2]
+    return cycles, (got[-1][0] if got else 0) + 1
+
+
+def rework_next(feat, bid, lines, summary):
+    """Write the next rework/<bid>-<n>.md (the ONE numbering and cap of ingest and `rework write`):
+    ({action: rework, rework, reason} | {action: park, rework: None, reason: "rework cap…"})."""
+    cycles, n = rework_cycles(feat, bid)
+    if len(cycles) >= REWORK_CAP:
+        return {"action": "park", "rework": None, "reason": "rework cap: %d cycles used (%s); %s" % (
+            len(cycles), ", ".join(os.path.relpath(p, feat.dir) for _, p in cycles), summary)}
+    path = os.path.join(feat.dir, "rework", "%s-%d.md" % (bid, n))
+    write_text(path, "\n".join(["# Rework %s — cycle %d" % (bid, n), ""] + lines).rstrip("\n") + "\n")
+    return {"action": "rework", "rework": path, "reason": "%s: cycle %d of %d" % (summary, len(cycles) + 1, REWORK_CAP)}
+
+
+def drop_review_proof(feat, bid):
+    """A non-promote outcome invalidates the block's review proof: `proof check`/`compose start` refuse."""
+    p = os.path.join(feat.dir, "review-proof", bid + ".json")
+    if os.path.isfile(p):
+        os.remove(p)
+        return True
+    return False
+
+
+def review_release(feat, bid):
+    """The release a finding of `bid` is filed under: the block's row, or a group's frontmatter."""
+    if bid in feat.row:
+        rel = feat.row[bid].get("release")
+    else:
+        first = os.path.join(feat.dir, "rework", bid + "-1.md")
+        rel = board.parse_frontmatter(read(first))[0].get("release") if os.path.isfile(first) else None
+    return str(rel) if rel not in (None, "") else None
+
+
+def finding_block(feat, bid, at):
+    """The block a finding of `bid` is filed under. A group's finding names one of its `blocks:` —
+    the one whose grouped lines cite the finding's file, when exactly one does, else the first —
+    so `release group` accepts it later. A legacy group (no blocks) keeps its own id."""
+    if bid in feat.row:
+        return bid
+    first = os.path.join(feat.dir, "rework", bid + "-1.md")
+    if not os.path.isfile(first):
+        return bid
+    fm, body = board.parse_frontmatter(read(first))
+    blocks = [str(b) for b in fm.get("blocks") or []] if isinstance(fm.get("blocks"), list) else []
+    if not blocks:
+        return bid
+    path, cited = locator_path(clean_field(at)), set()
+    for l in body.splitlines():
+        m = PRE_LINE.match(l)
+        parts = [p.strip() for p in m.group(4).split("·")] if m else []
+        if len(parts) >= 4 and parts[1] in blocks and locator_path(parts[3]) == path:
+            cited.add(parts[1])
+    return cited.pop() if len(cited) == 1 else blocks[0]
+
+
+def ingest_marker(feat, bid, attempt):
+    return os.path.join(feat.dir, "review-ingest", "%s-%d.json" % (bid, attempt))
+
+
+def review_ingest(feat, a):
+    """Validate the whole set of reports first (nothing written on any problem), then: file the
+    MED/LOW deferrals in pre-release.md (idempotent, every attempt), and decide ONE action —
+    decide (a Decision finding, a code-review BLOCKED) · blocked (a verifier SKIP) · rework (a FAIL,
+    a HIGH, a CHANGES: one rework/<id>-<n>.md; park once REWORK_CAP cycles exist) · promote (the
+    review proof recorded, as `proof record review`). Every non-promote outcome drops the review
+    proof. The result is recorded per (id, attempt, reports): an identical retry returns it."""
+    repo, bid, problems = feat.repo(), a.id, []
+    S = sha(repo, a.sha)
+    problems += [] if S else ["--sha %s is not a commit" % a.sha]
+    tip = sha(repo, PREFIX + bid)
+    if not tip:
+        problems.append("no branch %s%s" % (PREFIX, bid))
+    elif S and tip != S:
+        problems.append("--sha %s is not the tip of %s%s (%s): review the tip" % (a.sha, PREFIX, bid, tip[:12]))
+    raw = []
+    for path in a.file:
+        try:
+            raw.append((path, open(path, "rb").read()))
+        except OSError as e:
+            problems.append("%s: unreadable (%s)" % (path, e))
+    hashes = sorted(hashlib.sha256(b).hexdigest() for _, b in raw)
+    mpath = ingest_marker(feat, bid, a.attempt)
+    mark = load_json(mpath) if os.path.isfile(mpath) else None
+    if mark and not problems:  # checked BEFORE the spec: a group's own rework file changes its spec
+        if mark.get("reports") == hashes and mark.get("sha") == S and mark.get("depth") == a.depth:
+            return dict(mark.get("result") or {}, repeat=True), 0
+        return {"ok": False, "refused": "nothing written", "problems": [
+            "attempt %d of %s was already ingested with other reports (or sha, depth): a new review is a new "
+            "attempt" % (a.attempt, bid)]}, 1
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError as e:
+        cur = None
+        problems.append(str(e))
+    if cur and a.spec_hash != cur:
+        problems.append("--spec-hash is not the current spec hash (%s): the spec changed since the reviewed "
+                        "pack — re-pack, review again" % cur[:12])
+    reports, seen = [], {}
+    for path, b in raw:
+        where = os.path.basename(path)
+        try:
+            r = json.loads(b.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as e:
+            problems.append("%s: unreadable JSON (%s)" % (path, e))
+            continue
+        bad = report_problems(r, where)
+        if bad:
+            problems += bad
+            continue
+        problems += ["%s: id %s, not %s" % (where, r["id"], bid)] if r["id"] != bid else []
+        problems += ["%s: attempt %s, not %s" % (where, r["attempt"], a.attempt)] if r["attempt"] != a.attempt else []
+        if S and sha(repo, r["sha"]) != S:
+            problems.append("%s: sha %s is not --sha %s" % (where, r["sha"], S[:12]))
+        problems += ["%s: spec_hash is not --spec-hash" % where] if r["spec_hash"] != a.spec_hash else []
+        if r["reviewer"] in seen:
+            problems.append("%s: a second %s report (%s)" % (where, r["reviewer"], seen[r["reviewer"]]))
+        seen[r["reviewer"]] = where
+        reports.append((path, r))
+    need = DEPTH_REVIEWERS[a.depth]
+    problems += ["depth %s requires a %s report" % (a.depth, x) for x in need if x not in seen]
+    problems += ["depth %s takes no %s report" % (a.depth, x) for x in seen if x not in need]
+    rel = review_release(feat, bid)
+    deferred = [(r["reviewer"], f) for _, r in reports for f in r["findings"]
+                if f["sev"] in ("MED", "LOW") and f["fix"] != "Decision"]
+    if deferred and not rel:
+        problems.append("%s has no release: its MED/LOW findings cannot be filed in pre-release.md" % bid)
+    if problems:
+        return {"ok": False, "refused": "nothing written", "problems": problems}, 1
+
+    # -- deferrals: every attempt's, each finding once (release, block, sev, at, issue)
+    ppath = os.path.join(feat.dir, "pre-release.md")
+    have = {tuple(f[k] for k in ("release", "block", "sev", "locator", "issue"))
+            for f in parse_findings(feat) if "finding" in f}
+    today, new = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"), []
+    tag = "" if bid in feat.row else "[%s] " % bid  # a group's finding keeps the group id in its issue
+    for reviewer, f in deferred:
+        key = (rel, finding_block(feat, bid, f["at"]), f["sev"], clean_field(f["at"]), tag + clean_field(f["issue"]))
+        if key not in have:
+            have.add(key)
+            new.append("- [ ] %s" % " · ".join(key + (reviewer, today)))
+    if new:
+        old = read(ppath) if os.path.isfile(ppath) else "# Pre-release findings\n\n"
+        write_text(ppath, old + ("" if old.endswith("\n") else "\n") + "\n".join(new) + "\n")
+
+    allf = [(r["reviewer"], f) for _, r in reports for f in r["findings"]]
+    fails = [(r["reviewer"], x) for _, r in reports for x in r["failures"]]
+    counts = {s: sum(1 for _, f in allf if f["sev"] == s) for s in REVIEW_SEVS}
+    counts["failures"] = len(fails)
+    verdicts = {r["reviewer"]: r["verdict"] for _, r in reports}
+    vtext = " · ".join("%s %s" % kv for kv in sorted(verdicts.items()))
+    out = {"ok": True, "action": None, "reason": None, "rework": None, "counts": counts, "appended": len(new),
+           "proof": False, "objections": [dict(reviewer=r["reviewer"], about=one_line(o["about"]), text=one_line(o["text"]))
+                                          for _, r in reports for o in r.get("objections") or []]}
+    brief = lambda items: "; ".join(("%s %s" % (w, clean_field(t))).strip()[:160] for w, t in items[:3]) + \
+        (" (+%d more)" % (len(items) - 3) if len(items) > 3 else "")
+    decisions = [(f["at"], f["issue"]) for _, f in allf if f["fix"] == "Decision"]
+    high = [(rv, f) for rv, f in allf if f["sev"] == "HIGH"]
+    patch = [(rv, f) for rv, f in allf if f["sev"] != "HIGH" and f["fix"] == "Patch"]
+    if decisions or verdicts.get("code-review") == "BLOCKED":
+        out.update(action="decide", reason="a human/product choice: " + (
+            brief(decisions) or "code-review BLOCKED — see " + seen.get("code-review", "")))
+    elif verdicts.get("verifier") == "SKIP":
+        out.update(action="blocked", reason="verifier SKIP (a strategy problem outside the block): " +
+                   (brief([("", x) for rv, x in fails if rv == "verifier"]) or "see " + seen["verifier"]))
+    elif fails or high or verdicts.get("verifier") == "FAIL" or verdicts.get("code-review") == "CHANGES":
+        body = ["review: attempt %d · sha %s · spec %s" % (a.attempt, S, a.spec_hash), "verdicts: " + vtext,
+                "reports: " + " · ".join(p for p, _ in reports), ""]
+        if fails:
+            body += ["## Failures", ""] + ["- [%s] %s" % (rv, one_line(x)) for rv, x in fails] + [""]
+        if high:
+            body += ["## HIGH findings", ""] + ["- [%s] %s · %s — fix: %s. Evidence: %s" % (
+                rv, f["at"], one_line(f["issue"]), f["fix"], one_line(f["evidence"]) or "-") for rv, f in high] + [""]
+        if patch:
+            body += ["## MED/LOW to patch in this cycle (also filed in pre-release.md)", ""] + [
+                "- [%s] %s · %s · %s. Evidence: %s" % (rv, f["sev"], f["at"], one_line(f["issue"]),
+                                                      one_line(f["evidence"]) or "-") for rv, f in patch] + [""]
+        out.update(rework_next(feat, bid, body, "%d failures, %d HIGH (%s)" % (len(fails), len(high), vtext)))
+    else:
+        record_review_proof(feat, bid, S, cur)
+        out.update(action="promote", reason="every report passes (%s), no HIGH" % vtext, proof=True)
+    if out["action"] != "promote":
+        out["proof_dropped"] = drop_review_proof(feat, bid)
+    write_json(mpath, {"id": bid, "attempt": a.attempt, "depth": a.depth, "sha": S, "reports": hashes,
+                       "result": out})
+    return out, 0
+
+
+def cmd_review(a):
+    return emit(*review_ingest(Feature(a.feature_dir), a))
+
+
+def rework_write(feat, a):
+    """A rework cycle that is not a review's (a red candidate, a merge conflict): the next
+    rework/<id>-<n>.md under the same numbering and cap as `review ingest`; drops the review proof."""
+    try:
+        spec_hash(feat, a.id)  # a block, or a group with its rework/<id>-1.md
+    except UsageError as e:
+        return {"ok": False, "refused": "nothing written", "problems": [str(e)]}, 1
+    try:
+        ev = sys.stdin.read() if a.evidence == "-" else read(a.evidence)
+    except OSError as e:
+        return {"ok": False, "refused": "nothing written", "problems": ["--evidence: %s" % e]}, 1
+    if not ev.strip():
+        return {"ok": False, "refused": "nothing written", "problems": ["--evidence is empty"]}, 1
+    out = rework_next(feat, a.id, ["reason: %s" % a.reason, "", "## Evidence", "", ev.strip(), ""], a.reason)
+    out = dict({"ok": True}, **out)
+    out["proof_dropped"] = drop_review_proof(feat, a.id)
+    return out, 0
+
+
+def cmd_rework(a):
+    return emit(*rework_write(Feature(a.feature_dir), a))
+
+
+# ---- state commit: the composer's bookkeeping, exactly <output_dir>, on the integration line --------
+def state_commit(feat, a):
+    repo = feat.repo()
+    rel = os.path.relpath(feat.odir, repo)
+    if rel == "." or rel.startswith(".."):
+        return {"ok": False, "refused": "the output_dir %s is not a directory strictly inside the repository %s"
+                % (feat.odir, repo)}, 1
+    head = git(repo, "symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
+    if head != a.integration:
+        return {"ok": False, "refused": "the checkout of F (%s) is on %s, not %s" % (
+            repo, head or "a detached HEAD", a.integration)}, 1
+    if open_candidates(repo):
+        return {"ok": False, "refused": "a candidate is open: commit before compose start or after compose "
+                "promote, never between", "open": open_candidates(repo)}, 1
+    def staged():  # every staged path (added, modified, deleted), unquoted
+        parts = git(repo, "diff", "--cached", "--name-only", "--no-renames", "-z").stdout.split("\0")
+        return [p for p in parts if p]
+    prefix = rel.replace(os.sep, "/").rstrip("/") + "/"
+    outside = [p for p in staged() if not p.startswith(prefix)]
+    if outside:
+        return {"ok": False, "refused": "changes outside %s are staged: unstage them (never committed with the "
+                "state)" % prefix, "outside": outside}, 1
+    git(repo, "add", "-A", "--", rel)
+    paths = staged()
+    if not paths:
+        return {"ok": True, "committed": False}, 0
+    c = git(repo, "commit", "-q", "-m", a.m, check=False)
+    if c.returncode:
+        return {"ok": False, "refused": "git commit failed: %s" % (c.stderr or c.stdout).strip(), "paths": paths}, 1
+    return {"ok": True, "committed": True, "sha": sha(repo, "HEAD"), "paths": paths}, 0
+
+
+def cmd_state(a):
+    return emit(*state_commit(Feature(a.feature_dir), a))
+
+
 # ---- CLI ----------------------------------------------------------------------------------------
+HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact semantics are CLI.md's
+    "status": "Read-only. Lists anomalies (doing without worktree, leftover candidate, stale review proof, ...),\n"
+              "the outcome (done|work|idle|anomaly) and the resume blocks. Exit 1 if any anomaly.",
+    "lint": "Read-only. The exact structural checks of the manifest, block files, ADRs, decisions.md and\n"
+            "pre-release.md; each gap names its bounce_to. --adrs DIR: the ADRs alone. Exit 1 on a gap.",
+    "why": "check: validate a decision-notes file (read-only). append: add an entry file's D-NNNN entries only\n"
+           "if the whole file still passes (identical = no-op; only Debate/Result/ADR updates); else nothing written.",
+    "manifest": "render: write every block file from its building-blocks.yaml row (state folder kept, identical\n"
+                "files untouched); an incomplete row, a duplicate or a context change refuses, writing nothing.",
+    "ready": "Read-only. Blocks in todo/ whose dependencies are integrated, in build order (scaffold first),\n"
+             "plus finishable blocks, open spikes and resume blocks.",
+    "move": "Moves a block file todo->doing, doing->todo, doing->done (only if finishable), git mv if tracked;\n"
+            "done deletes its progress. Anything else: ok:false + refused, nothing moved (exit 1).",
+    "pack": "Read-only. Prints the block's context (Markdown) headed by spec_hash: block, row, boundaries, ADRs,\n"
+            "lessons, decision notes, open findings, a fresh checkpoint, --extra files.",
+    "progress": "record: write F/progress/<id>.json (a worker's checkpoint) atomically. Refused, nothing written:\n"
+                "not in doing/, head not block/<id>'s tip, dirty worktree, spec changed, no progress.",
+    "diff-range": "Read-only. The review range from the merge-base of --base and --head (run in the repo).",
+    "proof": "record review: write F/review-proof/<id>.json (refused if --spec-hash is not the current one).\n"
+             "record gate: F/gate-proof/<side>/proof.json. check: fresh or stale_because (exit 1 when stale).",
+    "compose": "start: candidate worktree = line tip + --branch (refused without a fresh review proof, or while a\n"
+               "candidate is open). promote: fast-forward the line, write integrated/<id>.json. abort: remove it.",
+    "release": "list: the release evaluation (read-only). group: write rework/pre-<Rn>-<k>-1.md. close|waive:\n"
+               "append records + flip marks, the whole batch validated first. confirm: ff the base + tag (consent).",
+    "review": "ingest: validate the reviewers' JSON reports (full set for --depth, same id/attempt/sha/spec_hash;\n"
+              "--sha the tip of block/<id>, --spec-hash current), else nothing written. Files MED/LOW in pre-release.md\n"
+              "(idempotent), then ONE action: promote (review proof written) | rework (rework/<id>-<n>.md) | park\n"
+              "(rework cap) | decide | blocked; a non-promote action drops the review proof. An identical retry\n"
+              "of an attempt returns its recorded result.",
+    "rework": "write: the next rework/<id>-<n>.md (same numbering and 2-cycle cap as review ingest; a group's -1\n"
+              "is its spec) from --evidence; at the cap: action park, nothing written. Drops the review proof.",
+    "state": "commit: on the checkout of F, on --integration only, no candidate open: stage every change under\n"
+             "<output_dir> and commit it; refused if anything outside it is staged. Nothing to commit: committed:false.",
+}
+
+
 def build_parser():
-    ap = argparse.ArgumentParser(prog="mismagent.py", description="mismAgent build tool — see CLI.md")
+    ap = argparse.ArgumentParser(prog="mismagent.py", description="mismAgent build tool — `<command> --help` for "
+                                 "each; exact semantics in CLI.md")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def cmd(name, fn, hlp, *pos):
-        p = sub.add_parser(name, help=hlp)
+        p = sub.add_parser(name, help=hlp, description=HELP[name], formatter_class=argparse.RawDescriptionHelpFormatter)
         for x in pos:
             p.add_argument(x) if isinstance(x, str) else p.add_argument(x[0], choices=x[1])
         p.set_defaults(fn=fn)
@@ -2572,6 +2953,22 @@ def build_parser():
         p.add_argument(opt)
     p.add_argument("--lines", nargs="*")
     p.add_argument("--replace", nargs="+")
+    p = cmd("review", cmd_review, "ingest the reviewers' reports into one action", ("op", ("ingest",)), "feature_dir",
+            "id")
+    p.add_argument("--attempt", type=int, required=True, help="the review attempt the reports carry")
+    p.add_argument("--depth", choices=tuple(DEPTH_REVIEWERS), required=True,
+                   help="standard: a verifier report; deep: verifier + code-review")
+    p.add_argument("--file", action="extend", nargs="+", required=True, help="a reviewer's report (one per reviewer)")
+    p.add_argument("--sha", required=True, help="the reviewed head: the tip of block/<id>")
+    p.add_argument("--spec-hash", required=True, help="the reviewed pack's spec_hash")
+    p = cmd("rework", cmd_rework, "write the next rework file (a red candidate, a merge conflict)",
+            ("op", ("write",)), "feature_dir", "id")
+    p.add_argument("--reason", choices=REWORK_REASONS, required=True)
+    p.add_argument("--evidence", required=True, help="a file, or - for stdin")
+    p = cmd("state", cmd_state, "commit the state under <output_dir> on the integration line", ("op", ("commit",)),
+            "feature_dir")
+    p.add_argument("-m", required=True, metavar="MESSAGE")
+    p.add_argument("--integration", required=True)
     return ap
 
 

@@ -56,7 +56,8 @@ python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated cla
   unreadable → stop `cli-version` before any firing.
 - **When to stop** — after each firing it reads `mismagent.py status F --integration B` (`outcome`),
   never the report text (also once before the first firing): `done` · `idle` (only work waiting on a
-  decision or an external condition) · `anomaly` · `no-progress` (two consecutive firings changed no
+  decision or an external condition — a release awaiting the user's confirmation, a release with no
+  blocks yet) · `anomaly` · `no-progress` (two consecutive firings changed no
   structural state: state folders, block files and manifest, `integrated/`, review proofs, `rework/`,
   open questions, `pre-release.md`, spike evidence (content), the trees of the `block/*`/`spike/*` branch tips,
   the uncommitted changes (`git status --porcelain` + content) of their worktrees — timestamps,

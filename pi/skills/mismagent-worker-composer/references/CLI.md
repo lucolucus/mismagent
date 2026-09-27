@@ -13,12 +13,12 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 
 | Command | Output |
 |---|---|
-| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…]}` — exit 1 if any anomaly |
+| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
 | `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
-| `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}]}` |
+| `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
@@ -26,6 +26,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM proof record F gate <side> --gate TEXT --gate-files GLOB…` · `MM proof check F gate <side> --gate TEXT --gate-files GLOB…` | `{recorded, proof[, warnings]}` · `{fresh, stale_because, proof}` |
 | `MM compose start F <id> --integration B --branch X` | `{candidate_path, candidate_sha, base_sha, branch_sha}` or `{refused}` |
 | `MM compose promote F <id>` · `MM compose abort F <id>` | `{promoted, integration_sha}` · `{aborted, kept_branch}` |
+| `MM release list F <Rn> --integration B` | `{release, sha, blocks:[{id, state, integrated}], blocking, advisory, waived, closed, waiting, errors, gaps, releasable, confirmed}` — read-only |
+| `MM release close F <Rn> --entries <json> [--replace <finding>…]` · `MM release waive F <Rn> --entries <json> [--replace <finding>…]` | `{ok:true, release, action, lines, findings, replaced, file}` or `{ok:false, refused, problems}` |
+| `MM release group F <Rn> --id pre-<Rn>-<k> --lines <line>:<finding>…` | `{ok:true, id, file, blocks, findings, context, unchanged}` or `{ok:false, refused, problems}` |
+| `MM release confirm F <Rn> --integration B --sha S --tag TAG --merge-to BASE --base-sha T --by <user> --consent <ref>` | `{ok:true, confirmed, release, sha, tag, merge_to, base_sha_before, partial, unchanged}` or `{ok:false, refused, problems}` |
 
 ## Exact semantics
 
@@ -42,14 +46,20 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `stale_review_proof` (its `spec_hash` differs from the current one) · `done_unwelded` (in `done/`,
   not finishable) · `lint_gap` (checked only before `done`/`idle`: a `lint` gap of rule `ids.*`,
   `consumes.boundary`, `boundary.owner`, `after.*`, `blockfile.exists|unique|orphan`, `spikes.*` —
-  `id` = the rule). Read-only. **outcome** (for a runner; computed with `ready`'s rules): `anomaly`
+  `id` = the rule). Read-only. **outcome** (for a runner; computed with `ready`'s rules and the ONE
+  release evaluation below): `anomaly`
   (any of the above) · `work` — something to do now (`work` lists it): a `ready` or `finishable`
-  block, a block in `doing/` not integrated, a `central` spike in `backlog/`/`todo/`, or in `doing/` with its worktree but no evidence yet, a cleanup node
-  in `todo/`/`doing/`, an open `pre-release.md` line whose release has every block in `done/` ·
+  block, a `resume` block, a `central` spike in `backlog/`/`todo/`, or in `doing/` with its worktree but no evidence yet, a cleanup node
+  in `todo/`/`doing/`, a release whose blocks are all done and integrated with a blocking line, a release
+  with record ↔ mark `gaps` (whatever its blocks' state: the composer repairs them) ·
   `idle` — only work waiting on a decision or an external condition (`waiting` lists it: parked
-  blocks and what they hold up, an open question, a spike not yet closed — a `central` one only once its evidence exists —, a cleanup's `ready_when`)
-  · `done` — every block in `done/`, no open `pre-release.md` line, no spike/cleanup node outside
-  `done/`, no open question. `ready: []` alone is never `idle`.
+  blocks and what they hold up, an open question, a spike not yet closed — a `central` one only once its evidence exists —, a cleanup's `ready_when`,
+  a release with no blocks (its lines wait), a releasable release awaiting the user's `release confirm`)
+  · `done` — every block in `done/`, every release confirmed, no spike/cleanup node outside
+  `done/`, no open question (open LOW lines never prevent it). `ready: []` alone is never `idle`.
+- **resume** (`status` and `ready`) = each block in `doing/` not integrated, with its branch, its
+  worktree (null if none) and the count of uncommitted changes there: facts, never a diagnosis — a
+  dirty tree with no commit also describes a worker still running.
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
@@ -71,7 +81,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   is yours). Files without a row are listed as `orphans`, untouched. It writes documents only: the
   decisions and criteria are the row's.
 - **why append** adds the entry file's `### D-NNNN` entries (their ids as written, nothing assigned)
-  only if the whole file then passes `why check`; an identical entry already present is a no-op. The
+  only if the whole file then passes `why check` and — when the file sits beside a manifest — each
+  added or updated entry's scope names a row or release of it (else `meta.scope`, nothing written;
+  a wrong scope already in history is fixed by a new entry that `Supersedes` it, never by an edit);
+  an identical entry already present is a no-op. The
   same id with other content is an **update**, replaced in place, only when it changes nothing but
   `Debate`/`Result` and adds an `ADR:` backlink (an existing one kept); anything else is refused. An
   entry that `Supersedes` an accepted one flips its `status` to `superseded`. Refused → nothing written.
@@ -90,7 +103,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `[~]` waived left out; advisory, a block's pack only), and each
   `--extra` file, under a first line `spec_hash: <h>`. `spec_hash` hashes the block file's **content** (not its folder), so a state move
   never makes a proof stale; `after:` is build order, not spec: out of the row's hash and of the rendered file. An id that is not a block (a pre-release group) has its
-  `F/rework/<id>-*.md` files as its spec, and its pack is those files.
+  `F/rework/<id>-*.md` files as its spec plus — when `<id>-1.md` has `blocks:` frontmatter (`release group`) —
+  those blocks' files and rows and the boundaries and ADRs they resolve, **each once**; its ONE pack
+  is the rework files, those blocks, boundaries, ADRs and types' lessons (each once), and the notes
+  scoped `release:<Rn>` or to those blocks. A group without frontmatter (legacy) is its rework files alone.
 - **diff-range**: `range` = `<merge_base>..<head_sha>` (≡ `B...X`): files the line gained after the
   branch was cut never show as deleted by the block.
 - **review proof** `F/review-proof/<id>.json` = `{sha, spec_hash}`. `record` refuses unless
@@ -115,6 +131,57 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   removes whatever exists of the candidate (worktree, directory, metadata) — also a half-created one
   — and keeps `candidate/<id>` as evidence. No revert, no timeout. Candidates live in the
   git-common-dir; block worktrees and packs do not (`LOOP.md`, Worktrees).
+
+## Releases — `F/pre-release.md`, records, confirm
+
+**Line** (one per deferred finding): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
+`<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]` or `path#symbol` (a symbol does not
+rot). Marks: `[ ]` open · `[x]` closed · `[~]` waived — flipped only by `release close|waive`; text
+after the seventh field is an annotation. **Identity** = a hash of the seven fields (`finding`, 12
+hex), never the mark, the line number or an annotation: the line number only **selects**, and every
+command takes both (a line that is now another finding is refused — re-read `release list`).
+
+**Evaluation** (ONE function: `status`, `release list`, `release confirm`) of Rn on `B`'s tip:
+`blocking` = each Rn line that is open HIGH/FAIL/MED, malformed, a HIGH/FAIL marked `[~]`, or marked
+without a valid last record · a close record holds while its `sha` is on `B`, its evidence names the
+finding, and the locator's file is unchanged between that `sha` and `B` (a records-only commit
+stales nothing; a code change asks for a new verification) · `advisory` = the open LOW lines of Rn
+and of every earlier release (a **view** with their `release`; never copied, never work) · `waived` /
+`closed` = lines freed by a valid record · `waiting` = Rn has no blocks, or a block not done and
+integrated (its `integrated/` record's `sha` a commit on `B`) · `gaps` = Rn's `release.*` lint gaps
+(records ↔ marks) · `releasable` ⇔ blocks non-empty ∧ none waiting ∧ nothing blocking ∧ readable
+records ∧ no gaps ·
+`confirmed` = a `release confirm` tag of Rn whose commit is on its merge-to branch.
+
+**close / waive** `--entries` = a JSON array (inline or a file). close: `{line, finding, sha, by,
+evidence}` — `sha` a commit (stored resolved), `evidence` = `release-evidence/<Rn>.md[#anchor]`, a
+file that names the finding (per finding: sha, current location, the verification run, its result).
+waive: `{line, finding, by, consent, reason, risk, revisit}` — `by` the deciding user, `consent` a
+reference to the message; a HIGH/FAIL is never waived, a closed line neither. Exactly these keys,
+non-empty. The **whole batch** is validated first (keys, selector, release, duplicates, sha,
+evidence); any problem → nothing written. Then the records are appended — `action` and `at` set by
+the tool — to the ONE ```json block `{"records": [...]}` of `F/release-decisions/<Rn>.md` (prose
+around it, e.g. a legacy file, kept), and the marks flip. The last record of a finding is its
+current one (a re-verification appends). An invalid record already in the file is refused (nothing
+written) unless its finding is in `--replace`: each `--replace` finding (one of the batch) has its
+earlier records, valid or not, dropped before the new one is appended — the repair path.
+
+**group** writes `F/rework/<id>-1.md` (`<id>` = `pre-<Rn>-<k>`): frontmatter `release`, `blocks`,
+`findings` (the hashes), then the selected lines copied. `--lines` takes `<line>:<finding>` pairs
+(from `release list`). Refused: a line that is now another finding, a line not open or not of Rn, a
+block not in the manifest, lines across contexts (or `side:` values), a finding already in another
+group, an existing file with other content (an identical one: `unchanged`).
+
+**confirm** — preflight, all of it, nothing written on any failure: `S` is `B`'s tip; Rn releasable
+and its `release.*` lint clean; the checkout of `F` is on `B` and clean; `BASE`'s checkout (if any)
+clean; `BASE` at `T` with `T` an ancestor of `S` (else diverged: stop, never a new merge) — or already
+at `S`; `TAG` a valid tag name (`git check-ref-format`), absent or already THIS confirmation's tag —
+same release, `S`, `BASE`, `T`, `B`, `--by`, `--consent` (else collision); `--by`, `--consent`
+non-empty. Then `BASE` is fast-forwarded to `S` (compare-and-swap; `merge --ff-only` in its checkout)
+and an annotated `TAG` is put on `S`, its message carrying `mismagent-release: <feature>/<Rn>`,
+`integration: B @ S`, `merge-to: BASE (from T)`, `decided:`, `consent:`. An identical repeat is
+`unchanged`; a half-done one (merge or tag already there) is completed and named in `partial`. Never
+a push. Tag + ancestry are the confirmation: no flag is written.
 
 ## lint — the exact checks (nothing else)
 Each gap names its `bounce_to` (`build-manifest` unless noted).
@@ -141,7 +208,9 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `render.input` · `blockfile.render` | `manifest: rendered` (some row has `what:`), for every row: its render inputs are complete and its file equals `manifest render`'s output. `legacy` (no row has `what:`): hand-written files, no render check — never forced to render |
 | `after.block` · `after.cycle` | `after` is a list of other block ids; no cycle in the "waits for" graph (`after` ∪ the owners of consumed boundaries) |
 | `manifest.build_order` | no `build_order:` (read by nothing; order with `after:`) |
-| `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:` scope names a row of the manifest → `recorder` (who wrote the entry) |
+| `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:`/`release:` scope names a row / a release of the manifest → `recorder` (who wrote the entry) |
+| `release.finding` | every `- [ ]` line of `pre-release.md` has the seven fields, a severity, a locator → `composer` |
+| `release.record` · `release.unverified` · `release.record_orphan` | `release-decisions/<Rn>.md` holds at most one readable ```json block of valid records; every `[x]`/`[~]` line's last record is a `close`/`waive` (a legacy mark with none: kept, flagged unverified); every record names a line of its release carrying its mark → `composer` |
 | `spikes.central_node` · `spikes.central_flag` | each open `[ ]` entry of the context map's `## Open spikes` with `owner: <this feature>` and `central: true` has a `type: spike` node carrying `central: true` |
 
 `MM lint --adrs <dir>` (before any manifest; → `architect`): `adr.filename` (`NNNN-<slug>.md`),
@@ -186,7 +255,7 @@ dumps, ordinary findings, backlog, open questions, progress, approvals.
 **Format** — one physical line per field, ≤220 words per entry (URLs excluded), title ≤8 words:
 | field | required content (word cap) |
 |---|---|
-| `Meta` | `<ISO date>; scope: feature\|block:<id>\|boundary:<id>; status: accepted\|superseded[; sha: <commit>]` — sha when the choice concerns reviewed code |
+| `Meta` | `<ISO date>; scope: feature\|block:<id>\|boundary:<id>\|release:<Rn>; status: accepted\|superseded[; sha: <commit>]` — sha when the choice concerns reviewed code; `release:<Rn>` for a pre-release change |
 | `Question` | the problem and its decisive constraint (25) |
 | `Options` | 2–3 real alternatives and why each loses (40) |
 | `Hypothesis` | a testable prediction, stated before the check (25) — or, with `Check` and `Result`, the short form below |

@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.22.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.23.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -224,6 +224,12 @@ another feature's work for a gap in yours.
 > handled (a headless run no longer loses a worker); per-block `after:` replaces `build_order` (tolerated
 > on legacy manifests); the pack carries open MED/LOW findings; `status` reports done/idle/work/anomaly;
 > `bench/run.py` re-invokes the composer headless until done or idle, with a cost cap.
+>
+> **v0.23.0 — the release path:** HIGH blocks at review; MED is fixed or waived by the user; LOW is
+> advisory and never blocks. `release list|close|waive|group|confirm` replace the hand-kept lists:
+> already-satisfied lines are closed on a reviewer's evidence (no worker), waivers are recorded with
+> reason, risk and consent, and `release confirm` fast-forwards the base and tags the commit only with
+> the user's explicit consent (never pushes). The composer resumes blocks left in `doing` first.
 
 ## Going deeper
 

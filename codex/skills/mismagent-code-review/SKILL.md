@@ -47,17 +47,16 @@ design problem, judge it with the one `craft` reference that fits it — `clean-
 ## Triage of every finding
 - **Severity:** `HIGH` — evidence of a correctness/security error or an AC/contract not satisfied:
   concrete scenario, code location, consequence (blocks the merge) · `MED` — a
-  concrete maintenance problem or a violated discursive rule, no HIGH harm shown (fixed before the
-  release) · `LOW` — a motivated local improvement.
+  concrete maintenance problem or a violated discursive rule, no HIGH harm shown (fixed or waived by
+  the user before the release) · `LOW` — a motivated local improvement, advisory; a LOW showing
+  an AC/contract/security violation is misclassified: reclassify it.
   An ambiguous public name alone is not HIGH; it joins a HIGH when it hides a demonstrable
   violation (seconds where the contract says milliseconds). A wrong substitution (LSP) can be HIGH;
   SRP/OCP/DRY are not HIGH by themselves.
-- **Disposition:** `Patch` (the worker fixes it now — **HIGH only**) · `Defer` (every MED/LOW, and
-  future work: the worker-composer writes it to the feature's **`pre-release.md`**, which the
-  release empties; a research unknown becomes a `spike` node via `write-task`) · `Decision` (a
-  human/product choice is needed: do not invent it).
-- **Only HIGH blocks**; a MED/LOW is never `Patch`, however cheap — severity is the harm, not the
-  convenience.
+- **Disposition:** `Patch` (the worker fixes it now — **HIGH only**) · `Defer` (every MED/LOW:
+  the feature's **`pre-release.md`**; a research unknown becomes a `spike` node via `write-task`) ·
+  `Decision` (a human/product choice is needed: do not invent it).
+- **Only HIGH blocks** the merge: severity is the harm, not the convenience.
 
 ## Outcome — strict handoff
 ```

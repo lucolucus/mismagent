@@ -1061,10 +1061,17 @@ class TestV022(Base):
             self.integrate(bid)
         for bid in ("agg-order", "svc-order", "rm-orders", "svc-report"):
             self.run_tool("move", self.feat, bid, "--to", "done", expect=0)
-        self.assertEqual(self.status()["outcome"], "done")
+        out = self.status()
+        self.assertEqual(out["outcome"], "idle")                               # both releases await the user
+        self.assertIn("release R0: releasable, awaiting the user's confirmation (`release confirm`)", out["waiting"])
         self.put("pre-release.md", "- [ ] R1 · rm-orders · MED · a.py:1 · x · v · d\n")
-        self.assertEqual(self.status()["outcome"], "work")                     # R1 is done: its group runs
+        self.assertEqual(self.status()["outcome"], "work")                     # R1 is done: its MED is work
         self.put("pre-release.md", "- [~] R1 · rm-orders · MED · a.py:1 · x · v · d · waived: ok\n")
+        self.assertEqual(self.status()["outcome"], "work")                     # a legacy waiver frees nothing
+        self.put("pre-release.md", "- [ ] R1 · rm-orders · MED · a.py:1 · x · v · d\n")
+        h = mismagent.finding_id(["R1", "rm-orders", "MED", "a.py:1", "x", "v", "d"])
+        self.run_tool("release", "waive", self.feat, "R1", "--entries", json.dumps([dict(
+            line=1, finding=h, by="Ada", consent="msg-7", reason="cosmetic", risk="none", revisit="R2")]), expect=0)
         self.put("tasks/be/backlog/s.md", "---\nid: s\ntype: spike\n---\n# S\n")
         self.assertEqual(self.status()["outcome"], "idle")                     # a spike waits on a decision
         self.put("tasks/be/backlog/s.md", "---\nid: s\ntype: spike\ncentral: true\n---\n# S\n")
@@ -1073,7 +1080,7 @@ class TestV022(Base):
         self.put("tasks/be/backlog/c.md", "---\nid: c\ntype: cleanup\nready_when: \"no-consumer-uses:X\"\n---\n")
         self.assertEqual(self.status()["outcome"], "idle")                     # waits on its condition
         os.remove(os.path.join(self.feat, "tasks", "be", "backlog", "c.md"))
-        self.assertEqual(self.status()["outcome"], "done")
+        self.assertEqual(self.status()["outcome"], "idle")                     # awaiting confirmation
         self.put("integrated/ghost.json", json.dumps({"sha": "0" * 40}))
         self.assertEqual(self.status(expect=1)["outcome"], "anomaly")
 
@@ -1086,7 +1093,7 @@ class TestV022(Base):
             self.integrate(bid)
         for bid in blocks:
             self.run_tool("move", self.feat, bid, "--to", "done", expect=0)
-        self.assertEqual(self.status()["outcome"], "done")
+        self.assertEqual(self.status()["outcome"], "idle")                     # releases await confirmation
 
     def test_terminal_outcome_runs_lint_first(self):
         self.all_done()
@@ -1117,6 +1124,367 @@ class TestV022(Base):
         sh(self.repo, "git", "worktree", "remove", "--force", wt)
         self.put("spikes/s.md", "evidence\n")
         self.assertEqual(self.status()["outcome"], "idle")                     # waits on the user's closure
+
+
+def fline(rel, bid, sev, loc, issue, mark=" "):
+    """A pre-release.md line and its finding id."""
+    fields = [rel, bid, sev, loc, issue, "verifier", "2026-09-24"]
+    return "- [%s] %s\n" % (mark, " · ".join(fields)), mismagent.finding_id(fields)
+
+
+class TestV023(Base):
+    """v0.23: the release path — findings, evaluation, records, groups, confirm; resume; release scope."""
+
+    def status(self, expect=0):
+        return self.run_tool("status", self.feat, "--integration", "feature/shop", expect=expect)
+
+    def rlist(self, rn):
+        return self.run_tool("release", "list", self.feat, rn, "--integration", "feature/shop", expect=0)
+
+    def all_done(self):
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        blocks = ("agg-order", "svc-order", "rm-orders", "svc-report")
+        for bid in blocks:
+            self.run_tool("move", self.feat, bid, "--to", "doing", expect=0)
+            self.integrate(bid)
+        for bid in blocks:
+            self.run_tool("move", self.feat, bid, "--to", "done", expect=0)
+
+    def findings(self, *lines):
+        out = [fline(*l) for l in lines]
+        self.put("pre-release.md", "# Pre-release\n\n" + "".join(t for t, _ in out))
+        return [h for _, h in out]                 # line n of the file = index n-3
+
+    def act(self, op, rn, entries, expect):
+        return self.run_tool("release", op, self.feat, rn, "--entries", json.dumps(entries), expect=expect)
+
+    def waiver(self, line, h, **kw):
+        return dict(dict(line=line, finding=h, by="Ada", consent="chat 2026-09-24 12:03", reason="cosmetic",
+                         risk="a darker banner", revisit="before R2"), **kw)
+
+    # -- core ----------------------------------------------------------------------------------------
+    def test_findings_identity_is_the_seven_fields_not_the_line(self):
+        self.put("pre-release.md", "x\n" + fline("R0", "agg-order", "MED", "src/a.py#Order.total", "i")[0] +
+                 "- [ ] R0 · agg-order · MED · src/a.py · no anchor · v · d\n- [ ] R0 · agg-order · MED · a.py:1\n"
+                 "- [x] R0 · agg-order · MID · a.py:1 · i · v · d\n")
+        f = mismagent.parse_findings(mismagent.Feature(self.feat))
+        self.assertEqual((f[0]["line"], f[0]["locator"]), (2, "src/a.py#Order.total"))
+        self.assertEqual(f[0]["finding"], fline("R0", "agg-order", "MED", "src/a.py#Order.total", "i", "x")[1])
+        self.assertEqual([("error" in x) for x in f], [False, True, True, True])   # locator, fields, severity
+        rules = {g["rule"] for g in self.gaps()[1]["gaps"]}
+        self.assertIn("release.finding", rules)
+
+    def test_policy_med_blocks_low_is_advisory_and_a_view_for_later_releases(self):
+        self.all_done()
+        h = self.findings(("R0", "agg-order", "LOW", "a.py:1", "rename"), ("R0", "svc-order", "MED", "b.py:2", "split"),
+                          ("R1", "rm-orders", "LOW", "c.py:3", "tidy"))
+        r0 = self.rlist("R0")
+        self.assertEqual(([b["finding"] for b in r0["blocking"]], [a["finding"] for a in r0["advisory"]]), ([h[1]], [h[0]]))
+        self.assertFalse(r0["releasable"])
+        self.assertEqual(r0["sha"], sh(self.repo, "git", "rev-parse", "feature/shop"))
+        r1 = self.rlist("R1")
+        self.assertTrue(r1["releasable"])                                     # a LOW never blocks
+        self.assertEqual([(a["release"], a["finding"]) for a in r1["advisory"]], [("R0", h[0]), ("R1", h[2])])
+        self.assertEqual(mismagent.read(os.path.join(self.feat, "pre-release.md")).count("rename"), 1)   # never copied
+        self.assertIn("release R0: 1 blocking lines (`release list`)", self.status()["work"])
+        self.act("waive", "R0", [self.waiver(4, h[1])], 0)
+        r0 = self.rlist("R0")
+        self.assertTrue(r0["releasable"])
+        self.assertEqual((r0["waived"][0]["by"], r0["waived"][0]["revisit"]), ("Ada", "before R2"))
+        self.assertIn("- [~] R0 · svc-order · MED", mismagent.read(os.path.join(self.feat, "pre-release.md")))
+        rec = mismagent.read(os.path.join(self.feat, "release-decisions", "R0.md"))
+        recs = json.loads(re.search(r"```json\n(.*?)```", rec, re.S).group(1))["records"]
+        self.assertEqual((recs[0]["action"], recs[0]["finding"], recs[0]["consent"]), ("waive", h[1], "chat 2026-09-24 12:03"))
+        self.assertTrue(recs[0]["at"].endswith("Z"))
+        self.run_tool("lint", self.feat, expect=0)
+
+    def test_release_without_blocks_waits_and_status_is_idle(self):
+        self.write_feature(MANIFEST + '  R2: { goal: "later", blocks: [] }\n')   # declared, no block rows
+        self.all_done()
+        self.findings(("R2", "agg-order", "MED", "a.py:1", "for later"))
+        r2 = self.rlist("R2")
+        self.assertEqual((r2["blocks"], r2["waiting"], r2["releasable"]), ([], ["R2 has no blocks"], False))
+        out = self.status()
+        self.assertEqual(out["outcome"], "idle")                              # #47: nothing actionable
+        self.assertIn("release R2: no blocks (1 blocking lines wait)", out["waiting"])
+        self.assertFalse(any("R2" in w for w in out["work"]))
+
+    def test_orphan_and_legacy_marks_free_nothing_and_lint_says_so(self):
+        self.all_done()
+        self.put("pre-release.md", "# P\n\n" + fline("R0", "agg-order", "MED", "a.py:1", "x", "~")[0].rstrip("\n") +
+                 " · waived: ok\n" + fline("R0", "svc-order", "MED", "b.py:1", "y", "x")[0])
+        self.put("release-decisions/R0.md", "# R0\n\nThe user waived line 3 in chat.\n")   # a legacy file
+        r0 = self.rlist("R0")
+        self.assertEqual(len(r0["blocking"]), 2)
+        self.assertIn("legacy waiver", r0["blocking"][0]["reason"])
+        gaps = self.gaps()[0]
+        self.assertIn(("release.unverified", "pre-release.md line 3"), gaps)
+        self.assertIn(("release.unverified", "pre-release.md line 4"), gaps)
+        h = fline("R0", "agg-order", "MED", "a.py:1", "x")[1]
+        self.act("waive", "R0", [self.waiver(3, h)], 0)                       # re-recorded by the tool
+        text = mismagent.read(os.path.join(self.feat, "release-decisions", "R0.md"))
+        self.assertIn("The user waived line 3 in chat.", text)                # legacy prose kept
+        self.assertIn("· waived: ok", mismagent.read(os.path.join(self.feat, "pre-release.md")))
+        self.assertEqual(len(self.rlist("R0")["blocking"]), 1)
+        self.put("pre-release.md", "# P\n\n" + fline("R0", "agg-order", "MED", "a.py:1", "x")[0])   # mark removed
+        self.assertIn(("release.record_orphan", "pre-release.md line 3"), self.gaps()[0])
+
+    def test_a_batch_is_validated_whole_before_any_write(self):
+        self.all_done()
+        h = self.findings(("R0", "agg-order", "MED", "a.py:1", "x"), ("R0", "svc-order", "HIGH", "b.py:1", "y"),
+                          ("R1", "rm-orders", "MED", "c.py:1", "z"))
+        before = mismagent.read(os.path.join(self.feat, "pre-release.md"))
+        bad = [[self.waiver(3, h[0]), self.waiver(4, h[1])],                  # a HIGH is never waived
+               [self.waiver(3, h[0]), self.waiver(3, h[0])],                  # twice
+               [self.waiver(3, h[1])],                                        # stale selector: line 3 is another finding
+               [self.waiver(5, h[2])],                                        # another release
+               [self.waiver(3, h[0], extra="x")], [dict(self.waiver(3, h[0]), by="")]]
+        for entries in bad:
+            out = self.act("waive", "R0", entries, 1)
+            self.assertEqual(out["refused"], "nothing written", entries)
+        self.assertEqual(mismagent.read(os.path.join(self.feat, "pre-release.md")), before)
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "release-decisions")))
+        self.run_tool("release", "waive", self.feat, "R0", "--entries", "[]", expect=2)
+        self.run_tool("release", "waive", self.feat, "R0", expect=2)          # --entries required
+
+    def test_close_needs_fresh_evidence_and_a_code_change_stales_it(self):
+        self.all_done()
+        h = self.findings(("R0", "agg-order", "MED", "src/agg-order.txt:1", "x"))[0]
+        tip = sh(self.repo, "git", "rev-parse", "feature/shop")
+        entry = dict(line=3, finding=h, sha=tip, by="mismagent-verifier", evidence="release-evidence/R0.md#" + h)
+        self.assertIn("release-evidence", self.act("close", "R0", [entry], 1)["problems"][0])
+        self.put("release-evidence/R0.md", "# R0\n\n## other\n")
+        self.assertIn("does not name", self.act("close", "R0", [entry], 1)["problems"][0])
+        self.put("release-evidence/R0.md", "# R0\n\n## %s\nsha %s · src/agg-order.txt · test run: green\n" % (h, tip))
+        self.assertIn("not a commit", self.act("close", "R0", [dict(entry, sha="f" * 40)], 1)["problems"][0])
+        self.act("close", "R0", [entry], 0)
+        self.assertTrue(self.rlist("R0")["releasable"])
+        self.line_commit("notes.txt", "records only\n")                     # another file: still fresh
+        self.assertTrue(self.rlist("R0")["releasable"])
+        self.line_commit("src/agg-order.txt", "changed\n")                   # the verified code changed
+        r0 = self.rlist("R0")
+        self.assertFalse(r0["releasable"])
+        self.assertIn("changed after the closure", r0["blocking"][0]["reason"])
+        self.act("close", "R0", [dict(entry, sha="feature/shop")], 0)        # verified again: a new record
+        self.assertTrue(self.rlist("R0")["releasable"])
+        self.run_tool("lint", self.feat, expect=0)
+
+    def test_group_writes_one_rework_file_and_one_deduplicated_pack(self):
+        self.all_done()
+        h = self.findings(("R0", "agg-order", "MED", "a.py:1", "x"), ("R0", "svc-order", "MED", "b.py:1", "y"),
+                          ("R1", "svc-report", "MED", "c.py:1", "z"), ("R1", "rm-orders", "MED", "d.py:1", "w"))
+        L = lambda n: "%d:%s" % (n, h[n - 3])                                # line:finding pairs
+        self.run_tool("release", "group", self.feat, "R0", "--id", "grp-1", "--lines", L(3), expect=2)
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", expect=2)
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", "3", expect=2)   # a bare number
+        out = self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", "3:" + h[1], expect=1)
+        self.assertIn("re-read `release list`", out["problems"][0])          # the line is now another finding
+        out = self.run_tool("release", "group", self.feat, "R1", "--id", "pre-R1-1", "--lines", L(5), L(6), expect=1)
+        self.assertIn("contexts orders, reports", out["problems"][0])       # one group per (context, side)
+        out = self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", L(3), L(4), expect=0)
+        self.assertEqual((out["blocks"], out["findings"]), (["agg-order", "svc-order"], h[:2]))
+        text = mismagent.read(out["file"])
+        self.assertTrue(text.startswith("---\nrelease: R0\nblocks: [agg-order, svc-order]\nfindings: [%s, %s]\n---\n"
+                                        % tuple(h[:2])))
+        self.assertIn("- [ ] R0 · svc-order · MED · b.py:1 · y", text)
+        self.assertTrue(self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", L(3), L(4),
+                                      expect=0)["unchanged"])
+        out = self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-2", "--lines", L(3), expect=1)
+        self.assertIn("already in group pre-R0-1", out["problems"][0])
+        md = self.run_tool("pack", self.feat, "pre-R0-1", expect=0)
+        self.assertEqual(md.count("\n## Boundary b-order\n"), 1)           # consumed by both, packed once
+        for sec in ("## Rework pre-R0-1-1", "## Block agg-order", "## Block svc-order"):
+            self.assertIn(sec, md)
+        self.assertNotIn("## Open findings", md)
+        h0 = self.spec_hash("pre-R0-1")
+        self.write_feature(MANIFEST.replace("sku:string · qty:int", "sku:string · qty:int · note:string"))
+        self.assertNotEqual(self.spec_hash("pre-R0-1"), h0)                 # a contract change stales the group
+
+    def test_release_scope_is_validated_before_writing_and_selects_the_group_pack(self):
+        note = ("### D-%04d · %s\n- Meta: 2026-09-24; scope: %s; status: %s\n- Question: q?\n- Options: A; B.\n"
+                "- Hypothesis: n/a — decided by REQ-1\n- Check: n/a — decided by REQ-1\n- Result: n/a — decided by REQ-1\n"
+                "- Debate: none\n- Decision: %s\n- By: decided: user; recorded: worker-composer\n"
+                "- Docs: [m](building-blocks.yaml)\n- Revisit: never\n%s")
+        notes = os.path.join(self.feat, "decisions.md")
+        self.put("e.md", note % (1, "Bad scope", "block:pre-R0-1", "accepted", "old", ""))
+        out = self.run_tool("why", "append", notes, "--entry", os.path.join(self.feat, "e.md"), expect=1)
+        self.assertEqual(out["errors"][0]["rule"], "meta.scope")
+        self.assertFalse(os.path.exists(notes))                              # refused before writing
+        self.put("e.md", note % (1, "Unknown release", "release:R9", "accepted", "old", ""))
+        self.run_tool("why", "append", notes, "--entry", os.path.join(self.feat, "e.md"), expect=1)
+        self.put("decisions.md", note % (1, "Bad scope", "block:pre-R0-1", "accepted", "old", ""))   # history as found
+        self.assertIn(("why.scope", "decisions.md D-0001"), self.gaps()[0])
+        self.put("e.md", note % (2, "Release scope", "release:R0", "accepted", "keep the rename", "- Supersedes: D-0001\n"))
+        self.run_tool("why", "append", notes, "--entry", os.path.join(self.feat, "e.md"), expect=0)
+        self.run_tool("lint", self.feat, expect=0)                           # superseded, not rewritten
+        h = self.findings(("R0", "agg-order", "MED", "a.py:1", "x"))[0]
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", "3:" + h, expect=0)
+        self.assertIn("keep the rename", self.run_tool("pack", self.feat, "pre-R0-1", expect=0))
+        self.assertNotIn("keep the rename", self.run_tool("pack", self.feat, "agg-order", expect=0))
+
+    # -- resume --------------------------------------------------------------------------------------
+    def test_a_doing_block_is_a_resume_candidate_never_diagnosed(self):
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.run_tool("move", self.feat, "agg-order", "--to", "doing", expect=0)
+        wt = self.block_wt("agg-order")
+        self.put("src/half.py", "work in progress\n", base=wt)
+        out = self.status()
+        self.assertEqual(out["outcome"], "work")
+        self.assertEqual(out["resume"], [{"id": "agg-order", "branch": "block/agg-order", "worktree": wt, "uncommitted": 1}])
+        self.assertIn("resume: agg-order (doing, not integrated; worktree %s, 1 uncommitted)" % wt, out["work"])
+        self.assertNotIn("interrupt", json.dumps(out))
+        self.assertEqual(self.run_tool("ready", self.feat, expect=0)["resume"], out["resume"])
+        self.assertEqual(mismagent.read(os.path.join(wt, "src", "half.py")), "work in progress\n")   # untouched
+
+    # -- confirm (git) -------------------------------------------------------------------------------
+    def releasable_line(self):
+        """Every block done, F committed on feature/shop, checked out in the main checkout."""
+        self.all_done()
+        sh(self.repo, "git", "config", "tag.gpgSign", "false")
+        base = sh(self.repo, "git", "rev-parse", "main")
+        sh(self.repo, "git", "checkout", "-q", "feature/shop")
+        sh(self.repo, "git", "add", "-A")
+        sh(self.repo, "git", "commit", "-q", "-m", "records")
+        return sh(self.repo, "git", "rev-parse", "HEAD"), base
+
+    def confirm(self, rn, expect, **kw):
+        args = dict({"integration": "feature/shop", "tag": "shop-" + rn, "merge-to": "main", "by": "Ada",
+                     "consent": "chat 2026-09-24 12:10"}, **kw)
+        return self.run_tool("release", "confirm", self.feat, rn, *[x for k, v in args.items()
+                                                                    for x in ("--" + k, v)], expect=expect)
+
+    def test_confirm_fast_forwards_the_base_and_tags_idempotently(self):
+        S, T = self.releasable_line()
+        self.assertIn("release R0: releasable, awaiting the user's confirmation (`release confirm`)", self.status()["waiting"])
+        self.run_tool("release", "confirm", self.feat, "R0", "--integration", "feature/shop", "--sha", S, "--tag", "t",
+                      "--merge-to", "main", "--base-sha", T, "--by", "Ada", expect=2)          # no consent
+        out = self.confirm("R0", 0, sha=S, **{"base-sha": T})
+        self.assertEqual((out["confirmed"], out["partial"], out["unchanged"]), (True, [], False))
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "main"), S)
+        tag = sh(self.repo, "git", "cat-file", "-p", "shop-R0")
+        for want in ("object " + S, "mismagent-release: shop/R0", "merge-to: main (from %s)" % T, "decided: Ada",
+                     "consent: chat 2026-09-24 12:10", "integration: feature/shop @ " + S):
+            self.assertIn(want, tag)
+        self.assertTrue(self.confirm("R0", 0, sha=S, **{"base-sha": T})["unchanged"])   # identical repeat
+        self.assertEqual(self.rlist("R0")["confirmed"]["tag"], "shop-R0")
+        self.assertNotIn("R0", json.dumps(self.status()["waiting"]))
+        out = self.confirm("R1", 0, sha=S, **{"base-sha": S})               # the base already holds S
+        self.assertEqual(self.status()["outcome"], "done")
+        sh(self.repo, "git", "tag", "-d", "shop-R1")                          # partial: the tag is missing
+        out = self.confirm("R1", 0, sha=S, **{"base-sha": S})
+        self.assertIn("only the tag is created", out["partial"][0])
+        sh(self.repo, "git", "update-ref", "refs/heads/main", T)              # partial: the merge is missing
+        self.assertEqual(self.status()["outcome"], "idle")                    # a tag alone is no confirmation
+        out = self.confirm("R0", 0, sha=S, **{"base-sha": T})
+        self.assertIn("only the fast-forward is done", out["partial"][0])
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "main"), S)
+
+    def test_confirm_preflight_refuses_and_writes_nothing(self):
+        S, T = self.releasable_line()
+        sh(self.repo, "git", "tag", "taken", T)
+        cases = [({"sha": T, "base-sha": T}, "not the consented"),
+                 ({"sha": S, "base-sha": S}, "neither the consented base"),
+                 ({"sha": S, "base-sha": T, "tag": "taken"}, "collision"),
+                 ({"sha": S, "base-sha": T, "consent": " "}, "--consent"),
+                 ({"sha": S, "base-sha": T, "merge-to": "feature/shop"}, "integration line itself")]
+        for kw, why in cases:
+            out = self.confirm("R0", 1, **kw)
+            self.assertIn(why, " ".join(out["problems"]), kw)
+        self.put("stray.txt", "x\n", base=self.repo)
+        self.assertIn("uncommitted", " ".join(self.confirm("R0", 1, sha=S, **{"base-sha": T})["problems"]))
+        os.remove(os.path.join(self.repo, "stray.txt"))
+        wt = os.path.join(self.tmp, "wt", "main")
+        sh(self.repo, "git", "worktree", "add", "-q", wt, "main")
+        self.commit(wt, "hotfix.txt", "x\n")                                  # the base diverged
+        T2 = sh(wt, "git", "rev-parse", "HEAD")
+        self.assertIn("diverged", " ".join(self.confirm("R0", 1, sha=S, **{"base-sha": T2})["problems"]))
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "main"), T2)
+        self.assertEqual(sh(self.repo, "git", "tag", "-l", "shop-*"), "")
+        self.findings(("R0", "agg-order", "MED", "a.py:1", "x"))
+        self.assertIn("not releasable", " ".join(self.confirm("R0", 1, sha=S, **{"base-sha": T})["problems"]))
+
+    def test_confirm_on_a_checked_out_base_fast_forwards_that_checkout(self):
+        S, T = self.releasable_line()
+        wt = os.path.join(self.tmp, "wt", "main")
+        sh(self.repo, "git", "worktree", "add", "-q", wt, "main")
+        self.confirm("R0", 0, sha=S, **{"base-sha": T})
+        self.assertEqual(sh(wt, "git", "rev-parse", "HEAD"), S)
+        self.assertEqual(sh(wt, "git", "status", "--porcelain"), "")
+
+    # -- review fixes: shared evaluation, tag identity, preflight, repair path --------------------------
+    def records(self, rn, *recs):
+        self.put("release-decisions/%s.md" % rn, "# %s\n\n```json\n%s\n```\n" % (rn, json.dumps({"records": list(recs)})))
+
+    def test_an_integrated_record_off_the_line_is_not_releasable_and_confirm_refuses(self):
+        _, T = self.releasable_line()
+        wt = os.path.join(self.tmp, "wt", "side")
+        sh(self.repo, "git", "worktree", "add", "-q", "-b", "side", wt, "main")
+        off = self.commit(wt, "side.txt", "x\n")                              # a commit never on B
+        rec = json.loads(mismagent.read(os.path.join(self.feat, "integrated", "agg-order.json")))
+        self.put("integrated/agg-order.json", json.dumps(dict(rec, sha=off)))
+        sh(self.repo, "git", "commit", "-q", "-am", "record off the line")
+        S = sh(self.repo, "git", "rev-parse", "HEAD")
+        r0 = self.rlist("R0")
+        self.assertFalse(r0["releasable"])
+        self.assertIn("block agg-order: done, its integrated sha is not on the line", r0["waiting"])
+        out = self.confirm("R0", 1, sha=S, **{"base-sha": T})
+        self.assertIn("not releasable", " ".join(out["problems"]))
+        self.assertEqual((sh(self.repo, "git", "rev-parse", "main"), sh(self.repo, "git", "tag", "-l")), (T, ""))
+
+    def test_a_tag_of_another_destination_or_consent_is_a_collision(self):
+        S, T = self.releasable_line()
+        self.confirm("R0", 0, sha=S, **{"base-sha": T})
+        sh(self.repo, "git", "branch", "production", T)
+        out = self.confirm("R0", 1, sha=S, **{"base-sha": T, "merge-to": "production"})
+        self.assertIn("collision", " ".join(out["problems"]))
+        self.assertIn("merge-to main", " ".join(out["problems"]))
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "production"), T)   # nothing written
+        out = self.confirm("R0", 1, sha=S, **{"base-sha": T, "consent": "another message"})
+        self.assertIn("collision", " ".join(out["problems"]))
+        self.assertTrue(self.confirm("R0", 0, sha=S, **{"base-sha": T})["unchanged"])
+
+    def test_an_invalid_tag_name_is_refused_before_the_fast_forward(self):
+        S, T = self.releasable_line()
+        out = self.confirm("R0", 1, sha=S, **{"base-sha": T, "tag": "bad tag"})
+        self.assertIn("not a valid tag name", " ".join(out["problems"]))
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "main"), T)
+
+    def test_record_mark_gaps_are_in_the_shared_evaluation_and_are_composer_work(self):
+        self.all_done()
+        self.assertTrue(self.rlist("R0")["releasable"])
+        self.records("R0", dict(self.waiver(3, "abcdef012345"), action="waive", at="2026-09-24T12:00:00Z"))
+        r0 = self.rlist("R0")
+        self.assertFalse(r0["releasable"])
+        self.assertIn("release.record_orphan", r0["gaps"][0])
+        out = self.status()
+        self.assertEqual(out["outcome"], "work")
+        self.assertIn("release R0: 1 record/mark gaps to repair (`lint`)", out["work"])
+
+    def test_an_invalid_record_is_repaired_only_by_replace(self):
+        self.all_done()
+        h = self.findings(("R0", "agg-order", "MED", "a.py:1", "x", "~"))[0]
+        bad = dict(self.waiver(3, h), action="waive", at="2026-09-24T12:00:00Z")
+        del bad["by"]
+        self.records("R0", bad)
+        self.run_tool("lint", self.feat, expect=1)
+        out = self.act("waive", "R0", [self.waiver(3, h)], 1)                  # a plain re-record never repairs
+        self.assertIn("--replace %s" % h, " ".join(out["problems"]))
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", "3:" + h, "--replace", h,
+                      expect=2)
+        out = self.run_tool("release", "waive", self.feat, "R0", "--entries", json.dumps([self.waiver(3, h)]),
+                            "--replace", "0" * 12, expect=1)
+        self.assertIn("not a finding of the batch", " ".join(out["problems"]))
+        out = self.run_tool("release", "waive", self.feat, "R0", "--entries", json.dumps([self.waiver(3, h)]),
+                            "--replace", h, expect=0)
+        self.assertEqual(out["replaced"], [h])
+        recs = json.loads(re.search(r"```json\n(.*?)```", mismagent.read(out["file"]), re.S).group(1))["records"]
+        self.assertEqual([r["by"] for r in recs], ["Ada"])
+        self.run_tool("lint", self.feat, expect=0)
+        self.assertTrue(self.rlist("R0")["releasable"])
 
 
 class TestPromptInvocations(unittest.TestCase):
@@ -1153,7 +1521,7 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release") else 1):
                 continue  # a name reference (`MM status`), not an invocation
             seen += 1
             try:

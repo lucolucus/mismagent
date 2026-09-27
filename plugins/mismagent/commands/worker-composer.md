@@ -52,24 +52,26 @@ with the gap named (regenerate, never hand-patch; `recorder` below). Then the ju
   side with a manual `ui_render_check` and no `run` binding → the profile.
 
 Bounce targets: `/mismagent:build-manifest`, `/mismagent:architect`, **the profile** (a field edit
-with the user), or `recorder` (`why.*`: in the build, you fix `F/decisions.md` and re-lint).
+with the user), `recorder` (`why.*`: you fix `F/decisions.md`) or `composer` (`release.*`: re-record
+with `release close|waive --replace <finding>`); then re-lint.
 
 **2 · Scaffold** (greenfield: `MM ready F` holds every other block until it is integrated and done).
 `MM move F <id> --to doing`, its worktree, a worker with `realize-scaffold`. Acceptance = **the gate alone** (no review):
 the worker records the gate proof; then `MM compose start F <id> --integration B --branch block/<id>`,
 the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to done`.
 
-**3 · Build.** `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
+**3 · Build.** **Resume first** each `resume` block of `MM status`: its worker again on its
+existing worktree with a fresh `MM pack`, told the tree holds unverified work. Never infer that a
+worker was interrupted (a dirty tree also describes a running one): unsure, or `BLOCKED` → ask. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus the blocks already building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with `MM pack F <id>`
-(it carries open MED/LOW findings as advisory notes; `--extra` the authored dev-architecture doc, if
-any), the block-type skill, the worktree and the side's gate. Never assemble context by hand.
-**Every dispatch** (worker, rework, reviewer) runs in the **foreground** (never background), parallel ones in one message.
+(`--extra` the authored dev-architecture doc, if any), the block-type skill, the worktree and the side's gate. Never assemble context by hand.
+**Every dispatch** runs in the **foreground**, parallel ones in one message.
 
 **4 · As each worker returns.**
 - `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, a signature, a key, a declared guarantee) →
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
-  `build-manifest` folds it in and deletes the file). An answer needing no code → `MM move F <id>
+  `build-manifest` folds it in). An answer needing no code → `MM move F <id>
   --to doing`, then step 5 on its branch and worktree, reviewed against the current spec;
 - `BLOCKED` → report its cause; it stays in `doing/`;
 - `READY-FOR-REVIEW` → queue it for step 5 with its `DECISIONS`/`DEVIATIONS`.
@@ -86,7 +88,8 @@ any), the block-type skill, the worktree and the side's gate. Never assemble con
    the step-3 pack `--extra` that file. With `n = 2` already → **park**, the findings in
    `open-questions/<id>.md`. A finding that needs a **human/product choice** (a code-review `BLOCKED`, a verifier `SKIP` with
    `decision:`) → park.
-4. **PASS, no HIGH** → MED/LOW to `pre-release.md` (below) → `MM proof record F review <id> --sha
+4. **PASS, no HIGH** → each MED/LOW (code-review's, the verifier's `DEFERRED:`) one line in
+   `F/pre-release.md`: `- [ ] <release> · <id> · <sev> · <file:line> · <issue> · <reviewer> · <date>` → `MM proof record F review <id> --sha
    <head_sha> --spec-hash <spec_hash>` (refused: the spec changed → review again) → `MM compose
    start F <id> --integration B --branch block/<id>`. A merge conflict → rework with the conflicting
    files.
@@ -112,7 +115,7 @@ binds them and overrides rows).
 |---|---|
 | `run-app-smoke` | light |
 | worker · `scaffold`, `application-service`, `adapter`, `read-model`, `ui` | standard |
-| worker · `aggregate`, `port` (the invariants and the Published Language live here) | deep |
+| worker · `aggregate`, `port` | deep |
 | reviewers | the review depth: `deep` → verifier + code-review both on deep · `standard` → the verifier on standard |
 
 Worker modifiers, in order, capped at `deep`: `model_hint: deep`
@@ -122,14 +125,9 @@ it is the last cycle and to re-read both findings files.
 ## Review depth by block type
 | block type | depth | review |
 |---|---|---|
-| `ui` · `adapter` · `read-model` | standard | ONE `mismagent-verifier` with `REVIEW_DEPTH: standard` (it adds the code-review lenses, HIGH only; MED/LOW under `DEFERRED:`) |
+| `ui` · `adapter` · `read-model` | standard | ONE `mismagent-verifier` with `REVIEW_DEPTH: standard` |
 | `aggregate` · `port` · `application-service` | deep | `mismagent-verifier` + a separate `code-review` |
 Escalate to `deep` when the block carries `model_hint: deep` or is in rework. The profile's `build.review_depth_by_type` overrides a row.
-
-## Only HIGH reworks
-A rework carries the FAILs and the HIGH findings, **nothing else**. Every MED/LOW (code-review's or
-the verifier's `DEFERRED:`) goes to **`F/pre-release.md`**, one line each: `- [ ] <release> · <id> ·
-<sev> · <file:line> · <issue> · <reviewer> · <date>`.
 
 ## Spikes — wave 0
 An open `type: spike` node with `central: true` (`MM ready F` → `open_spikes`) runs **at wave 0,
@@ -140,30 +138,32 @@ evidence to `F/spikes/<id>.md`, remove the worktree, report. Closure is the **us
 stop starting new owner waves and report it as a model decision.
 
 ## Releases
-Every block carries `release:`. **Rn is green** ⇔ all its blocks in `done/` ∧ no open `- [ ]` line
-for Rn in `pre-release.md`. Once Rn's blocks are done, group its open lines by (context, side); each
-group is one change with id `pre-<Rn>-<n>`: write `F/rework/pre-<Rn>-<n>-1.md` (the lines), a worker
-on `block/pre-<Rn>-<n>` from `B` (tier = the highest of the group's block types) with
-`MM pack F pre-<Rn>-<n>` (its rework files; its `spec_hash` is the proof's) and `MM pack` of the
-blocks involved, then **step 5 like any block**, reviewers on the same packs — the deepest review
-depth among them. Cap of 2 cycles; beyond it the lines go to the user. Fixed lines → `- [x]`; new MED/LOW here → the next release. A
-line the user waives lives in `F/release-decisions/<Rn>.md`; mark it `- [~] … · waived: <reason>`.
-Then release-tag → feature flag: **the user confirms**. At a side's first release, move its
-`gate_after_release` steps into `gate` (a profile edit, confirmed with the release) and re-record
-the gate proof.
+`MM release list F <Rn> --integration B` applies the policy: HIGH already blocks at step 5, an
+open MED blocks until fixed or waived, LOW is advisory. Once Rn's blocks are done:
+1. **Already satisfied** — one verifier re-checks the open lines together on `B`'s tip (no worker);
+   each it confirms fixed → `MM release close F <Rn> --entries <json>`.
+2. **Waive** a MED only on the user's decision: `MM release waive F <Rn> --entries <json>`.
+3. **Fix the rest** — `MM release group F <Rn> --id pre-<Rn>-<k> --lines <line:finding>…` per (context, side),
+   each integrated like a block (`block/pre-<Rn>-<k>`, `MM pack F pre-<Rn>-<k>`, tier and review
+   depth = its deepest block's, decision scope `release:<Rn>`); after promote, `release close` its
+   lines.
+4. **Confirm** — releasable, gate green on the final commit `S` → present `S`, the tag, `BASE@T`,
+   waivers and residual LOW. Only on the user's explicit consent naming that commit
+   and destination: `MM release confirm F <Rn> --integration B --sha S --tag <tag> --merge-to BASE
+   --base-sha T --by <user> --consent <ref>`. At a side's first release, move its
+   `gate_after_release` steps into `gate` (a profile edit, presented before the consent) and
+   re-record the gate proof.
 
 ## Lessons by block type
 When the first block of a type passes review — or a rework fixed a defect class the next block of
 that type could repeat — dispatch `harvest-dev-architecture` in lessons mode (tier standard) with
-the block's `rework/` files and findings; `MM pack` carries the type's lessons to every worker and
-reviewer.
+the block's `rework/` files and findings.
 
 ## Report (~30 lines)
 Blocks integrated and done, parked, blocked and why; this
-firing's dispatches with tier and depth; spikes; the next release and what is left on its path; open
-`pre-release.md` lines; the next action. Point the user to `/mismagent:board`.
+firing's dispatches with tier and depth; spikes; the next release's `release list`; the next action. Point the user to `/mismagent:board`.
 
 ## Invariants
 1. Only you compose (`MM compose`) and move state (`MM move`; `ok: false` = nothing moved, read
    `refused`).
-2. **No merge or push onto the base branch** without the user's explicit request.
+2. **Nothing onto the base branch** but `MM release confirm` on the user's explicit consent; never push.

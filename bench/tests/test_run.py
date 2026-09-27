@@ -79,7 +79,7 @@ class Sim(unittest.TestCase):
         open(os.path.join(self.feat, "building-blocks.yaml"), "w").write("blocks: []\n")
         open(os.path.join(self.feat, "blocks", "orders", "todo", "agg.md"), "w").write("# agg\n")
         for args in (["init", "-q", "-b", "main"], ["config", "user.email", "t@e.x"], ["config", "user.name", "t"],
-                     ["add", "."], ["commit", "-q", "-m", "seed"]):
+                     ["add", "."], ["commit", "-q", "-m", "seed"], ["branch", "integration/shop"]):
             subprocess.run(["git", "-C", self.repo] + args, check=True, capture_output=True)
         self.plugin = os.path.join(self.tmp, "plugin")
         os.makedirs(os.path.join(self.plugin, "tools"))
@@ -103,9 +103,10 @@ class Sim(unittest.TestCase):
         p = os.path.join(self.tmp, "calls.log")
         return [json.loads(l) for l in open(p).read().splitlines()] if os.path.exists(p) else []
 
-    def run_it(self, total=10, per=4, extra=()):
+    def run_it(self, total=10, per=4, extra=(), resume=True):   # most scenarios script cumulative totals
         args = ["--project", self.repo, "--feature", "shop", "--plugin-dir", self.plugin, "--total-usd", str(total),
                 "--per-firing-usd", str(per), "--claude-bin", self.claude] + list(extra)
+        args += ["--resume-sessions"] if resume else []
         return run.run(run.parse(args))
 
     def progress(self, i):
@@ -131,6 +132,18 @@ class RunnerTest(Sim):
         self.assertEqual(argv[0][-1], "/mismagent:worker-composer shop")
         self.assertEqual({c["bg"] for c in self.calls()}, {"1"})
         self.assertEqual({c["cwd"] for c in self.calls()}, {self.repo})
+
+    def test_fresh_session_per_firing_by_default(self):
+        self.scenario([{"out": res(3.0, sid="s-1"), "write": self.progress(1)},
+                       {"out": res(1.5, sid="s-2"), "write": self.progress(2)},
+                       {"out": res(0.5, sid="s-3"), "status": st("done")}])
+        out = self.run_it(total=5, per=4, resume=False)
+        self.assertEqual((out["outcome"], out["firings"], out["total_cost_usd"]), ("done", 3, 5.0))
+        self.assertEqual([f["cost_usd"] for f in out["log"]], [3.0, 1.5, 0.5])        # each session's own total
+        argv = [c["argv"] for c in self.calls()]
+        self.assertTrue(all("--resume" not in a for a in argv))
+        self.assertEqual([a[a.index("--max-budget-usd") + 1] for a in argv], ["4.0000", "2.0000", "0.5000"])
+        self.assertEqual(out["session_id"], "s-3")
 
     def test_total_budget_stops(self):
         self.scenario([{"out": res(4.0), "write": self.progress(1)}, {"out": res(8.0), "write": self.progress(2)}])
@@ -198,6 +211,13 @@ class RunnerTest(Sim):
             out = self.run_it()
             self.assertEqual((out["outcome"], out["firings"]), (outcome, 0))
         self.assertEqual(self.calls(), [])
+
+    def test_fresh_build_without_integration_line_fires_first(self):
+        subprocess.run(["git", "-C", self.repo, "branch", "-D", "integration/shop"], check=True, capture_output=True)
+        self.set_status(st("done"))   # would stop before any firing if status were read
+        self.scenario([{"out": res(1.0), "status": st("done")}])
+        out = self.run_it()
+        self.assertEqual((out["outcome"], out["firings"]), ("done", 1))
 
     def test_anomaly_after_a_firing_stops(self):
         self.scenario([{"out": res(1.0), "status": st("anomaly")}])

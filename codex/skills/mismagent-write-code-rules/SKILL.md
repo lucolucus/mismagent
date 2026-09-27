@@ -8,14 +8,13 @@ description: "mismAgent model: writes the project's <output_dir>/code-rules.md \
 
 # write-code-rules — rules that survive because something enforces them
 
-**A coding rule exists only together with its enforcement channel** — otherwise it is a wish. You
-write the set the user **already deliberated** (the architect's `ARCH_PROPOSAL`); you don't invent it.
+**A coding rule exists only together with its enforcement channel**. You write the set the user
+**already deliberated** (the architect's `ARCH_PROPOSAL`).
 Orientation: `methodology/mismagent.md`.
 
 ## Where the rules live — visible, next to the profile
-`<output_dir>/code-rules.md` — **project-level** (rules outlive features), beside `profile.md` and
-`architecture.md`. The **profile points at it** (`code_rules:`): workers and the code-review
-receive it through the profile. Later features propose **deltas only**; this file is the one source.
+`<output_dir>/code-rules.md` — **project-level**, beside `profile.md` and `architecture.md`, pointed
+at by the profile. Later features propose **deltas only**; this file is the one source.
 
 ## The default catalogue (proposed in pass-1, inside `ARCH_PROPOSAL`)
 Adapted to the stack; the user prunes or hardens it. The
@@ -40,23 +39,26 @@ A dependency rule is a **graph property**: a text search is the wrong tool (blin
 names, build files, aliases). Use the stack's **dependency lint**, named here and in the style
 ADR, its config derived from `architecture.md`'s module map:
 - The config **lives in the side's path** (wired by the wave-0 `scaffold`): it runs in the
-  worker's gate loop, verifier step 2 and CI; on a module rename the worker maintains it.
+  worker's gate loop, the verifier and CI; on a module rename the worker maintains it.
 - Style rules (empty-catch, mutability) join the same linter's ruleset where it has them.
+- **Published signatures cross boundaries too:** the lint checks the declared published surface
+  (public signatures, nested types, re-exports) against its Published Language (pinned and
+  shared-kernel types, declared error shapes); the build graph re-exports no inner module. A
+  violating and a conforming fixture prove it.
 - **This is the ADR checks' mechanism:** the style ADR's `enforced_by` names the lint config as its
-  `check` (see `write-adr`) — one mechanism, same fixtures and result; no second grep.
+  `check` (`write-adr`): one mechanism, no second grep.
 
 ## Output — `<output_dir>/code-rules.md`
-One section per rule: the statement (one line), its **scope** (where it applies), a verifiable
-criterion, the channel and the pointer — `gate lint: <tool>, config <path>` · `review criterion` ·
+One section per rule: the statement (one line), its **scope**, a verifiable criterion, the channel and
+the pointer — `gate lint: <tool>, config <path>` · `review criterion` ·
 `structural: <owner skill/gate>` — and its **exceptions**, each citing its ADR.
 Header note: *"written by the architect (model); change it only through a new deliberation — each
 change cites its ADR"*. Update the **profile** (`code_rules:`) if the binding is missing.
 
 ## Consumers (why it is not a zombie)
 The **user** (the visible standard), the **workers** (the gate bites in their loop), the
-**code-review** (the discursive criteria, cited in the finding); mechanical rules need no reviewer.
+**code-review** (discursive criteria, cited in findings); mechanical rules need no reviewer.
 
 ## Outcome
-Path of `code-rules.md`, which rules landed in the gate lint (tool + config path), which are review
-criteria, which are structural citations; the profile binding set; deltas vs the existing file on a
-later feature.
+Path of `code-rules.md`; the rules per channel (gate lint: tool + config path; review criteria;
+structural citations); the profile binding; deltas on a later feature.

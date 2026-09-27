@@ -1487,6 +1487,251 @@ class TestV023(Base):
         self.assertTrue(self.rlist("R0")["releasable"])
 
 
+COMP = "    consumes: [b-order]\n    commands: [PlaceOrder]\n"   # svc-order's row, the R0 composition block
+ARCH = "# Architecture\n\n- `composition_root: src/app/main`\n"
+
+
+class TestV024(Base):
+    """v0.24: the composition block, the worker's checkpoint (`progress record`), the pack diet."""
+
+    def comp(self, extra="    composition: true\n    after: [agg-order]\n", base=MANIFEST):
+        return base.replace(COMP, COMP + extra)
+
+    def status(self, expect=0):
+        return self.run_tool("status", self.feat, "--integration", "feature/shop", expect=expect)
+
+    def record(self, bid, cp=None, head=None, h=None, expect=0):
+        cp = json.dumps({"done": ["INV-1 green"], "next": "the rejection path"} if cp is None else cp)
+        return self.run_tool("progress", "record", self.feat, bid, "--head", head or "block/" + bid,
+                             "--spec-hash", h or self.spec_hash(bid), "--json", cp, expect=expect)
+
+    # -- composition ---------------------------------------------------------------------------------
+    def test_composition_lint_unique_last_root_and_legacy(self):
+        self.run_tool("lint", self.feat, expect=0)                           # no flag: no new gap
+        self.write_feature(self.comp("    composition: true\n"))
+        gaps, out = self.gaps()
+        self.assertIn(("composition.last", "svc-order"), gaps)                # agg-order is its R0 sibling
+        self.assertIn(("composition.root", "architecture.md"), gaps)
+        self.assertEqual({g["rule"]: g["bounce_to"] for g in out["gaps"]}["composition.root"], "architect")
+        self.put("architecture.md", ARCH, base=self.out)
+        self.write_feature(self.comp())
+        self.run_tool("lint", self.feat, expect=0)
+        m = self.comp().replace("    related_adrs: [0001]\n", "    related_adrs: [0001]\n    composition: true\n")
+        self.write_feature(m)
+        self.assertIn(("composition.unique", "agg-order, svc-order"), self.gaps()[0])
+        m = self.comp().replace("    related_adrs: [0001]\n", "    related_adrs: [0001]\n    side: fe\n")
+        self.write_feature(m.replace("    composition: true\n    after: [agg-order]\n", "    composition: true\n"))
+        self.run_tool("lint", self.feat, expect=0)                           # another side: not a sibling
+        self.write_feature(self.comp("    composition: yes\n"))
+        self.assertIn(("composition.valid", "svc-order"), self.gaps()[0])
+        self.write_feature(MANIFEST.replace("    wave: 0\n", "    wave: 0\n    composition: true\n", 1))
+        self.assertIn(("composition.valid", "scaffold-app"), self.gaps()[0])
+        for r in ("composition.unique", "composition.last", "composition.root"):
+            self.assertIn(r, mismagent.TERMINAL_LINT)
+
+    def test_composition_render_line_frontmatter_and_spec_hash(self):
+        h = self.spec_hash("svc-order")
+        self.write_feature(self.comp())
+        self.assertNotEqual(self.spec_hash("svc-order"), h)                   # the flag is spec
+        shutil.rmtree(os.path.join(self.feat, "blocks"))
+        self.put("building-blocks.yaml", self.comp(base=RENDERED))
+        self.run_tool("manifest", "render", self.feat, expect=0)
+        path = os.path.join(self.feat, "blocks", "orders", "todo", "svc-order.md")
+        text = mismagent.read(path)
+        self.assertIn("\ncomposition: true\n", text.split("\n---\n")[0] + "\n")
+        self.assertIn("returns the id.\nComposition: extend the existing composition at <composition_root in "
+                      "architecture.md> in place — never wrap it", text)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])
+        self.put("architecture.md", ARCH, base=self.out)
+        self.assertIn(("blockfile.render", "svc-order"), self.gaps()[0])       # the root is part of the render
+        self.run_tool("manifest", "render", self.feat, expect=0)
+        self.assertIn("composition at src/app/main in place", mismagent.read(path))
+        self.run_tool("lint", self.feat, expect=0)
+        self.assertNotIn("Composition:", mismagent.read(os.path.join(self.feat, "blocks", "orders", "todo",
+                                                                      "agg-order.md")))
+
+    # -- progress ------------------------------------------------------------------------------------
+    def doing(self, bid):
+        self.run_tool("move", self.feat, bid, "--to", "doing", expect=0)
+        wt = self.block_wt(bid)
+        self.commit(wt, "src/%s.txt" % bid, "one\n")
+        return wt
+
+    def test_progress_record_writes_atomically_and_counts_attempts(self):
+        self.doing("agg-order")
+        out = self.record("agg-order")
+        self.assertEqual((out["ok"], out["id"], out["attempt"]), (True, "agg-order", 1))
+        rec = json.loads(mismagent.read(out["file"]))
+        self.assertEqual(out["file"], os.path.join(self.feat, "progress", "agg-order.json"))
+        self.assertEqual(rec, {"head": sh(self.repo, "git", "rev-parse", "block/agg-order"),
+                               "spec_hash": self.spec_hash("agg-order"), "attempt": 1,
+                               "checkpoint": {"done": ["INV-1 green"], "next": "the rejection path"}, "extras": []})
+        f = self.put("cp.json", json.dumps({"done": [], "next": "n", "tests": ["t1"], "decisions": "d"}), base=self.tmp)
+        self.assertEqual(self.run_tool("progress", "record", self.feat, "agg-order", "--head", "block/agg-order",
+                                       "--spec-hash", self.spec_hash("agg-order"), "--json", f, expect=0)["attempt"], 2)
+        p = subprocess.run([sys.executable, TOOL, "progress", "record", self.feat, "agg-order", "--head", "block/agg-order",
+                            "--spec-hash", self.spec_hash("agg-order"), "--json", "-"],
+                           input='{"done": ["a"], "next": "b"}', capture_output=True, text=True)
+        self.assertEqual((p.returncode, json.loads(p.stdout)["attempt"]), (0, 3))
+        self.assertFalse(glob.glob(os.path.join(self.feat, "progress", "*.tmp")))
+
+    def test_progress_record_refusals_write_nothing(self):
+        self.doing("agg-order")
+        self.record("agg-order")
+        before = mismagent.read(os.path.join(self.feat, "progress", "agg-order.json"))
+        h = self.spec_hash("agg-order")
+        cases = [
+            (dict(bid="ghost", h=h), "not a block of the manifest"),
+            (dict(bid="agg-order", head="feature/shop"), "is not the tip of block/agg-order"),
+            (dict(bid="agg-order", h="0" * 64), "not the block's current spec hash"),
+            (dict(bid="svc-order", h=self.spec_hash("svc-order")), "not doing/"),
+            (dict(bid="agg-order", cp={"done": "x", "next": "n"}), "`done`"),
+            (dict(bid="agg-order", cp={"done": [], "next": " "}), "`next`"),
+            (dict(bid="agg-order", cp={"done": [], "next": "n", "mood": "ok"}), "unknown keys mood"),
+        ]
+        for kw, why in cases:
+            bid = kw.pop("bid")
+            out = self.record(bid, expect=1, **kw)
+            self.assertFalse(out["ok"])
+            self.assertTrue(any(why in p for p in out["problems"]), (why, out))
+        out = self.run_tool("progress", "record", self.feat, "agg-order", "--head", "block/agg-order",
+                            "--spec-hash", h, "--json", "{bad", expect=1)
+        self.assertIn("does not parse", out["problems"][0])
+        self.assertEqual(mismagent.read(os.path.join(self.feat, "progress", "agg-order.json")), before)
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "progress", "svc-order.json")))
+
+    def test_status_reports_progress_fresh_then_stale_and_pack_carries_only_a_fresh_one(self):
+        wt = self.doing("agg-order")
+        self.assertNotIn("progress", self.status()["resume"][0])
+        self.assertNotIn("## Checkpoint", self.run_tool("pack", self.feat, "agg-order", expect=0))
+        self.record("agg-order", {"done": ["INV-1 green"], "next": "the rejection path", "deviations": ["kept x"]})
+        out = self.status()
+        tip = sh(self.repo, "git", "rev-parse", "block/agg-order")
+        self.assertEqual(out["resume"][0]["progress"], {"attempt": 1, "head": tip, "next": "the rejection path",
+                                                        "fresh": True})
+        self.assertTrue(any(w.endswith("; checkpoint attempt 1, fresh)") for w in out["work"]))
+        md = self.run_tool("pack", self.feat, "agg-order", expect=0)
+        self.assertLess(md.index("## Checkpoint — attempt 1"), md.index("## Block agg-order"))
+        for s in ("- next: the rejection path", "  - INV-1 green", "- pending DEVIATIONS:\n  - kept x",
+                  "source: `.mismagent/features/shop/progress/agg-order.json`"):
+            self.assertIn(s, md)
+        self.commit(wt, "src/more.txt", "more\n")                             # work after the checkpoint
+        out = self.status()                                                  # stale: reported, no anomaly
+        self.assertEqual((out["ok"], out["resume"][0]["progress"]["fresh"]), (True, False))
+        self.assertNotIn("## Checkpoint", self.run_tool("pack", self.feat, "agg-order", expect=0))
+        self.record("agg-order")                                             # recorded again at the new tip
+        self.write_feature(MANIFEST.replace("never negative", "never negative nor absurd"))
+        self.move("agg-order", "doing")
+        self.assertFalse(self.status()["resume"][0]["progress"]["fresh"])     # the spec changed
+
+    def test_an_integrated_block_ignores_its_progress_and_done_removes_it(self):
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.commit(self.block_wt("scaffold-app"), "src/s.txt", "s\n")
+        self.record("scaffold-app")
+        self.compose("start", "scaffold-app", expect=0)
+        self.compose("promote", "scaffold-app", expect=0)
+        self.assertEqual(self.status()["resume"], [])
+        out = self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.assertEqual(out["progress_removed"], os.path.join(self.feat, "progress", "scaffold-app.json"))
+        self.assertFalse(os.path.exists(out["progress_removed"]))
+
+    # -- pack diet -----------------------------------------------------------------------------------
+    def test_pack_carries_only_the_findings_of_the_block_and_its_boundary_neighbours(self):
+        lines = [fline("R0", "agg-order", "MED", "a.py:1", "owner of b-order"),
+                 fline("R1", "rm-orders", "LOW", "r.py:1", "fellow consumer of b-order"),
+                 fline("R0", "b-order", "MED", "b.py:1", "scoped to the boundary"),
+                 fline("R1", "svc-report", "MED", "s.py:1", "far away"),
+                 fline("R0", "svc-order", "LOW", "o.py:1", "its own"),
+                 fline("R0", "agg-order", "LOW", "a.py:2", "already closed", mark="x")]
+        self.put("pre-release.md", "# Pre-release\n\n" + "".join(t for t, _ in lines))
+        md = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        for s in ("owner of b-order", "fellow consumer of b-order", "scoped to the boundary", "its own",
+                  "\n1 other open findings in the feature (not relevant to this block)"):
+            self.assertIn(s, md)
+        for s in ("far away", "already closed"):
+            self.assertNotIn(s, md)
+        md = self.run_tool("pack", self.feat, "svc-report", expect=0)
+        self.assertIn("- line 6: R1 · svc-report", md)
+        self.assertIn("fellow consumer of b-order", md)                     # rm-orders owns b-rm
+        self.assertIn("\n3 other open findings in the feature", md)
+        h = lines[0][1]
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-1", "--lines", "3:" + h, expect=0)
+        md = self.run_tool("pack", self.feat, "pre-R0-1", expect=0)
+        self.assertNotIn("## Open findings", md)                             # a group packs its own lines
+        self.assertNotIn("other open findings", md)
+        self.assertIn("owner of b-order", md)
+
+    # -- review fixes --------------------------------------------------------------------------------
+    def test_progress_refuses_a_dirty_worktree_and_a_dirty_tree_is_not_fresh(self):
+        wt = self.doing("agg-order")
+        self.put("src/loose.txt", "not committed\n", base=wt)
+        out = self.record("agg-order", expect=1)
+        self.assertTrue(any("commit everything before a checkpoint" in p for p in out["problems"]))
+        os.remove(os.path.join(wt, "src", "loose.txt"))
+        self.record("agg-order")
+        self.assertTrue(self.status()["resume"][0]["progress"]["fresh"])
+        self.put("src/loose.txt", "after the checkpoint\n", base=wt)       # a crash after it: unverified
+        self.assertFalse(self.status()["resume"][0]["progress"]["fresh"])
+        self.assertNotIn("## Checkpoint", self.run_tool("pack", self.feat, "agg-order", expect=0))
+
+    def test_progress_refuses_no_progress_and_non_blocks(self):
+        wt = self.doing("agg-order")
+        self.record("agg-order")
+        out = self.record("agg-order", expect=1)
+        self.assertIn("no progress since attempt 1: same head, same done list", out["problems"])
+        self.record("agg-order", {"done": ["INV-1 green", "rejection"], "next": "n"})   # more done: progress
+        self.commit(wt, "src/x.txt", "x\n")
+        self.assertEqual(self.record("agg-order", {"done": ["INV-1 green", "rejection"], "next": "n"})["attempt"], 3)
+        out = self.record("pre-R0-1", h="0" * 64, expect=1)
+        self.assertIn("checkpoints are for manifest blocks only", out["problems"][0])
+
+    def test_progress_extras_are_stored_and_packed_once(self):
+        self.doing("agg-order")
+        rw = self.put("rework/agg-order-1.md", "- fix the rounding\n")
+        doc = self.put("dev-arch.md", "layout memory\n", base=self.tmp)
+        out = self.run_tool("progress", "record", self.feat, "agg-order", "--head", "block/agg-order", "--spec-hash",
+                            self.spec_hash("agg-order"), "--json", '{"done": [], "next": "n"}',
+                            "--extra", os.path.join(self.tmp, "ghost.md"), expect=1)
+        self.assertIn("--extra %s not found" % os.path.join(self.tmp, "ghost.md"), out["problems"])
+        self.run_tool("progress", "record", self.feat, "agg-order", "--head", "block/agg-order", "--spec-hash",
+                      self.spec_hash("agg-order"), "--json", '{"done": [], "next": "n"}', "--extra", rw,
+                      "--extra", doc, expect=0)
+        self.assertEqual(json.loads(mismagent.read(os.path.join(self.feat, "progress", "agg-order.json")))["extras"],
+                         [rw, doc])
+        md = self.run_tool("pack", self.feat, "agg-order", expect=0)
+        self.assertIn("fix the rounding", md)
+        self.assertIn("## Extra — dev-arch.md", md)
+        md = self.run_tool("pack", self.feat, "agg-order", "--extra", doc, expect=0)
+        self.assertEqual(md.count("## Extra — dev-arch.md"), 1)
+
+    def chain(self, report_after):
+        m = self.comp().replace("    commands: [BuildReport]\n", "    commands: [BuildReport]\n    composition: true\n"
+                                "    after: [%s]\n" % report_after)
+        self.put("architecture.md", ARCH, base=self.out)
+        self.write_feature(m)
+
+    def test_composition_chain_and_the_composition_diet(self):
+        self.chain("rm-orders")
+        self.assertIn(("composition.chain", "svc-report"), self.gaps()[0])
+        self.assertIn("composition.chain", mismagent.TERMINAL_LINT)
+        self.chain("rm-orders, svc-order")
+        self.run_tool("lint", self.feat, expect=0)
+        self.put("pre-release.md", "# Pre-release\n\n" + fline("R0", "svc-order", "MED", "m.py:1", "root debt")[0] +
+                 fline("R0", "agg-order", "MED", "a.py:1", "unrelated")[0])
+        md = self.run_tool("pack", self.feat, "svc-report", expect=0)
+        self.assertIn("root debt", md)                                      # the earlier composition's line
+        self.assertNotIn("unrelated", md)
+
+    def test_an_empty_or_heading_root_line_is_no_root(self):
+        self.write_feature(self.comp())
+        for text in ("# A\n\ncomposition_root:\n## Next\n", "## composition_root: src/app\n",
+                     "- composition_root: `` \n"):
+            self.put("architecture.md", text, base=self.out)
+            self.assertIn(("composition.root", "architecture.md"), self.gaps()[0], text)
+        self.put("architecture.md", "- **composition_root:** `src/app/main`\n", base=self.out)
+        self.run_tool("lint", self.feat, expect=0)
+
+
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
 
@@ -1521,7 +1766,7 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress") else 1):
                 continue  # a name reference (`MM status`), not an invocation
             seen += 1
             try:

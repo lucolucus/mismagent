@@ -28,7 +28,7 @@ You realize **ONE scaffold**: the minimal project skeleton for a **side**, so it
   report it. A **manual** `ui_render_check`: run `run-app-smoke` once on the skeleton; no launch or no
   capture → report it (the check must become automated).
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
-  lint**: wire its config and the published-surface check (public signatures against the Published
+  lint**: wire its config and the contract check (exported signatures against the Published
   Language) so the **gate executes them from wave 0** — the lint config is the module map's
   *executable projection* in this repo (workers maintain it on rename);
 - the **`enforced_by` checks without `from`** of the ADRs in your pack (they apply from the start):

@@ -1527,8 +1527,8 @@ def suspect_generated(repo, globs):
 # ---- codemap: where the existing code is (discovery, never authority) ----------------------------
 def codemap(odir, ref, side=None, module=None, files=False):
     """Markdown: per side (profile `sides:`), per module (architecture.md `modules:` — {id, side, root,
-    entry_files}) else per top directory, the files git tracks at `ref`, entry files marked. What is
-    public stays the project's (its dependency lint); this only says where to start reading."""
+    entry_files}) else per top directory, the files git tracks at `ref`, entry files marked. A module's
+    contract stays the project's (its dependency lint); this only says where to start reading."""
     p = subprocess.run(["git", "-C", odir, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
     if p.returncode:
         raise UsageError("%s is not inside a git repository" % odir)
@@ -1543,7 +1543,7 @@ def codemap(odir, ref, side=None, module=None, files=False):
     under = lambda f, root: root in (".", "", "./") or f == root.rstrip("/") or f.startswith(root.rstrip("/") + "/")
     note = "" if mods else " No `modules:` in architecture.md: modules unknown, grouped by directory."
     out = ["# Code map at %s" % s[:12], "",
-           "Discovery only: what is public is the project's (its dependency lint); entry files (*) are where to start "
+           "Discovery only: a module's contract is the project's (its dependency lint enforces it); entry files (*) are where to start "
            "reading." + note, ""]
     for sd, root in sorted(sides.items()):
         if side and sd != side:
@@ -3317,7 +3317,7 @@ HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact 
               "Decision findings are answered — re-ingest a `decide` attempt with them to promote without code.",
     "codemap": "Read-only. Markdown on stdout, at --ref: per side (profile `sides:`), per module (architecture.md\n"
                "`modules:` [{id, side, root, entry_files}] in a YAML block; else per top directory), the files git tracks,\n"
-               "entry files marked with --files. Discovery only: what is public stays the project's dependency lint.",
+               "entry files marked with --files. Discovery only: a module's contract stays the project's dependency lint.",
     "rework": "write: the next rework/<id>-<n>.md (same numbering and 2-cycle cap as review ingest; a group's -1\n"
               "is its spec) from --evidence; at the cap: action park, nothing written. Drops the review proof.",
     "state": "commit: on the checkout of F, on --integration only, no candidate open: stage every change under\n"

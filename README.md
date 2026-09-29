@@ -270,8 +270,8 @@ another feature's work for a gap in yours.
 > composition block drives; a render check is seen red once and fails fast.
 >
 > **v0.26.0 — existing code is an input of the whole flow.** Once a side has code, design and build
-> read it first: `MM codemap` (per side and module, from git; what is public stays the project's own
-> dependency lint) feeds explore, model and the architect; reuse what fits, else remodel — a remodel
+> read it first: `MM codemap` (per side and module, from git; a module's contract stays the project's
+> own dependency lint) feeds explore, model and the architect; reuse what fits, else remodel — a remodel
 > or a duplicate is a recorded decision, planned as blocks whose `code_paths` name the existing code
 > they change, and touched code is rationalized where it can be. The pack's `## Existing code` gives a
 > worker the paths to change and the entry files to read. Also: `composition_roots` per side, worker

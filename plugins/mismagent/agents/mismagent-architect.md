@@ -52,8 +52,8 @@ without pass 1 → checkpoint → pass 2 is a process defect, even if the choice
   `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mismagent.py" lint --adrs <output_dir>/decisions/`: zero gaps
   before any manifest; `infra-notes.md` via `write-infra-notes`;
 - `<output_dir>/architecture.md` — the structure: style, module map, allowed dependency directions,
-  a YAML block with `modules: [{id, side, root, contexts, entry_files}]` (where to start reading; what is public
-  stays the dependency lint's) and `composition_roots: {<side>: <path>}` (one side: a `composition_root: <path>` line) for the app's wiring (the scaffold derives the skeleton from it;
+  a YAML block with `modules: [{id, side, root, contexts, entry_files}]` (where to start reading; a module's
+  contract stays the dependency lint's) and `composition_roots: {<side>: <path>}` (one side: a `composition_root: <path>` line) for the app's wiring (the scaffold derives the skeleton from it;
   the gate's dependency lint is its executable form);
 - `<output_dir>/code-rules.md` via `write-code-rules` — mechanical rules → the gate's dependency
   lint, discursive → code-review criteria, structural → citations; point the profile's

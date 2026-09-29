@@ -29,6 +29,7 @@ blocks:
     triggers: [<Command>…]              # ui
     model_hint: deep                    # OPTIONAL, any type; omit otherwise
     after: [<block-id>…]                # OPTIONAL: waits for these to be integrated
+    code_paths: [<repo-relative path>…]  # OPTIONAL: existing code it changes (new/revised rows only)
     composition: true                   # OPTIONAL, non-scaffold: THE block wiring its release into the app
     release: R0 | R1 | …                # REQUIRED except scaffold
     notes: "<explicit cut / where a prescribed surface went>"   # OPTIONAL

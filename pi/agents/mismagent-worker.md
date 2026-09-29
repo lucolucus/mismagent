@@ -32,7 +32,8 @@ smallest **throwaway prototype** answering its `## Question to answer` against i
 Return `READY-FOR-REVIEW`, the evidence (measurements, what worked, what not) in NOTE; the user decides.
 
 ## Golden rule
-Write **only** in your block's package/dir — never another context's source. If you would need to
+Write **only** in your block's package/dir and its `code_paths` — never another context's source; the
+pack's **Existing code** first: reuse what fits (methodology rule 9). If you would need to
 cross the boundary, an AC is ambiguous, or the contract (pinned type, signature, key,
 declared guarantee) must deviate → **`BOUNCED <what's missing>`** before implementing, don't invent.
 A **`composition`** block also writes in the project's composition location, **extending the
@@ -95,8 +96,9 @@ code one — return `BLOCKED` naming the step and what you observed.
 
 ## Handoff and return
 Append each non-obvious choice the spec left open to the **handoff** file, as a decision-note
-entry (`@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md` "Decision notes": title ≤8 words, Question ≤25,
-Decision ≤35, entry ≤220; links relative to `decisions.md`) — no handoff given → in the return.
+entry from `MM why template <F>/decisions.md` (`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`; its
+id is a placeholder, links relative to `decisions.md`); before returning, `MM why check <handoff> --into
+<worktree>/<F>/decisions.md` passes.
 Return ≤ 8 lines, lastly appended to the handoff too:
 ```
 RESULT: READY-FOR-REVIEW | CHECKPOINT | BLOCKED | BOUNCED

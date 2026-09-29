@@ -68,7 +68,7 @@ its latest attempt not ingested → step 5.3; a `result` (it returned) → step 
 again on its worktree, fresh `MM pack`, from its `progress` when `fresh`, else its `commits`: redo
 nothing green. Review returned blocks before new dispatches. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus those building. For each: `MM move F <id> --to doing`, its worktree
-from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with the path of `MM pack F <id>`
+from `B`'s tip (an un-parked block reuses its own, `B` merged into it first; a conflict → rework), and dispatch **`mismagent-worker`** on the routed model (below) with the path of `MM pack F <id>`
 (`--extra` the authored dev-architecture doc, if any), the block-type skill, the worktree, the side's gate and its handoff.
 **Every dispatch** runs in the **foreground**, parallel ones in one message; no second wave.
 
@@ -103,8 +103,8 @@ from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-wo
    write F <id> --reason merge-conflict --evidence <excerpt>`, act on its `action` likewise.
 4. **In the candidate** (`candidate_path`): the side's `gate_verify` (else `gate`) + the `contract_test` of every
    owner↔consumer pair on a touched boundary with both sides in the candidate.
-   **Green** → `MM compose promote F <id>`, `MM why append` every handoff of the block (also for a
-   promoted block whose handoffs were not), finish as in step 0, `MM state commit`. **Red** → `MM compose abort F <id>`, `MM rework write F <id> --reason candidate-red --evidence <excerpt>`, act on its `action`; which side reworks follows the evidence, never the consumer by default.
+   **Green** → `MM compose promote F <id>`, `MM why import F/decisions.md --handoff <h>` every handoff of
+   the block (also for a promoted block whose handoffs were not), finish as in step 0, `MM state commit`. **Red** → `MM compose abort F <id>`, `MM rework write F <id> --reason candidate-red --evidence <excerpt>`, act on its `action`; which side reworks follows the evidence, never the consumer by default.
    A refused promote → `MM compose abort F <id>`, step 5 again from the new tip.
 
 **6 · Report and end** — once every dispatched block is integrated, parked or blocked and no
@@ -139,13 +139,14 @@ no new owner waves; report it as a model decision.
 ## Releases
 `MM release list F <Rn> --integration B` applies the policy: HIGH blocks at step 5, an open MED
 until fixed or waived, LOW is advisory. Once Rn's blocks are done:
-1. **Already satisfied** — one verifier re-checks the open lines together on `B`'s tip (no worker);
-   each its report confirms fixed → `MM release close F <Rn> --entries <json>`.
+1. **Triage** — one verifier sorts the open lines on `B`'s tip: already fixed · to fix (no worker).
 2. **Waive** a MED only on the user's decision: `MM release waive F <Rn> --entries <json>`.
-3. **Fix the rest** — `MM release group F <Rn> --id pre-<Rn>-<k>` per (context, side),
+3. **Fix** — `MM release group F <Rn> --id pre-<Rn>-<k>` per (context, side) of the lines to fix,
    each integrated like a block (`block/pre-<Rn>-<k>`, its `MM pack`, its deepest block's tier and
-   depth, decision scope `release:<Rn>`); after promote, `release close` its lines.
-4. **Confirm** — releasable, gate green on the final commit `S` → present `S`, the tag, `BASE@T`,
+   depth, decision scope `release:<Rn>`).
+4. **Close once**, no group open: one verifier re-checks every line to close on the final tip →
+   `MM release close F <Rn> --entries <json>` (a closure is voided when its file changes later).
+5. **Confirm** — releasable, gate green on the final commit `S` → present `S`, the tag, `BASE@T`,
    waivers, residual LOW. Only on the user's explicit consent naming commit and destination: `MM release confirm`
    (`--help`). At a side's first release, move its `gate_after_release` steps into `gate` (a
    profile edit, presented before the consent); re-record the gate proof.

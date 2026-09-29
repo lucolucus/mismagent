@@ -40,7 +40,9 @@ challenger to attack.
    **`capacity`**. The last three must come from the user: if the dialogue does not surface them,
    **ask explicitly** (the profile's comments say why each matters).
    Never invent `gate` or `dev_architecture`: the architect finalizes them.
-1. **Diverge** with the user: goals, users, constraints, alternatives.
+1. **Diverge** with the user: goals, users, constraints, alternatives. A side with code: `MM codemap
+   <output_dir> --ref <base>` feeds every dispatch below (methodology rule 9); the brief cites what
+   exists and what this feature adds.
 2. **Attack before modeling:** dispatch `mismagent-challenger`. `KILL` → stop and report; `RESHAPE`
    → redesign with the user; `PROCEED` → close its `MUST_ANSWER_BEFORE_MODELING` items first.
    Record the challenger's debate and the user's non-obvious choice (a `KILL` too) in

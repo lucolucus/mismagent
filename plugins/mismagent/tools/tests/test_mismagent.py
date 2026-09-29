@@ -796,6 +796,48 @@ class TestWhy(Base):
     def rules(self, text):
         return {(e["id"], e["rule"]) for e in self.why(text, 1)["errors"]}
 
+    def test_a_handoff_imports_with_local_ids_idempotently(self):
+        d = os.path.join(self.tmp, "imp")
+        path = self.put("decisions.md", note("D-0001") + "\n" + note("D-0002"), base=d)
+        h = self.put("h.md", note("D-0001", Decision="first local") + "\n" +
+                     note("D-0002", Decision="second local", Debate="builds on D-0001; unlike D-0002 above") +
+                     "\nRESULT: READY-FOR-REVIEW\nBLOCK: agg-order\n", base=d)
+        out = self.run_tool("why", "check", h, "--into", path, expect=0)                 # dry: nothing written
+        self.assertEqual(out["mapping"], {"D-0001": "D-0003", "D-0002": "D-0004"})
+        self.assertNotIn("D-0003", mismagent.read(path))
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)
+        self.assertEqual((out["appended"], out["unchanged"]), (["D-0003", "D-0004"], []))
+        text = mismagent.read(path)
+        self.assertIn("- Debate: builds on D-0003; unlike D-0004 above", text)           # local refs remapped
+        self.assertNotIn("RESULT:", text)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)             # a retry adds nothing
+        self.assertEqual((out["appended"], out["unchanged"]), ([], ["D-0003", "D-0004"]))
+        self.assertEqual(mismagent.read(path), text)
+        bad = self.put("bad.md", note("D-0001", Docs="[x](missing.md)"), base=d)
+        out = self.run_tool("why", "check", bad, "--into", path, expect=1)
+        self.assertIn("link.missing", {e["rule"] for e in out["errors"]})
+        self.assertEqual(mismagent.read(path), text)
+
+    def test_a_handoff_import_survives_cycles_updates_and_rejects_malformed_notes(self):
+        d = os.path.join(self.tmp, "imp2")
+        path = self.put("decisions.md", note("D-0001"), base=d)
+        h = self.put("x-1.md", note("D-0001", Debate="see D-0002") + "\n" + note("D-0002", Debate="see D-0001"), base=d)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)
+        self.assertEqual((out["mapping"], out["appended"]), ({"D-0001": "D-0002", "D-0002": "D-0003"}, ["D-0002", "D-0003"]))
+        text = mismagent.read(path)
+        self.assertIn("- Debate: see D-0003", text)                                       # mapped once, never twice
+        self.assertEqual(self.run_tool("why", "import", path, "--handoff", h, expect=0)["appended"], [])  # cycle: no-op
+        self.put("x-1.md", note("D-0001", Debate="see D-0002; the reviewer agreed") + "\n" +
+                 note("D-0002", Debate="see D-0001"), base=d)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)              # an allowed update
+        self.assertEqual((out["appended"], out["updated"]), ([], ["D-0002"]))
+        self.assertEqual(len(mismagent.parse_notes(path)[0]), 3)
+        for bad in ("## D-0001 · Parser choice\n", note("D-0001").replace("- Question: Which parser?\n",
+                                                                           "- Question: Which\n  parser?\n")):
+            self.put("y-1.md", bad, base=d)
+            out = self.run_tool("why", "check", os.path.join(d, "y-1.md"), "--into", path, expect=1)
+            self.assertEqual(out["errors"][0]["rule"], "handoff.line")
+
     def test_valid_file_before_any_manifest(self):
         d = os.path.join(self.tmp, "early")
         path = self.put("decisions.md", note("D-0001") + note("D-0002", Supersedes="D-0001"), base=d)
@@ -1386,6 +1428,12 @@ class TestV023(Base):
         self.move("svc-order", "done")
         self.assertNotIn(("release.later_work", "svc-order"), self.gaps()[0])        # history, never reopened
 
+    def test_a_release_refusal_names_the_unexpected_and_the_missing_flags(self):
+        out = self.run_tool("release", "close", self.feat, "R0", "--entries", "[]", "--integration", "feature/shop")
+        self.assertIn("not an option of close: --integration", out["error"])
+        out = self.run_tool("release", "list", self.feat, "R0")
+        self.assertIn("missing: --integration", out["error"])
+
     def test_a_proof_recorded_on_the_full_consumer_list_stays_valid(self):
         feat = mismagent.Feature(self.feat)
         full = mismagent.spec_hash(feat, "agg-order", own=False)
@@ -1793,6 +1841,75 @@ class TestV024(Base):
             self.assertIn(("composition.root", "architecture.md"), self.gaps()[0], text)
         self.put("architecture.md", "- **composition_root:** `src/app/main`\n", base=self.out)
         self.run_tool("lint", self.feat, expect=0)
+
+    def test_composition_roots_are_resolved_per_side(self):
+        self.write_feature(self.comp("    composition: true\n    after: [agg-order]\n    side: app\n"))
+        self.put("architecture.md", "# A\n\n```yaml\ncomposition_roots:\n  admin: src/admin\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # none for side app
+        self.put("architecture.md", "# A\n\n- `composition_root: legacy/one`\n\n```yaml\ncomposition_roots:\n"
+                 "  admin: src/admin\n  app: src/app\n```\n", base=self.out)
+        self.run_tool("lint", self.feat, expect=0)
+        self.assertEqual(mismagent.composition_root(mismagent.Feature(self.feat), "app"), "src/app")  # map wins
+        self.put("architecture.md", "# A\n\n```yaml\ncomposition_roots:\n  app: null\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # a null root is none
+        self.put("architecture.md", "- `composition_root: one/root`\n", base=self.out)
+        self.put("profile.md", "```yaml\nsides:\n  app: {path: a}\n  admin: {path: b}\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # one line, two sides
+
+    def test_code_paths_name_existing_code_and_leave_other_blocks_specs_alone(self):
+        before = {b: self.spec_hash(b) for b in ("agg-order", "svc-order")}
+        self.put("src/orders/api.py", "x\n", base=self.repo)
+        self.put("src/local-only.py", "x\n", base=self.repo)                             # never committed
+        sh(self.repo, "git", "add", "src/orders/api.py")
+        sh(self.repo, "git", "commit", "-q", "-m", "api")
+        m = MANIFEST.replace("    view_shape: { orderId: string, total: int }\n",
+                             "    view_shape: { orderId: string, total: int }\n    code_paths: [src/orders/api.py, src/gone.py]\n", 1)
+        self.write_feature(m)
+        self.assertIn(("code_paths.exist", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace(", src/gone.py", ", src/local-only.py"))
+        self.assertIn(("code_paths.exist", "rm-orders"), self.gaps()[0])               # the committed tree counts
+        self.write_feature(m.replace(", src/gone.py", ""))
+        self.assertNotIn(("code_paths.exist", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "src/orders/api.py"))
+        self.assertIn(("code_paths.shape", "rm-orders"), self.gaps()[0])
+        self.assertEqual({b: self.spec_hash(b) for b in before}, before)               # only its own row changed
+        self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "[/abs/path]"))
+        self.assertIn("code_paths", json.dumps(self.run_tool("manifest", "render", self.feat)))
+
+    def test_the_pack_names_the_code_to_change_and_the_entry_files_to_read(self):
+        self.put("src/orders/api.py", "x\n", base=self.repo)
+        self.write_feature(MANIFEST.replace("    commands: [PlaceOrder]\n", "    commands: [PlaceOrder]\n"
+                                            "    code_paths: [src/orders/api.py]\n", 1))
+        self.put("architecture.md", "# A\n\n```yaml\nmodules:\n  - id: orders\n    root: src/orders\n"
+                 "    entry_files: [src/orders/api.py, src/orders/ports.py]\n  - id: reports\n    root: src/reports\n"
+                 "    entry_files: [src/reports/api.py]\n```\n", base=self.out)
+        md = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        sec = md[md.index("## Existing code"):]
+        self.assertIn("To change (`code_paths`):\n- `src/orders/api.py`", sec)
+        self.assertIn("- `src/orders/ports.py`", sec)                                    # its context's entry
+        self.assertNotIn("src/reports", sec.split("## ")[1])                             # not its dependency
+
+    def test_codemap_groups_by_module_marks_entry_files_and_skips_the_output_dir(self):
+        for f in ("src/orders/api.py", "src/orders/impl/x.py", "src/reports/r.py", "tools/t.sh"):
+            self.put(f, "x\n", base=self.repo)
+        self.put("profile.md", "# P\n\n```yaml\nsides:\n  app:\n    path: src\n```\n", base=self.out)
+        sh(self.repo, "git", "add", ".")
+        sh(self.repo, "git", "commit", "-q", "-m", "code")
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--files", expect=0)
+        self.assertIn("modules unknown", md)
+        self.assertIn("- **orders** `src/orders` — 2 files", md)
+        self.assertNotIn(".mismagent", md)
+        self.assertNotIn("tools/t.sh", md)                                              # outside the side
+        self.put("architecture.md", "# A\n\n```yaml\nmodules:\n  - id: ord\n    side: app\n    root: src/orders\n"
+                 "    entry_files: [src/orders/api.py]\n```\n", base=self.out)
+        self.put("profile.md", "# P\n\n```yaml\nsides:\n  app:\n    path: src\n  ops:\n    path: tools\n```\n",
+                 base=self.out)
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--side", "ops", "--files", expect=0)
+        self.assertIn("(outside any module) — 1 files: `tools/t.sh`", md)             # ops: its own fallback
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--files", "--module", "ord", expect=0)
+        self.assertIn("  - * `src/orders/api.py`", md)
+        self.assertIn("  - `src/orders/impl/x.py`", md)
+        self.assertNotIn("src/reports", md)
 
 
 def finding(sev, at, issue, fix="Defer", evidence="seen in the diff"):

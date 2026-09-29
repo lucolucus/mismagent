@@ -30,6 +30,3 @@ You realize **one read-model**: a query or projection serving a view to its cons
 
 ## TDD, green on its own
 Red-green-refactor on the side's gate until green and the view matches its shape.
-
-## Return
-`PUBLIC_API`: the realized `view_shape`.

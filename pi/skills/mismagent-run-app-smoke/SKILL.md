@@ -9,36 +9,32 @@ description: "mismAgent build: the recorded render proof for ui blocks \u2014 la
 # run-app-smoke — the render proof, recorded
 
 You produce the **second proof** of a `ui` block (presenter-green alone is not done) by **running
-the real app** and recording what you see — clipped or invisible controls are caught only this way.
+the real app** and recording what you see — the only way to catch clipped or invisible controls.
 
 ## Input
 - the **ui block(s)** to prove: one block (at its review); at a `composition` block, **every** `ui` block of
   its release deferred to it, each run at the composition's sha, under its own
   `render-proof/<block-id>/`; or every `ui` block of a slice (before release);
-- the **active profile**: `sides.<side>.run` (how to launch the side locally) and `ui_render_check`;
+- the **active profile**: `sides.<side>.run` and `ui_render_check`;
 - the block specs (`blocks/<ctx>/*/<id>.md`) + `UI/ux-proposal.md` (how to reach each screen).
 
 ## Procedure
-1. **Launch the app** with the profile's `run` command (background; respect `toolchain`). If the
-   profile has **no `run` binding**, stop and say so — never fake the proof: the render-check
-   stays **owed**.
-2. **Reach each block's screen** (the block spec + ux-proposal name it) and apply **realize-ui's
-   render checklist**, item by item:
+1. **Launch the app** with the profile's `run` command (background; respect `toolchain`). **No
+   `run` binding** → stop and say so — never fake the proof: the render-check stays **owed**.
+2. **Reach each block's screen** and apply **realize-ui's render checklist**, item by item:
    - **sizing** — windows/dialogs/containers explicitly sized, nothing clipped or tiny;
    - **overflow** — long text/lists clip-or-scroll-or-ellipsize on purpose;
    - **contrast/visibility** — every control visible against its background;
    - **state rendering** — empty / error / loading actually render (drive the app into each state
      where possible);
    - **re-render** — interact and watch the view actually update.
-3. **Record the evidence** in `<output_dir>/features/<feature>/render-proof/<block-id>/`: a screenshot per
-   checklist item where the platform allows capture, otherwise a
-   dated observation note per item — **what was checked, what was seen**; a live process or a
-   window title alone proves nothing. Evidence is written even when everything passes, plus a
-   `sha.txt` holding the sha you ran (`rev-parse HEAD` in the worktree): evidence for another
-   sha is no proof.
+3. **Record the evidence** in `<output_dir>/features/<feature>/render-proof/<block-id>/`: a
+   screenshot per checklist item where the platform allows capture, else a dated observation note
+   per item — **what was checked, what was seen**; a live process or a window title alone proves
+   nothing. Write evidence even when everything passes, plus a `sha.txt` holding the sha you ran
+   (`rev-parse HEAD` in the worktree): evidence for another sha is no proof.
 4. **Verdict per block:**
-   - `RENDER-OK` — checklist green, evidence recorded → the proof the verifier's step 8
-     accepts;
+   - `RENDER-OK` — checklist green, evidence recorded → the proof verifier step 8 accepts;
    - `RENDER-FAIL` — findings named (which item, which screen, evidence attached) → routes like a
      review FAIL: the worker reworks the block (max 2 cycles), then re-prove.
 

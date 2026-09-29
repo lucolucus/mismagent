@@ -108,8 +108,8 @@ files and per-type standard.
     to end), as few waves as the dependency graph allows — never bent to fit (domain in the
     scaffold, a boundary owned by the wrong block). Present the R0 cut to the user at the `tests_nl`
     checkpoint. A release is a point on the line (its tag), never a code layer: later releases extend
-    the code in place **through blocks of their own** (`after:` the one they extend), never a note on
-    a done block; no `tests_nl` asserts release history — a feature a user setting switches off
+    the code in place **through blocks of their own** (`after:` the one they extend, `code_paths:` the
+    existing code they change), never a note on a done block; no `tests_nl` asserts release history — a feature a user setting switches off
     stays testable behavior.
 20. **Central risks are wave-0 spikes:** every `central: true` spike of the context-map (and every
     risk the architect flagged) has a `type: spike` node with `central: true`: flag the

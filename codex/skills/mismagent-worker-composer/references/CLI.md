@@ -16,13 +16,15 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted, attempt, commits, handoff, result[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
+| `MM why import <decisions.md> --handoff <h>` · `MM why check <h> --into <decisions.md>` | `{ok, file, mapping:{local: final}, appended, unchanged, …}` — a handoff's heading ids are local; `check --into` writes nothing |
 | `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` — `MM why append --help` lists the rules |
 | `MM why template [<file>]` | Markdown: a valid entry skeleton, the file's next id |
 | `MM question close F <id> --decision D-NNNN` | `{ok:true, id, decision, path, git, relinked}` or `{ok:false, refused}` — `relinked`: `F/decisions.md` links to the moved file rewritten (also on `move`) |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
 | `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git, relinked[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
-| `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
+| `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path; `## Existing code`: the block's `code_paths` (to change) and the `entry_files` of the modules serving its and its consumed owners' (context, side) — a module serves its `contexts:`, else the context named like its id (read-only), a composition block's side root — paths only, never in `spec_hash` |
+| `MM codemap <output_dir> --ref <sha> [--side S] [--module M] [--files]` | Markdown: per side (profile `sides:`), per module (`modules:` of architecture.md, else per directory), the files git tracks at the ref (`--files` lists them, entry files `*`). Discovery only: what is public stays the project's dependency lint |
 | `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…` | `{ok:true, id, file, attempt}` or `{ok:false, refused, problems}` |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
 | `MM proof record F review <id> --sha S --spec-hash H` · `MM proof check F review <id> --sha S` | `{recorded, sha}` or `{refused, reviewed, current}` · `{fresh, stale_because}` |
@@ -315,6 +317,7 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `wave.owner_first` | a consumed boundary's owner has a lower `wave` than the consumer |
 | `consumes.boundary` | every `consumes` entry is a boundary id |
 | `boundary.owner` · `boundary.consumers` | `owner` / each consumer is a block id; `consumers` and the blocks' `consumes` agree both ways |
+| `code_paths.shape` · `code_paths.exist` | `code_paths` is a list of repo-relative paths; a not-done block's name paths committed at the checkout's HEAD (the existing code it changes; new files need none) |
 | `release.required` · `release.declared` · `release.later_work` | every non-scaffold block has `release:`; declared in `releases:` when that section exists; its `notes` never name a later release (that work is a block of that release) |
 | `scaffold.domain_free` | a `scaffold` row has no `invariants`, `invariant_fields`, `commands`, `consumes`, `pinned_types`, `view_shape`, `keys`, and owns no boundary |
 | `boundary.pinned_types` | `pinned_types` present and non-empty; `pinned_types`/`keys` each a mapping `{name: text}` (never coerced) → `architect` |
@@ -331,7 +334,7 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `manifest.build_order` | no `build_order:` (read by nothing; order with `after:`) |
 | `composition.valid` | `composition` is `true \| false`, never `true` on a `scaffold` |
 | `composition.unique` · `composition.last` | at most one `composition: true` block per (`release`, `side`); its `after:` lists every other non-scaffold block of that (`release`, `side`) — the single writer of the composition root, last by construction. A manifest without the flag: no gap |
-| `composition.root` | a `composition: true` block exists → `<output_dir>/architecture.md` holds `composition_root: <path>` on one non-heading line, the path non-empty (bullet or backticks allowed) → `architect` |
+| `composition.root` | each side with a `composition: true` block has a root in `<output_dir>/architecture.md`: `composition_roots: {<side>: <path>}` in a YAML block (it wins), else one `composition_root: <path>` non-heading line, the path non-empty (bullet or backticks allowed) → `architect` |
 | `composition.chain` | a `composition: true` block's `after:` lists the composition block of the nearest earlier release (release order: `releases:` keys, then other labels) that has one on the same `side` |
 | `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:`/`release:` scope names a row / a release of the manifest → `recorder` (who wrote the entry) |
 | `release.finding` | every `- [ ]` line of `pre-release.md` has the seven fields, a severity, a locator → `composer` |

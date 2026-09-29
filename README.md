@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.25.4 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.26.0 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -268,6 +268,15 @@ another feature's work for a gap in yours.
 > consumer's spec never includes the other consumers. Later-release work is a block of that release,
 > never a note on an earlier one (lint `release.later_work`); a `ui` block pins the entry points its
 > composition block drives; a render check is seen red once and fails fast.
+>
+> **v0.26.0 — existing code is an input of the whole flow.** Once a side has code, design and build
+> read it first: `MM codemap` (per side and module, from git; what is public stays the project's own
+> dependency lint) feeds explore, model and the architect; reuse what fits, else remodel — a remodel
+> or a duplicate is a recorded decision, planned as blocks whose `code_paths` name the existing code
+> they change, and touched code is rationalized where it can be. The pack's `## Existing code` gives a
+> worker the paths to change and the entry files to read. Also: `composition_roots` per side, worker
+> handoffs imported with composer-assigned ids (`MM why import`, idempotent), a re-used worktree
+> merged up to the line first, and the release path closes once, after the last fix.
 
 ## Going deeper
 

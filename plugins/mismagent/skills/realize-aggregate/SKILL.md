@@ -45,6 +45,3 @@ once — a parallel predicate that never touches the confined fields is for the 
 ## TDD, green on its own
 Red-green-refactor. Run the side's gate and re-read the diff against every invariant until green and
 every invariant covered.
-
-## Return
-`PUBLIC_API`: the root's public signatures and the named predicates consumers will use.

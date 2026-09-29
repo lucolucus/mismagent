@@ -1,15 +1,14 @@
 # mismAgent — Project profile (TEMPLATE)
 
-> The core (agents, skills, flow) is generic; this file is the **binding to your project**. Agents
-> read *"the profile"* and never name a project. The active profile lives in
-> **`<output_dir>/profile.md`** (default `.mismagent/profile.md`); `profiles/example.md` is a
-> filled-in fictional instance.
+> The core (agents, skills, flow) is generic; this file **binds it to your project**: agents read
+> *"the profile"*, never name a project. Active profile: **`<output_dir>/profile.md`** (default
+> `.mismagent/profile.md`); `profiles/example.md` is a fictional instance.
 >
-> **One profile per project** — the junction point, not a per-feature artifact. Features
+> **One profile per project**, not per feature. Features
 > (`<output_dir>/features/<feature>/`) read it and never rewrite it; `gate`, `run`, `architecture`
 > and `code_rules` change only when the user asks, through a superseding ADR.
 >
-> **Filled in at two moments, both on the first feature:**
+> **Filled in twice, both on the first feature:**
 > - **Bootstrap** (explore creates it if missing): output dir, language, validation mode, materials,
 >   capacity, sides. The bounded contexts live only in `context-map.md`.
 > - **Post-architect** (model): `gate` and its companions, `run`, `dev_architecture`, the definition
@@ -20,9 +19,9 @@
 ```yaml
 output_dir: .mismagent          # where mismAgent writes its artifacts
 ubiquitous_language:
-  lang: <it|en|...>             # the language the domain speaks — canonical names are never translated
-validation_mode: normal         # or greenfield_from_requirements: the deliverable is (re)built from the
-                                # stated requirements ONLY — no prior implementation is ground truth.
+  lang: <it|en|...>             # the domain's language — canonical names never translated
+validation_mode: normal         # or greenfield_from_requirements: the deliverable is (re)built from
+                                # the stated requirements ONLY — no prior implementation is ground truth.
 materials:                      # what source material EXISTS; `none` is an answer — no skill hunts
   sample: <path | none>         # domain PDFs/screenshots (analyst, researcher, challenger, ux-designer)
   ui: <path | none>             # pre-existing mockups (ux-designer, architect)
@@ -34,56 +33,53 @@ capacity: <team & hours>        # e.g. "2 devs, ~6h/week" or "full-agentic" — 
 
 ```yaml
 architecture: .mismagent/architecture.md  # style + module map + allowed dependency directions
-                                          # (source of the scaffold and of the dependency lint)
+                                          # (source of the scaffold and the dependency lint)
 code_rules: .mismagent/code-rules.md      # the deliberated rules, each with its enforcement channel
 ```
 
 ## Sides (code and verification scopes)
 
-A side is a path in the repository with its own gate; a single side is legitimate.
+A side is a repository path with its own gate; one side is legitimate.
 
 ```yaml
 sides:
   <side>:                       # e.g. be | fe | sync — or `app` if single-side
     path: <dir>                 # the side's code, relative to the project root (one repo per project)
-    dev_architecture: <skill | path.md | none>   # the CODEBASE's style memory: authored by the
-                                # architect before the first domain wave, or harvested from real code.
-                                # Sides sharing one codebase point at ONE memory. The worker-composer
+    dev_architecture: <skill | path.md | none>   # the CODEBASE's style memory, authored by the
+                                # architect before the first domain wave or harvested from real code;
+                                # sides sharing a codebase point at ONE memory; the worker-composer
                                 # injects it into every dispatch.
-    gate: "<commands>"          # build + test that must turn green; bootstrap value
-                                # "manual — TBD after the stack ADR". It must EXECUTE the tests of the
-                                # side's whole module graph, not merely build it. Its discriminating
-                                # power is proven red-green (at the scaffold on greenfield); the
+    gate: "<commands>"          # build + test that must turn green, EXECUTING the tests of the side's
+                                # whole module graph, not merely building it; its discrimination
+                                # is proven red-green (at the scaffold on greenfield) — the
                                 # worker-composer refuses a gate without a fresh proof.
-    gate_files: [<glob>…]       # REQUIRED whenever `gate` is set: the files defining the side's
-                                # build, modules, tests and registered checks — stable inputs, never
-                                # generated files (repo-relative, `**` allowed). They key the gate
-                                # proof: a change to them makes it stale.
+    gate_files: [<glob>…]       # REQUIRED whenever `gate` is set: the stable (never generated) files
+                                # defining the side's build, modules, tests and registered checks
+                                # (repo-relative, `**` allowed); a change to them stales the gate proof.
     gate_verify: "<commands>"   # optional: `gate` + the stack's re-run switch (no cached test phase); verifier and candidate run it
-    gate_after_release: "<steps>" # checks that protect RELEASED versions (e.g. migrations from
-                                # released data). Kept out of `gate` until the side's first release, when
+    gate_after_release: "<steps>" # checks protecting RELEASED versions (e.g. migrations from
+                                # released data); out of `gate` until the side's first release, when
                                 # the worker-composer appends them and records `switched@<tag>`.
                                 # none if every step matters from day one.
     toolchain: "<prerequisite>" # what the gate needs to START (e.g. a pinned runtime/SDK and how to
-                                # select it), so the same gate never flips on another shell. none if
+                                # select it), so the gate never flips on another shell. none if
                                 # self-sufficient.
     ui_render_check: "<mechanism>"  # UI sides only: how a `ui` block proves it RENDERS — an automated
-                                # smoke/screenshot test folded into the gate, or
+                                # smoke/screenshot test in the gate, or
                                 # "manual run-the-app (recorded)". none otherwise.
     run: "<launch command>"     # UI sides only: how to launch the side (run-app-smoke); its port only
-                                # if it serves one.
-                                # REQUIRED when ui_render_check is manual. Pinned by the architect
-                                # BEFORE any scaffold: a contract the wave-0 scaffold satisfies.
+                                # if it serves one. REQUIRED when ui_render_check is manual. Pinned by
+                                # the architect BEFORE any scaffold: a contract wave 0 satisfies.
 ```
 
 Keep every gate step cheap by strategy (standard migrations, faithful in-memory substrates,
-incremental per-module builds): a slow or hanging step is replaced by the architect, never waited out.
+incremental per-module builds): the architect replaces a slow or hanging step, never waits it out.
 
 ## Build loop (optional — defaults shown; read by the worker-composer)
 
 ```yaml
 build:
-  max_parallel_workers: 4       # the wave's cap — size it to `capacity` and to the machine (N workers
+  max_parallel_workers: 4       # the wave's cap — sized to `capacity` and the machine (N workers
                                 # = N gates at once)
   model_routing:                # the model follows the ACTION
     tiers: { light: haiku, standard: sonnet, deep: opus }   # rebind to your harness' models
@@ -106,8 +102,8 @@ people: ["<name> — <role>"]   # names for decision notes' `By:`; never proof o
 
 ## Boundaries
 - Every boundary is a consumer-owned port + its consumer-driven contract test, on a fake then the
-  real adapter. How a boundary travels over a network (API specs, event schemas, generated types) is
-  a project decision: its ADRs, code rules and gate.
+  real adapter. How it travels over a network (API specs, event schemas, generated types) is a
+  project decision: its ADRs, code rules and gate.
 - **authorship:** reads consumer-driven, writes producer-driven; the architect arbitrates.
 
 ## Branching

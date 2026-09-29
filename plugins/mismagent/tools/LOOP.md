@@ -116,7 +116,7 @@ branch is `block/<id>`.
 3. **Build:** first each `resume` block — a `result` (its worker returned, the lines at the end of
    its handoff) → step 4 with it; else its worker again on its existing worktree with a fresh pack,
    from its `progress` or its `commits`; then for each block of `MM ready` up to the cap: `move --to doing`, worktree
-   `.worktrees/<feature>/<id>` from the line tip (an un-parked block reuses its branch and
+   `.worktrees/<feature>/<id>` from the line tip (an un-parked block reuses its branch — `B` merged in first — and
    worktree), dispatch the worker with `MM pack` saved under `.worktrees/packs/<feature>/`.
    Every dispatch (worker, rework, reviewer) runs in the **foreground** — independent ones in
    parallel, in one message, where possible.
@@ -142,9 +142,8 @@ branch is `block/<id>`.
    again with `--answered`) · `blocked` → report it (a strategy problem, not the block's) ·
    `promote` (the proof is recorded) → `state commit` → `compose start` (a merge conflict → `rework write --reason merge-conflict`) → in the candidate run the
    gate + the contract test of every owner↔consumer pair whose both sides are in the candidate →
-   green: `compose promote`, then `MM why append F/decisions.md --entry <file>` for each of the block's
-   `.worktrees/returns/<feature>/<id>-<attempt>.md` files (every attempt's; their links now resolve
-   on the line), step 0's finish, `state commit` · red: `compose abort`, then `rework write --reason candidate-red`
+   green: `compose promote`, then `MM why import F/decisions.md --handoff <file>` for each of the block's
+   `.worktrees/returns/<feature>/<id>-<attempt>.md` files (every attempt's; ids assigned, idempotent), step 0's finish, `state commit` · red: `compose abort`, then `rework write --reason candidate-red`
    with the red output (the reviewers say whether owner, consumer or contract); `park` at the cap.
    `objections` from the ingest go to the decision note's `Debate`/`Result`.
 6. Report; end — once **the dispatch wave** of this firing is complete: every block dispatched in it

@@ -451,13 +451,14 @@ def _words(text):
     return len(URL.sub(" ", MD_LINK.sub(lambda m: m.group(0)[:m.group(0).rfind("](") + 1], text)).split())
 
 
-def parse_notes(path):
-    """([entry], [error]) — an entry: {id, title, line, fields, text}; an error: {id, rule, error}."""
+def parse_notes(path, text=None):
+    """([entry], [error]) — an entry: {id, title, line, fields, text}; an error: {id, rule, error}.
+    `text`: the content to parse instead of the file's."""
     entries, errors, cur = [], [], None
 
     def err(i, rule, msg):
         errors.append({"id": i, "rule": rule, "error": msg})
-    for n, line in enumerate(read(path).splitlines(), 1):
+    for n, line in enumerate((read(path) if text is None else text).splitlines(), 1):
         if line.startswith("###") or re.match(r"^\s+#|^#+\s*D-\d", line):  # malformed: an error, never skipped
             m = NOTE_HEAD.match(line)
             if not m:
@@ -482,11 +483,12 @@ def parse_notes(path):
     return entries, errors
 
 
-def check_notes(path):
-    """{ok, file, entries, active, errors} — exact checks of the decision-note format."""
-    if not os.path.isfile(path):
+def check_notes(path, text=None):
+    """{ok, file, entries, active, errors} — exact checks of the decision-note format. `text`: check this
+    content as if it were `path` (links resolved from its directory), without writing anything."""
+    if text is None and not os.path.isfile(path):
         raise UsageError("%s not found" % path)
-    entries, errors = parse_notes(path)
+    entries, errors = parse_notes(path, text)
     base, ids, by = os.path.dirname(os.path.abspath(path)), [e["id"] for e in entries], {}
 
     def err(i, rule, msg):
@@ -608,18 +610,18 @@ def note_update_ok(old, new):
     return keep(old) == keep(new) and adr(old) in ([], adr(new))
 
 
-def why_append(path, entry_path):
+def why_append(path, entry_path, entry_text=None, dry=False):
     """Append the entry file's entries to `path` — only if the result passes `why check`. The entries
     carry their ids (nothing is assigned); an identical entry already present is a no-op; the same id
     with other content is refused unless it is an update (`note_update_ok`), replaced in place. The one
     other edit to an old entry: `status: accepted` → `superseded` when a new entry `Supersedes` it.
     Nothing is written unless everything validates."""
-    if not os.path.isfile(entry_path):
+    if entry_text is None and not os.path.isfile(entry_path):
         raise UsageError("--entry %s not found" % entry_path)
     if not os.path.isdir(os.path.dirname(os.path.abspath(path))):
         raise UsageError("the directory of %s does not exist" % path)
     old = read(path) if os.path.isfile(path) else ""
-    have, new = dict(note_blocks(old)), note_blocks(read(entry_path))
+    have, new = dict(note_blocks(old)), note_blocks(read(entry_path) if entry_text is None else entry_text)
     if not new:
         return {"ok": False, "refused": "the entry file holds no `### D-NNNN · <title>` entry"}
     add, same, upd = [], [], []
@@ -653,20 +655,72 @@ def why_append(path, entry_path):
                for why in [scope_problem(feat, m.group(1))] if why]
         if bad:
             return {"ok": False, "refused": "a scope names nothing of the manifest: nothing written", "errors": bad}
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(text)
-    try:
-        r = check_notes(tmp)
-    except UsageError:
-        os.remove(tmp)
-        raise
+    r = check_notes(path, text)  # in memory, links resolved from path's directory
     if not r["ok"]:
-        os.remove(tmp)
         return {"ok": False, "refused": "the file would not pass `why check`", "errors": r["errors"]}
-    os.replace(tmp, path) if add or upd else os.remove(tmp)
+    if (add or upd) and not dry:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
     return {"ok": True, "file": path, "appended": [i for i, _ in add], "updated": [i for i, _ in upd],
             "unchanged": same, "superseded": flipped}
+
+
+def handoff_notes(handoff):
+    """([(local id, block)], [error]) — a worker handoff's decision entries: everything before its
+    return (the first `RESULT:` line), an optional `# ` title aside; each other line is a note heading,
+    a `- Field:` line or blank — anything else is an error, never dropped."""
+    entries, errors = [], []
+    for n, line in enumerate(read(handoff).splitlines(), 1):
+        if line.startswith("RESULT:"):
+            break
+        m = NOTE_HEAD.match(line)
+        if m:
+            entries.append([m.group(1), [line]])
+        elif re.match(r"^- [A-Za-z]+:", line) and entries:
+            entries[-1][1].append(line)
+        elif line.strip() and not (line.startswith("# ") and not entries):
+            errors.append({"id": "line %d" % n, "rule": "handoff.line", "error": "neither a `### D-NNNN · <title>` "
+                           "heading nor a `- <Field>: <one line>` line of a note: %r" % line[:60]})
+    return [(i, "\n".join(ls)) for i, ls in entries], errors
+
+
+def why_import(path, handoff, dry=False):
+    """Import a handoff's entries into `path`. Its heading ids are LOCAL: the composer assigns the final
+    ids (the next free ones, in order), references to local ids are rewritten, and the mapping is kept
+    in `handoff-imports.json` beside `path` (key: the handoff's file name) — a retry reuses it, so an
+    imported entry is a no-op or an allowed update (`why_append`), cycles included. `dry`: validate in
+    memory, write nothing."""
+    if not os.path.isfile(handoff):
+        raise UsageError("--handoff %s not found" % handoff)
+    entries, errors = handoff_notes(handoff)
+    if errors:
+        return {"ok": False, "refused": "the handoff's notes section is malformed: nothing written", "errors": errors}
+    old = read(path) if os.path.isfile(path) else ""
+    ledger_path = os.path.join(os.path.dirname(os.path.abspath(path)), "handoff-imports.json")
+    ledger = load_json(ledger_path) or {}
+    key = os.path.basename(handoff)
+    mapping = dict(ledger.get(key) or {})
+    have = {i for i, _ in note_blocks(old)}
+    mapping = {k: v for k, v in mapping.items() if v in have}  # a mapping whose entry is gone is void
+    nxt = max([int(i[2:]) for i in have], default=0)
+    for i, _ in entries:
+        if i not in mapping:
+            nxt += 1
+            mapping[i] = "D-%04d" % nxt
+    remap = lambda body: re.sub(r"\bD-\d{4}\b", lambda x: mapping.get(x.group(0), x.group(0)), body)
+    out = []
+    for i, b in entries:
+        head, _, body = b.partition("\n")
+        out.append(re.sub(r"^###\s+D-\d{4}", "### " + mapping[i], head, count=1) + ("\n" + remap(body) if body else ""))
+    if not out:
+        return {"ok": True, "file": path, "mapping": {}, "appended": [], "updated": [], "unchanged": []}
+    r = why_append(path, handoff, entry_text="\n\n".join(out) + "\n", dry=dry)
+    if r["ok"] and not dry and (r["appended"] or r["updated"] or ledger.get(key) != mapping):
+        ledger[key] = mapping
+        write_json(ledger_path, ledger)
+    return dict(r, file=path, mapping=mapping)
 
 
 def why_template(path):
@@ -698,13 +752,18 @@ def cmd_why(a):
     if not a.file:
         raise UsageError("why %s takes <file>" % a.op)
     if a.op == "append":
-        if not a.entry:
+        if not a.entry or a.handoff or a.into:
             raise UsageError("why append takes --entry <file>")
         r = why_append(a.file, a.entry)
         return emit(r, 0 if r["ok"] else 1)
-    if a.entry:
-        raise UsageError("why check takes no --entry")
-    r = check_notes(a.file)
+    if a.op == "import":
+        if not a.handoff or a.entry or a.into:
+            raise UsageError("why import takes <decisions.md> --handoff <file>")
+        r = why_import(a.file, a.handoff)
+        return emit(r, 0 if r["ok"] else 1)
+    if a.entry or a.handoff:
+        raise UsageError("why check takes <file> [--into <decisions.md>]")
+    r = why_import(a.into, a.file, dry=True) if a.into else check_notes(a.file)
     return emit(r, 0 if r["ok"] else 1)
 
 
@@ -760,10 +819,32 @@ COMP_LINE = ("Composition: extend the existing composition at %s in place — ne
              "this release publish what you wire.")
 
 
-def composition_root(feat):
-    """The project's composition root: `composition_root: <path>` in the trunk's architecture.md
-    (`<output_dir>/architecture.md`, the architect's); None when absent."""
+FENCE = re.compile(r"^```ya?ml[^\n]*\n(.*?)^```", re.M | re.S)
+
+
+def yaml_section(path, key):
+    """The value of top-level `key` in the first fenced YAML block of a Markdown file that has it."""
+    for m in FENCE.finditer(read(path)) if os.path.isfile(path) else []:
+        try:
+            doc = parse_yaml(m.group(1))
+        except YamlError:
+            continue
+        if key in doc:
+            return doc[key]
+    return None
+
+
+def composition_root(feat, side=None):
+    """The composition root of `side`: `composition_roots: {<side>: <path>}` in a YAML block of the
+    trunk's architecture.md, else the legacy `composition_root: <path>` line (one side); None when absent."""
     p = os.path.join(feat.odir, "architecture.md")
+    roots = yaml_section(p, "composition_roots")
+    if isinstance(roots, dict) and roots:
+        r = roots.get(side)
+        return r.strip() if isinstance(r, str) and r.strip() else None
+    sides = yaml_section(os.path.join(feat.odir, "profile.md"), "sides")
+    if side is not None and isinstance(sides, dict) and len(sides) > 1:
+        return None  # a single `composition_root:` line never serves several sides
     for line in read(p).splitlines() if os.path.isfile(p) else []:
         m = None if line.lstrip().startswith("#") else COMP_ROOT.search(line)
         if m:
@@ -788,12 +869,20 @@ def earlier_compositions(feat, b):
     return [str(x.get("id")) for x in sorted(out, key=lambda x: -order.index(str(x.get("release"))))]
 
 
+def code_paths_ok(cp):
+    """None, or a list of repo-relative paths (no absolute path, no `..`)."""
+    return cp is None or (isinstance(cp, list) and all(
+        isinstance(x, str) and x.strip() and not x.startswith("/") and ".." not in x.split("/") for x in cp))
+
+
 def render_block(feat, b):
     """(text, [missing input]) — the block file `manifest render` writes for manifest row `b`."""
     i, t, missing = str(b.get("id") or ""), b.get("type"), []
     tests = b.get("tests_nl") or []
     if b.get("composition") is not None and not isinstance(b["composition"], bool):
         missing.append("composition %r is not true | false" % (b["composition"],))
+    if not code_paths_ok(b.get("code_paths")):
+        missing.append("code_paths %r is not a list of repo-relative paths" % (b.get("code_paths"),))
     if not SLUG.match(i):
         missing.append("id %r is not a slug" % i)
     if t not in BLOCK_TYPES:
@@ -831,7 +920,7 @@ def render_block(feat, b):
     if b.get("what") or t != "scaffold":
         out += ["## What to do", str(b.get("what") or "").strip()]
         if b.get("composition") is True and t != "scaffold":  # the wiring obligation reaches the worker via the spec
-            out.append(COMP_LINE % (composition_root(feat) or "<composition_root in architecture.md>"))
+            out.append(COMP_LINE % (composition_root(feat, b.get("side")) or "<composition_root in architecture.md>"))
         out.append("")
     if b.get("invariants"):
         out += ["## Invariants"] + ["- %s" % x for x in b["invariants"]] + [""]
@@ -975,6 +1064,8 @@ def lint(feat):
         i, t, w = str(b.get("id")), b.get("type"), b.get("wave")
         if t not in BLOCK_TYPES:
             gap("type.valid", i, "type %r is not one of %s" % (t, ", ".join(BLOCK_TYPES)))
+        if not code_paths_ok(b.get("code_paths")):
+            gap("code_paths.shape", i, "code_paths %r is not a list of repo-relative paths" % (b.get("code_paths"),))
         if not isinstance(w, int) or isinstance(w, bool) or w < 0:
             gap("wave.valid", i, "wave %r is not a non-negative integer" % (w,))
         elif (w == 0) != (t == "scaffold"):
@@ -993,7 +1084,17 @@ def lint(feat):
                 gap("release.required", i, "non-scaffold block without release:")
             elif labels is not None and str(rel) not in labels:
                 gap("release.declared", i, "release %s is not in the releases: section" % rel)
-            elif feat.state_of(i) != "done":  # a done block's notes are history
+            if feat.state_of(i) != "done" and code_paths_ok(b.get("code_paths")) and b.get("code_paths"):
+                try:
+                    repo = feat.repo()
+                except UsageError:
+                    repo = None
+                gone = [x for x in b["code_paths"] if repo and not git(repo, "ls-tree", "HEAD", "--", x.rstrip("/"),
+                                                                        check=False).stdout.strip()]
+                if gone:
+                    gap("code_paths.exist", i, "code_paths name no existing file or directory: %s (they are the "
+                        "existing code the block changes; new files need no entry)" % ", ".join(gone))
+            if rel and (labels is None or str(rel) in labels) and feat.state_of(i) != "done":
                 order = release_names(feat)
                 later = [r for r in order[order.index(str(rel)) + 1:] if str(rel) in order
                          and re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(r), str(b.get("notes") or ""))]
@@ -1167,9 +1268,10 @@ def composition_gaps(feat):
         if prev and prev[0] not in after_of(feat, str(b.get("id"))):
             gap("composition.chain", str(b.get("id")), "after: lacks %s — the composition block of the nearest "
                 "earlier release on the same side: the root is extended release after release, in order" % prev[0])
-    if comps and not composition_root(feat):
-        gap("composition.root", "architecture.md", "a block has composition: true but <output_dir>/architecture.md "
-            "names no `composition_root: <path>` (the project location the composition extends)", "architect")
+    for side in sorted({str(b.get("side")) for b in comps if not composition_root(feat, b.get("side"))}):
+        gap("composition.root", "architecture.md", "a block of side %s has composition: true but "
+            "<output_dir>/architecture.md names no composition root for it (`composition_roots: {<side>: <path>}`, "
+            "or one `composition_root: <path>` for a single side)" % side, "architect")
     return gaps
 
 
@@ -1420,6 +1522,62 @@ def suspect_generated(repo, globs):
         if why:
             out.append("%s: %s" % (f, ", ".join(why)))
     return out
+
+
+# ---- codemap: where the existing code is (discovery, never authority) ----------------------------
+def codemap(odir, ref, side=None, module=None, files=False):
+    """Markdown: per side (profile `sides:`), per module (architecture.md `modules:` — {id, side, root,
+    entry_files}) else per top directory, the files git tracks at `ref`, entry files marked. What is
+    public stays the project's (its dependency lint); this only says where to start reading."""
+    p = subprocess.run(["git", "-C", odir, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if p.returncode:
+        raise UsageError("%s is not inside a git repository" % odir)
+    repo, s = p.stdout.strip(), need_sha(p.stdout.strip(), ref)
+    skip = os.path.relpath(os.path.abspath(odir), repo).replace(os.sep, "/") + "/"
+    tracked = [f for f in git(repo, "ls-tree", "-r", "--name-only", s).stdout.splitlines()
+               if not f.startswith(skip) and not f.startswith(".worktrees/")]
+    sides = yaml_section(os.path.join(odir, "profile.md"), "sides")
+    sides = {str(k): str((v or {}).get("path", ".")) for k, v in sides.items()} if isinstance(sides, dict) else {"-": "."}
+    mods = yaml_section(os.path.join(odir, "architecture.md"), "modules")
+    mods = [m for m in mods if isinstance(m, dict) and m.get("root")] if isinstance(mods, list) else []
+    under = lambda f, root: root in (".", "", "./") or f == root.rstrip("/") or f.startswith(root.rstrip("/") + "/")
+    note = "" if mods else " No `modules:` in architecture.md: modules unknown, grouped by directory."
+    out = ["# Code map at %s" % s[:12], "",
+           "Discovery only: what is public is the project's (its dependency lint); entry files (*) are where to start "
+           "reading." + note, ""]
+    for sd, root in sorted(sides.items()):
+        if side and sd != side:
+            continue
+        mine = [f for f in tracked if under(f, root)]
+        out += ["## Side %s (`%s`, %d files)" % (sd, root, len(mine)), ""]
+        own = [m for m in mods if m.get("side") is None or str(m.get("side")) == sd]
+        if own:  # this side's modules, as declared
+            groups = [(str(m.get("id")), str(m["root"]), [str(e) for e in m.get("entry_files") or []]) for m in own]
+        else:  # this side's top directories, under its root
+            pre = "" if root in (".", "", "./") else root.rstrip("/") + "/"
+            groups = [(d, pre + d, []) for d in sorted({f[len(pre):].split("/")[0] for f in mine if "/" in f[len(pre):]})]
+        seen = set()
+        for mid, base, entries in groups:
+            if module and mid != module:
+                continue
+            fs = [f for f in mine if under(f, base)]
+            seen.update(fs)
+            out.append("- **%s** `%s` — %d files%s" % (mid, base, len(fs), "; entry: " + ", ".join(
+                "`%s`" % e for e in entries) if entries else ""))
+            if files:
+                out += ["  - %s`%s`" % ("* " if any(under(f, e) for e in entries) else "", f) for f in fs]
+        rest = [f for f in mine if f not in seen]
+        if rest and not module:
+            shown = rest if files else rest[:12]
+            out.append("- (outside any module) — %d files: %s" % (len(rest), ", ".join("`%s`" % f for f in shown)
+                                                                   + ("" if len(shown) == len(rest) else " …")))
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
+def cmd_codemap(a):
+    sys.stdout.write(codemap(os.path.abspath(a.output_dir), a.ref, a.side, a.module, a.files))
+    return 0
 
 
 # ---- commands -----------------------------------------------------------------------------------
@@ -2113,6 +2271,9 @@ def cmd_pack(a):
         for p in rw:
             add("Rework %s" % os.path.basename(p)[:-3], p, read(p))
         pack_deps(feat, fm["blocks"], add, out, writer=None)
+    ex = existing_code(feat, [a.id] if a.id in feat.row else group_spec(feat, a.id)[1]["blocks"])
+    if ex:
+        add("Existing code (paths; read before writing — never in spec_hash)", os.path.join(feat.odir, "architecture.md"), ex)
     pack_notes(feat, a.id, add)
     if a.id in feat.row:  # advisory: never in spec_hash, never a contract change
         mine, others = block_findings(feat, a.id)
@@ -2127,6 +2288,40 @@ def cmd_pack(a):
         add("Extra — %s" % os.path.basename(x), os.path.abspath(x), read(x))
     print("spec_hash: %s\n\n# Context pack — %s\n\n%s" % (h, a.id, "\n".join(out)))
     return 0
+
+
+def existing_code(feat, bids):
+    """The pack's `## Existing code` body: the blocks' `code_paths` (to change) and, read-only, the entry
+    files of the modules serving their (context, side) and their consumed owners' (a module serves the
+    contexts it lists in `contexts:`, else the one named like its id; no `side:` = every side), plus a
+    composition block's side root and its side's entry files. Paths only."""
+    mods = yaml_section(os.path.join(feat.odir, "architecture.md"), "modules")
+    mods = [m for m in mods if isinstance(m, dict)] if isinstance(mods, list) else []
+    serves = lambda m, ctx, side: ctx in [str(x) for x in m.get("contexts") or [m.get("id")]] and \
+        (m.get("side") is None or side is None or str(m.get("side")) == str(side))
+    change, read_, comp = [], [], []
+    for bid in bids:
+        row = feat.row.get(bid, {})
+        cp = row.get("code_paths")
+        change += [str(x) for x in cp if str(x) not in change] if isinstance(cp, list) else []
+        side = row.get("side")
+        pairs = {(str(row.get("context")), side)} | {
+            (str(o.get("context")), o.get("side", side)) for c in feat.consumes(bid)
+            for o in [feat.row.get(str((feat.bnd.get(c) or {}).get("owner")), {})]}
+        picked = [m for m in mods if any(serves(m, c, sd) for c, sd in pairs)]
+        if row.get("composition") is True and row.get("type") != "scaffold":
+            r = composition_root(feat, side)
+            comp += ["- composition root (%s): `%s`" % (side or "-", r)] if r else []
+            picked += [m for m in mods if m not in picked and (m.get("side") is None or str(m.get("side")) == str(side))]
+        for m in picked:
+            for e in m.get("entry_files") or []:
+                if str(e) not in read_ and str(e) not in change:
+                    read_.append(str(e))
+    if not (change or read_ or comp):
+        return "" if mods else "No module index in architecture.md: `MM codemap <output_dir> --ref <B>` shows the code."
+    return "\n".join(["To change (`code_paths`):"] + ["- `%s`" % x for x in change] * bool(change) +
+                     (["- none"] if not change else []) + ["", "To read, never write (entry files):"] +
+                     (["- `%s`" % x for x in read_] or ["- none"]) + ([""] + comp if comp else []))
 
 
 def checkpoint_md(rec):
@@ -2617,7 +2812,10 @@ def cmd_release(a):
     given = {k for k in ("integration", "entries", "id", "lines", "sha", "tag", "merge_to", "base_sha", "by", "consent")
              if getattr(a, k) is not None}
     if given != need:
-        raise UsageError("release %s takes %s" % (a.op, " ".join("--" + k.replace("_", "-") for k in sorted(need))))
+        flag = lambda ks: " ".join("--" + k.replace("_", "-") for k in sorted(ks))
+        raise UsageError("release %s takes %s" % (a.op, flag(need)) + "".join(
+            "; %s: %s" % (what, flag(ks)) for what, ks in (("not an option of " + a.op, given - need),
+                                                          ("missing", need - given)) if ks))
     if a.replace and a.op not in ("close", "waive"):
         raise UsageError("--replace is for release close|waive only")
     rn = a.release
@@ -3072,6 +3270,9 @@ HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact 
             "pre-release.md; each gap names its bounce_to. --adrs DIR: the ADRs alone. Exit 1 on a gap.",
     "why": "check: validate a decision-notes file (read-only). append: add an entry file's D-NNNN entries only\n"
            "if the whole file still passes (identical = no-op; only Debate/Result/ADR updates); else nothing written.\n"
+           "import <decisions.md> --handoff H: a worker handoff's entries; their ids are local — the next free ids\n"
+           "are assigned, references remapped; idempotent (an entry imported before adds nothing); prints the mapping.\n"
+           "check H --into <decisions.md>: validate that import without writing (the worker, before returning).\n"
            "template [file]: print a valid entry skeleton with the file's next id.\n\nThe rules `check` enforces:\n"
            "- an entry = `### D-NNNN · <title, ≤ %d words>`, then `- <Field>: <value>` lines: EVERY field is ONE\n"
            "  physical line (never wrapped), given once, non-empty; any other line is an error.\n"
@@ -3114,6 +3315,9 @@ HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact 
               "(rework cap) | decide | blocked; a non-promote action drops the review proof. An identical retry\n"
               "of an attempt returns its recorded result. --answered D-NNNN (repeatable, notes of F/decisions.md): the\n"
               "Decision findings are answered — re-ingest a `decide` attempt with them to promote without code.",
+    "codemap": "Read-only. Markdown on stdout, at --ref: per side (profile `sides:`), per module (architecture.md\n"
+               "`modules:` [{id, side, root, entry_files}] in a YAML block; else per top directory), the files git tracks,\n"
+               "entry files marked with --files. Discovery only: what is public stays the project's dependency lint.",
     "rework": "write: the next rework/<id>-<n>.md (same numbering and 2-cycle cap as review ingest; a group's -1\n"
               "is its spec) from --evidence; at the cap: action park, nothing written. Drops the review proof.",
     "state": "commit: on the checkout of F, on --integration only, no candidate open: stage every change under\n"
@@ -3136,9 +3340,17 @@ def build_parser():
     p = cmd("lint", cmd_lint, "exact structural checks (F, or --adrs DIR before any manifest)")
     p.add_argument("feature_dir", nargs="?")
     p.add_argument("--adrs")
-    p = cmd("why", cmd_why, "check | append | template decision notes", ("op", ("check", "append", "template")))
+    p = cmd("why", cmd_why, "check | append | import | template decision notes",
+            ("op", ("check", "append", "import", "template")))
     p.add_argument("file", nargs="?")
     p.add_argument("--entry")
+    p.add_argument("--handoff")
+    p.add_argument("--into")
+    p = cmd("codemap", cmd_codemap, "where the existing code is (Markdown; discovery only)", "output_dir")
+    p.add_argument("--ref", required=True)
+    p.add_argument("--side")
+    p.add_argument("--module")
+    p.add_argument("--files", action="store_true")
     cmd("manifest", cmd_manifest, "render the block files from the manifest", ("op", ("render",)), "feature_dir")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(

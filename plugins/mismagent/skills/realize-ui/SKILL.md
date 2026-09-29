@@ -45,5 +45,4 @@ Red-green-refactor on the presenter; iterate on the side's gate until green, eve
 covered, and the render check passed.
 
 ## Return
-`PUBLIC_API`: the screen's entry point and the presenter's testable surface.
 `NOTE`: the render-check mechanism used and its result.

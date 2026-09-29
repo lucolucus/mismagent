@@ -77,14 +77,13 @@ violating fixture it fails and a conforming one it passes (code, not comments), 
 the side's gate so it prints its ADR and result, and name it in a handoff entry.
 
 **Long sessions** (a manifest block with ACs open — never a release group or a spike): past
-about 30–40 turns, at a **green AC boundary** (never between a red and
+~30–40 turns, at a **green AC boundary** (never between a red and
 its green), commit everything and return `CHECKPOINT` — a context reset: a fresh session
 continues in the same worktree from the pack's `## Checkpoint` (from `next`; never redo `done`).
 
 ## You do NOT touch state
 State is the **folder**; only the **worker-composer** moves it. You: **code + commits in your
-worktree** (the profile's commit format; a commit at every green AC, everything committed before you return), never `git mv`,
-never merge. Your
+worktree** (the profile's format; a commit per green AC, nothing left uncommitted), never `git mv` or merge. Your
 **block file** is **read-only spec** — its `## Tasks` list is your acceptance criteria; **never edit
 it, never tick a checkbox**: progress is your tests + the folder position.
 
@@ -96,7 +95,7 @@ code one — return `BLOCKED` naming the step and what you observed.
 Append each non-obvious choice the spec left open to the **handoff** file, as a decision-note
 entry (`${CLAUDE_PLUGIN_ROOT}/tools/CLI.md` "Decision notes": title ≤8 words, Question ≤25,
 Decision ≤35, entry ≤220; links relative to `decisions.md`) — no handoff given → in the return.
-Return ≤ 8 short lines:
+Return ≤ 8 lines, lastly appended to the handoff too:
 ```
 RESULT: READY-FOR-REVIEW | CHECKPOINT | BLOCKED | BOUNCED
 BLOCK: <id>

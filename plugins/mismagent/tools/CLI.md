@@ -13,15 +13,15 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 
 | Command | Output |
 |---|---|
-| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
+| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted, attempt, commits, handoff, result[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
 | `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` — `MM why append --help` lists the rules |
 | `MM why template [<file>]` | Markdown: a valid entry skeleton, the file's next id |
-| `MM question close F <id> --decision D-NNNN` | `{ok:true, id, decision, path, git}` or `{ok:false, refused}` |
+| `MM question close F <id> --decision D-NNNN` | `{ok:true, id, decision, path, git, relinked}` or `{ok:false, refused}` — `relinked`: `F/decisions.md` links to the moved file rewritten (also on `move`) |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
-| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
+| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git, relinked[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
 | `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
 | `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…` | `{ok:true, id, file, attempt}` or `{ok:false, refused, problems}` |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
@@ -66,7 +66,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `done/`, no open question (open LOW lines never prevent it). `ready: []` alone is never `idle`.
 - **resume** (`status` and `ready`) = each block in `doing/` not integrated, with its branch, its
   worktree (null if none) and the count of uncommitted changes there: facts, never a diagnosis — a
-  dirty tree with no commit also describes a worker still running. With `F/progress/<id>.json`, the
+  dirty tree with no commit also describes a worker still running. `attempt` = 1 + rework cycles;
+  `commits` = commits only `block/<id>` holds; `handoff` = `.worktrees/returns/<feature>/<id>-<attempt>.md`
+  or null; `result` = the last `RESULT:` line the worker appended there on returning (null: it never
+  returned). With `F/progress/<id>.json`, the
   entry gains `progress: {attempt, head, next, fresh}` — `fresh` ⇔ its `head` is still `block/<id>`'s
   tip, its `spec_hash` the current one and the block's worktree clean (a change after the checkpoint
   is unverified work); a stale one is reported (`fresh: false`), never an anomaly.

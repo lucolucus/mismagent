@@ -1334,11 +1334,44 @@ class TestV023(Base):
         self.put("src/half.py", "work in progress\n", base=wt)
         out = self.status()
         self.assertEqual(out["outcome"], "work")
-        self.assertEqual(out["resume"], [{"id": "agg-order", "branch": "block/agg-order", "worktree": wt, "uncommitted": 1}])
-        self.assertIn("resume: agg-order (doing, not integrated; worktree %s, 1 uncommitted)" % wt, out["work"])
+        self.assertEqual(out["resume"], [{"id": "agg-order", "branch": "block/agg-order", "worktree": wt, "uncommitted": 1,
+                                          "attempt": 1, "commits": 0, "handoff": None, "result": None}])
+        self.assertIn("resume: agg-order (doing, not integrated; worktree %s, 1 uncommitted, attempt 1, 0 commits, "
+                      "no return)" % wt, out["work"])
         self.assertNotIn("interrupt", json.dumps(out))
         self.assertEqual(self.run_tool("ready", self.feat, expect=0)["resume"], out["resume"])
         self.assertEqual(mismagent.read(os.path.join(wt, "src", "half.py")), "work in progress\n")   # untouched
+
+    def test_a_resume_entry_tells_a_returned_worker_from_an_interrupted_one(self):
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.run_tool("move", self.feat, "agg-order", "--to", "doing", expect=0)
+        wt = self.block_wt("agg-order")
+        self.commit(wt, "src/a.py", "ac1\n")
+        self.commit(wt, "src/b.py", "ac2\n")
+        r = self.status()["resume"][0]
+        self.assertEqual((r["attempt"], r["commits"], r["handoff"]), (1, 2, None))      # interrupted, work committed
+        h = self.put(os.path.join(".worktrees", "returns", os.path.basename(self.feat), "agg-order-1.md"), "entries\n",
+                     base=self.repo)
+        r = self.status()["resume"][0]
+        self.assertEqual((r["handoff"], r["result"]), (h, None))                       # entries so far, no return
+        self.put(h, "entries\nRESULT: CHECKPOINT\n\nmore\nRESULT: READY-FOR-REVIEW\nBLOCK: agg-order\n", base=self.repo)
+        self.assertEqual(self.status()["resume"][0]["result"], "READY-FOR-REVIEW")      # returned: review it
+        self.put("rework/agg-order-1.md", "# Rework agg-order — cycle 1\n")
+        r = self.status()["resume"][0]
+        self.assertEqual((r["attempt"], r["handoff"], r["result"]), (2, None, None))                       # the rework has not returned
+
+    def test_a_state_move_rewrites_the_decision_links_to_the_moved_file(self):
+        class F:
+            dir = self.feat
+        self.put("decisions.md", "- Docs: [q](open-questions/q1.md), [s](./tasks/app/backlog/s1.md#result), "
+                                 "[other](open-questions/q10.md)\n")
+        j = lambda *x: os.path.join(self.feat, *x)
+        self.assertEqual(mismagent.relink_notes(F, j("open-questions", "q1.md"), j("open-questions", "closed", "q1.md")), 1)
+        self.assertEqual(mismagent.relink_notes(F, j("tasks", "app", "backlog", "s1.md"), j("tasks", "app", "done", "s1.md")), 1)
+        self.assertEqual(mismagent.read(j("decisions.md")), "- Docs: [q](open-questions/closed/q1.md), "
+                         "[s](tasks/app/done/s1.md#result), [other](open-questions/q10.md)\n")
 
     # -- confirm (git) -------------------------------------------------------------------------------
     def releasable_line(self):

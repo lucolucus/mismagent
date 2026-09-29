@@ -1807,15 +1807,28 @@ def spike_dir_state(feat, repo, sid):
 
 
 def resume_candidates(feat, repo):
-    """[{id, branch, worktree, uncommitted[, progress]}] — blocks in doing/, not integrated: facts for
-    resuming them (never a diagnosis: a dirty tree also describes a worker still running). `progress`
-    when a checkpoint was recorded: {attempt, head, next, fresh} (a stale one is reported, not an anomaly)."""
+    """[{id, branch, worktree, uncommitted, attempt, commits, handoff[, progress]}] — blocks in doing/,
+    not integrated: facts for resuming them (never a diagnosis: a dirty tree also describes a worker
+    still running). `attempt` = 1 + rework cycles; `commits` = commits only block/<id> holds (on no
+    other branch but its own candidate);
+    `handoff` = .worktrees/returns/<feature>/<id>-<attempt>.md if it exists, else null; `result` = the
+    last `RESULT:` its worker appended there on returning (null: it never returned). `progress` when a checkpoint was recorded: {attempt, head, next, fresh} (a stale one is
+    reported, not an anomaly)."""
     out = []
     for b in feat.blocks:
         bid = str(b.get("id"))
         if feat.state_of(bid) == "doing" and not feat.integrated(bid):
             wt = worktree_of(repo, PREFIX + bid) if repo else None
             r = {"id": bid, "branch": PREFIX + bid, "worktree": wt, "uncommitted": len(dirty(wt)) if wt else None}
+            r["attempt"] = len(rework_cycles(feat, bid)[0]) + 1
+            n = git(repo, "rev-list", "--count", PREFIX + bid, "--not", "--exclude=" + PREFIX + bid,
+                    "--exclude=candidate/*", "--branches", check=False) if repo else None
+            r["commits"] = int(n.stdout) if n is not None and n.returncode == 0 else None
+            h = os.path.join(repo, ".worktrees", "returns", os.path.basename(feat.dir),
+                             "%s-%d.md" % (bid, r["attempt"])) if repo else None
+            r["handoff"] = h if h and os.path.isfile(h) else None
+            got = re.findall(r"(?m)^RESULT:\s*([A-Z-]+)", read(h)) if r["handoff"] else []
+            r["result"] = got[-1] if got else None
             rec, fresh = progress_of(feat, repo, bid)
             if rec:
                 r["progress"] = {"attempt": rec.get("attempt"), "head": rec.get("head"),
@@ -1930,8 +1943,9 @@ def outcome(feat, anomalies, repo=None, line_sha=None):
     work += ["ready: " + x["id"] for x in r["ready"]] + ["finishable: " + x for x in r["finishable"]]
     for x in resume_candidates(feat, repo):
         p = x.get("progress")
-        work.append("resume: %s (doing, not integrated; worktree %s, %s uncommitted%s)" % (
-            x["id"], x["worktree"] or "none", "?" if x["uncommitted"] is None else x["uncommitted"],
+        work.append("resume: %s (doing, not integrated; worktree %s, %s uncommitted, attempt %s, %s commits, %s%s)" % (
+            x["id"], x["worktree"] or "none", "?" if x["uncommitted"] is None else x["uncommitted"], x["attempt"],
+            "?" if x["commits"] is None else x["commits"], "returned %s" % x["result"] if x["result"] else "no return",
             "; checkpoint attempt %s, %s" % (p["attempt"], "fresh" if p["fresh"] else "stale") if p else ""))
     waiting += ["%s: %s" % (x["id"], x["reason"]) for x in r["excluded"]]
     for p in sorted(glob.glob(os.path.join(feat.dir, "open-questions", "*.md"))):
@@ -1980,6 +1994,20 @@ def outcome(feat, anomalies, repo=None, line_sha=None):
     return "done", [], []
 
 
+def relink_notes(feat, src, dst):
+    """Rewrite F/decisions.md links to a file that a state move relocated (src → dst): a note cites
+    the file where it was when written. Returns the number of links rewritten."""
+    npath = os.path.join(feat.dir, "decisions.md")
+    if not os.path.isfile(npath):
+        return 0
+    old, new = (os.path.relpath(x, feat.dir).replace(os.sep, "/") for x in (src, dst))
+    text = read(npath)
+    out, n = re.subn(r"\]\((?:\./)?%s(#[^)]*)?\)" % re.escape(old), lambda m: "](%s%s)" % (new, m.group(1) or ""), text)
+    if n:
+        write_text(npath, out)
+    return n
+
+
 def cmd_move(a):
     feat = Feature(a.feature_dir)
     locs = [(l, BLOCK_MOVES) for l in glob.glob(os.path.join(feat.dir, "blocks", "*", "*", a.id + ".md"))
@@ -1998,7 +2026,8 @@ def cmd_move(a):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tracked = git(os.path.dirname(src), "ls-files", "--error-unmatch", src, check=False).returncode == 0
     git(os.path.dirname(src), "mv", src, dst) if tracked else shutil.move(src, dst)
-    out = {"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked}
+    out = {"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked,
+           "relinked": relink_notes(feat, src, dst)}
     prog = progress_path(feat, a.id)
     if legal is BLOCK_MOVES and a.to == "done" and os.path.isfile(prog):  # a finished block's checkpoint is spent
         if git(feat.dir, "ls-files", "--error-unmatch", prog, check=False).returncode == 0:
@@ -2923,7 +2952,8 @@ def question_close(feat, a):
     day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     text = read(dst)
     write_text(dst, text + ("" if text.endswith("\n") else "\n") + "\nClosed by %s on %s\n" % (a.decision, day))
-    return {"ok": True, "id": a.id, "decision": a.decision, "path": dst, "git": tracked}, 0
+    return {"ok": True, "id": a.id, "decision": a.decision, "path": dst, "git": tracked,
+            "relinked": relink_notes(feat, src, dst)}, 0
 
 
 def cmd_question(a):

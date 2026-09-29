@@ -64,9 +64,9 @@ alone** (no review): the worker records the gate proof; then `MM state commit`, 
 the gate in the candidate, `MM compose promote F <id>`, `MM move F <id> --to done`, `MM state commit`.
 
 **3 · Build — one wave per firing.** **Resume first** each `resume` block of `MM status`: reports of
-its latest attempt not yet ingested → step 5.3 first; else its worker again on its
-existing worktree, fresh `MM pack`: from its `progress` when `fresh`, else told to continue from its branch's commits (one per green AC): re-run the tests, redo nothing green. Never infer an
-interrupted worker (a running one leaves a dirty tree too): unsure, or `BLOCKED` → ask. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
+its latest attempt not ingested → step 5.3; a `result` (it returned) → step 4 with it; else its worker
+again on its worktree, fresh `MM pack`, from its `progress` when `fresh`, else its `commits`: redo
+nothing green. Review returned blocks before new dispatches. Then `MM ready F` → take its `ready` list **in order**, up to `build.max_parallel_workers`
 (default 4) minus those building. For each: `MM move F <id> --to doing`, its worktree
 from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-worker`** on the routed model (below) with the path of `MM pack F <id>`
 (`--extra` the authored dev-architecture doc, if any), the block-type skill, the worktree, the side's gate and its handoff.
@@ -76,7 +76,8 @@ from `B`'s tip (an un-parked block reuses its own), and dispatch **`mismagent-wo
 - `BOUNCED`, or a `DEVIATION` touching a contract (a pinned type, signature, key, declared guarantee) →
   **park**: `MM move F <id> --to todo` + the question in `F/open-questions/<id>.md` (the user answers,
   `build-manifest` folds it). An answer recorded → `MM question close F <id> --decision <D-NNNN>`; needing
-  no code → `MM move F <id> --to doing`, then step 5, against the current spec;
+  no code → `MM move F <id> --to doing`, then step 5, against the current spec; an answer changing no
+  AC of a reviewed block stays a decision note (its row would re-open the review);
 - `BLOCKED` → report its cause (stays in `doing/`);
 - `CHECKPOINT` → `MM progress record F <id> --head <block tip> --spec-hash <spec_hash> --json -` with
   its checkpoint and `--extra` each extra of the first dispatch, then a

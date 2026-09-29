@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.25.2 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.25.3 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -256,6 +256,12 @@ another feature's work for a gap in yours.
 > needs no code to promote), `MM why template` and the entry rules in `why append --help`. The render
 > check is automated in the gate by default; a manual one must be proven launchable and capturable by
 > the wave-0 scaffold.
+>
+> **v0.25.3:** a resumed firing reads facts, not prose: `MM status` → `resume` gives each block's
+> `attempt`, its own `commits` and the `result` its worker appended to the handoff on returning — a
+> returned block goes straight to review, an interrupted one continues from its commits. A state move
+> rewrites the decision-note links to the moved file; the automated render check also fires each
+> screen's closing actions.
 
 ## Going deeper
 

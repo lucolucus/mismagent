@@ -113,8 +113,9 @@ branch is `block/<id>`.
 1. Readiness, every firing: `MM lint` + the judgment checks.
 2. Greenfield: the scaffold first (`MM ready` offers nothing else until it is integrated and done) —
    build, gate only, `proof record gate`, compose (no review).
-3. **Build:** first each `resume` block — its worker again on its existing worktree with a fresh
-   pack, told the tree holds unverified work (unsure whether one still runs → ask); then for each block of `MM ready` up to the cap: `move --to doing`, worktree
+3. **Build:** first each `resume` block — a `result` (its worker returned, the lines at the end of
+   its handoff) → step 4 with it; else its worker again on its existing worktree with a fresh pack,
+   from its `progress` or its `commits`; then for each block of `MM ready` up to the cap: `move --to doing`, worktree
    `.worktrees/<feature>/<id>` from the line tip (an un-parked block reuses its branch and
    worktree), dispatch the worker with `MM pack` saved under `.worktrees/packs/<feature>/`.
    Every dispatch (worker, rework, reviewer) runs in the **foreground** — independent ones in
@@ -130,8 +131,8 @@ branch is `block/<id>`.
    review still run once, at `READY-FOR-REVIEW`. Refused `no progress since attempt N` → treat it
    as `BLOCKED` (ask the user). Refused otherwise (head moved, dirty tree, spec changed) → the work is
    unverified: inspect the worktree, never record by hand. A crash before the record is the same:
-   the `resume` entry shows no `progress` or a stale one (a dirty tree included) — the tree holds
-   unverified work.
+   the `resume` entry shows no `progress` or a stale one (a dirty tree included): the worker
+   continues from the branch's commits, re-running the tests.
 5. **Integrate, one at a time:** reviewers on `diff-range` + one pack, each writing its report to
    its designated `.worktrees/reviews/…` path (pre-filled by `review template`) and returning a verdict line → `MM review ingest`
    with the depth's reports, the attempt, `head_sha` and the pack's spec hash → act on `action`:

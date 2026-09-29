@@ -1084,7 +1084,8 @@ def lint(feat):
                 gap("release.required", i, "non-scaffold block without release:")
             elif labels is not None and str(rel) not in labels:
                 gap("release.declared", i, "release %s is not in the releases: section" % rel)
-            if feat.state_of(i) != "done" and code_paths_ok(b.get("code_paths")) and b.get("code_paths"):
+            if feat.state_of(i) != "done" and code_paths_ok(b.get("code_paths")) and b.get("code_paths") \
+                    and all(feat.integrated(x) for x in after_of(feat, i)):  # before: the code it extends is still owed
                 try:
                     repo = feat.repo()
                 except UsageError:

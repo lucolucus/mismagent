@@ -1872,6 +1872,8 @@ class TestV024(Base):
         self.assertNotIn(("code_paths.exist", "rm-orders"), self.gaps()[0])
         self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "src/orders/api.py"))
         self.assertIn(("code_paths.shape", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace("    code_paths: [", "    after: [agg-order]\n    code_paths: [", 1))
+        self.assertNotIn(("code_paths.exist", "rm-orders"), self.gaps()[0])            # agg-order owes that code yet
         self.assertEqual({b: self.spec_hash(b) for b in before}, before)               # only its own row changed
         self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "[/abs/path]"))
         self.assertIn("code_paths", json.dumps(self.run_tool("manifest", "render", self.feat)))

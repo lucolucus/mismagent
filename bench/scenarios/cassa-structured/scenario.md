@@ -2,7 +2,7 @@
 
 A validation run with its hypotheses, phases, budgets and stop rules fixed **before** it starts, so
 the result is read against them and runs stay comparable. Deliverable: the cash register of
-`REQUISITI.md` (runs 2–7). Runner: `run-scenario.sh` (this folder). Harness: mismAgent ≥ v0.25.3.
+`REQUISITI.md` (runs 2–7). Runner: `run-scenario.sh` (this folder). Harness: mismAgent ≥ v0.26.0.
 
 ## Hypotheses (pre-registered)
 | id | hypothesis | measured by | pass |
@@ -14,6 +14,7 @@ the result is read against them and runs stay comparable. Deliverable: the cash 
 | H5 | the second feature reuses the trunk: no new stack/architecture ADR, the profile only amended; the cross-feature link (a sale → a stock movement) is a pinned boundary with a contract test in the gate | `decisions/` diff, profile diff, `building-blocks.yaml` boundaries of `magazzino` | yes |
 | H6 | the released app passes the external acceptance (`acceptance.md`, written before the run) | `acceptance-report.md` | ≥ 90% PASS, 100% of 🔴 |
 | H7 | frictions stay few and new | `MISMAGENT-LOG.md` per phase | ≤ 5 new `core` per phase |
+| H8 | existing code is read before designing: the second feature has no **unjustified** duplicate of an existing aggregate, VO or screen, remodels are recorded decisions, and the R0/R1 behavior it touches is preserved | magazzino's tactical model, decision notes, manifest `code_paths`, the code; acceptance A01–A29 still pass | yes |
 
 ## Phases
 | phase | what | command | budget | expected outcome |
@@ -45,7 +46,7 @@ frictions so far) and commits the run folder. After the last phase: `cost.py` pe
 `score.py` against runs 5–6, and the report below.
 
 ## Report template
-1. Hypotheses H1–H7: pass/fail, one line of evidence each.
+1. Hypotheses H1–H8: pass/fail, one line of evidence each.
 2. Cost per phase (table) and per release; composer share per build phase.
 3. The change request (C–D): what the method did with it, step by step; what it missed.
 4. The second feature (E): what was reused, what was re-decided, the cross-feature boundary.

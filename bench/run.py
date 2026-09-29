@@ -176,6 +176,15 @@ def budget_exhausted(out):
     return "budget" in str(out.get("subtype", "")).lower()
 
 
+def stops(st, a):
+    """Whether a status ends the run. With --until-release, an `idle` whose every waiting item is a
+    release awaiting the user's confirmation does not: the simulated user confirms in the next firing."""
+    if st["outcome"] not in STOP_OUTCOMES:
+        return False
+    return not (a.until_release and st["outcome"] == "idle" and st.get("waiting")
+                and all("awaiting the user's confirmation" in w for w in st["waiting"]))
+
+
 def why_stop(st):
     why = st.get("anomalies") if st["outcome"] == "anomaly" else st.get("waiting")
     return json.dumps(why, ensure_ascii=False)[:400] if why else st["outcome"]
@@ -199,7 +208,7 @@ def run(a):
         fresh = subprocess.run(["git", "-C", a.project, "rev-parse", "--verify", "-q", "refs/heads/" + integration],
                                capture_output=True).returncode != 0
         st = None if fresh else status(tool, fdir, integration)
-        if st and st["outcome"] in STOP_OUTCOMES:
+        if st and stops(st, a):
             return summary(st["outcome"], "before any firing: " + why_stop(st))
         if st and a.until_release and released(tool, fdir, integration, a.until_release):
             return summary("released", "before any firing: %s is already confirmed" % a.until_release)
@@ -230,7 +239,7 @@ def run(a):
             conf = a.until_release and released(tool, fdir, integration, a.until_release)
             if conf:
                 return summary("released", "%s confirmed: %s" % (a.until_release, json.dumps(conf, ensure_ascii=False)))
-            if st["outcome"] in STOP_OUTCOMES:
+            if stops(st, a):
                 return summary(st["outcome"], why_stop(st))
             now = snapshot(fdir)
             rec["progress"] = now != before

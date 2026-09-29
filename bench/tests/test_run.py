@@ -164,6 +164,18 @@ class RunnerTest(Sim):
         out = self.run_it(total=10, per=4, resume=False, extra=["--until-release", "R0"])
         self.assertEqual((out["outcome"], out["firings"]), ("released", 0))
 
+    def test_until_release_fires_through_an_idle_that_only_awaits_confirmation(self):
+        await_conf = st("idle", waiting=["release R0: releasable, awaiting the user's confirmation (`release confirm`)"])
+        self.set_status(await_conf)
+        self.scenario([{"out": res(1.0), "status": st("idle", confirmed={"tag": "shop-R0"})}])
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 1))
+        self.set_status(await_conf)                                                    # without the flag: stops
+        self.assertEqual(self.run_it(total=5, per=4, resume=False)["outcome"], "idle")
+        self.set_status(st("idle", waiting=["open question: open-questions/x.md"]))   # a real wait still stops
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("idle", 0))
+
     def test_total_budget_stops(self):
         self.scenario([{"out": res(4.0), "write": self.progress(1)}, {"out": res(8.0), "write": self.progress(2)}])
         out = self.run_it(total=8, per=4)

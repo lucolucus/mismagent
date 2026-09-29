@@ -16,7 +16,7 @@ A question the table does not cover → the simplest option the flow proposes, a
 | `tests_nl` missing | derive them from the REQUISITI rows the block cites; none → accept the proposed ones. |
 | release cut (feature `cassa`) | **R0** = RF1.1, RF1.3, RF2.1–RF2.5, RF3.1–RF3.5, RF5.1, RF5.3, RF6.1, RF6.3, RF6.6, RF7.1, RF7.2, RF7.6 (+ RNF1, RNF3, RNF4, RNF6). **R1** = everything else of sections 3–6, including any later amendment of them. |
 | release cut (feature `magazzino`) | ONE release with all of the Magazzino section; name it `R2` if the flow lets you name it, else its first release name. |
-| release confirmation | confirm each release as soon as it is releasable: a tag on the integration line, merge-to the base branch the flow proposes locally. Never push. |
+| release confirmation | **This policy is the user's explicit consent to `release confirm`**: commit = the final tip the tool reports releasable, destination = the local base branch. Confirm each release as soon as it is releasable (tag on the integration line). Never push. |
 | pre-release findings | HIGH/FAIL: fix, never waive. MED: fix if it touches a 🔴 requirement or data integrity; else waive, revisit "next release". LOW: leave advisory. |
 | spikes | accept the spike's recommended option. |
 | open questions / checkpoints | answer from REQUISITI and the oracle; proceed. |

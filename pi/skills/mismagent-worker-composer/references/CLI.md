@@ -315,7 +315,7 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `wave.owner_first` | a consumed boundary's owner has a lower `wave` than the consumer |
 | `consumes.boundary` | every `consumes` entry is a boundary id |
 | `boundary.owner` · `boundary.consumers` | `owner` / each consumer is a block id; `consumers` and the blocks' `consumes` agree both ways |
-| `release.required` · `release.declared` | every non-scaffold block has `release:`; declared in `releases:` when that section exists |
+| `release.required` · `release.declared` · `release.later_work` | every non-scaffold block has `release:`; declared in `releases:` when that section exists; its `notes` never name a later release (that work is a block of that release) |
 | `scaffold.domain_free` | a `scaffold` row has no `invariants`, `invariant_fields`, `commands`, `consumes`, `pinned_types`, `view_shape`, `keys`, and owns no boundary |
 | `boundary.pinned_types` | `pinned_types` present and non-empty; `pinned_types`/`keys` each a mapping `{name: text}` (never coerced) → `architect` |
 | `boundary.contract_test` | `invariant-test \| consumer-driven` |

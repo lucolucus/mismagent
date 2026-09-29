@@ -25,17 +25,18 @@ Presenter tests prove the logic, never that the screen renders. A `ui` block nee
 1. **Presenter tests** from `tests_nl`, green on their own.
 2. **A render check**, by the side's `ui_render_check` (profile):
    - automated → a smoke/screenshot test in the gate (containers render without throwing, are sized,
-     key elements visible) that also **fires each screen's closing actions on the real view**
-     and fails on an error the toolkit's event loop swallows;
-   - manual → a recorded run-the-app check via `run-app-smoke` (launches the side with the profile's
-     `run`, walks the checklist, records evidence in `render-proof/<block-id>/`).
+     key elements visible) that also **fires each screen's closing actions on the real view**,
+     fails on an error the event loop swallows, and is seen **red once** (a broken view fails fast,
+     never hangs);
+   - manual → a recorded run via `run-app-smoke` (the profile's `run`, the checklist, evidence in
+     `render-proof/<block-id>/`).
 
 Presenter-green alone is **not done**.
 
 **Render checklist** — apply every item:
 - **Sizing:** windows, dialogs and containers are explicitly sized, never left to defaults.
-- **Overflow:** long text and lists clip, scroll or ellipsize on purpose.
-- **Contrast / visibility:** every control is visible against its background.
+- **Overflow:** long text and lists clip, scroll or ellipsize.
+- **Visibility:** every control is visible against its background.
 - **States:** empty, error and loading each actually render.
 - **Reactivity:** an event re-renders through observable state — proven, not assumed.
 

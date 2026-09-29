@@ -411,11 +411,15 @@ class Feature:
     def integrated(self, bid):
         return load_json(os.path.join(self.dir, "integrated", bid + ".json"))
 
-    def welded(self, bd):
-        return all(self.integrated(x) for x in [str(bd.get("owner"))] + self.consumers(bd))
+    def welded(self, bd, for_bid=None):
+        """Owner and consumers integrated; `for_bid`: only the consumers of its release or an earlier
+        one — a later release's consumer adds a pair (proven by its contract test when it integrates),
+        it never reopens work already done."""
+        cons = self.consumers(bd) if for_bid is None else own_consumers(self, bd, for_bid)
+        return all(self.integrated(x) for x in [str(bd.get("owner"))] + cons)
 
     def finishable(self, bid):
-        return bool(self.integrated(bid)) and all(self.welded(bd) for bd in self.touched(bid))
+        return bool(self.integrated(bid)) and all(self.welded(bd, bid) for bd in self.touched(bid))
 
     def nodes(self):
         """spike/cleanup nodes: [(id, state, frontmatter, body, path)] under tasks/<side>/<state>/."""
@@ -989,6 +993,13 @@ def lint(feat):
                 gap("release.required", i, "non-scaffold block without release:")
             elif labels is not None and str(rel) not in labels:
                 gap("release.declared", i, "release %s is not in the releases: section" % rel)
+            elif feat.state_of(i) != "done":  # a done block's notes are history
+                order = release_names(feat)
+                later = [r for r in order[order.index(str(rel)) + 1:] if str(rel) in order
+                         and re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(r), str(b.get("notes") or ""))]
+                if later:
+                    gap("release.later_work", i, "its notes name later release %s: that release's work is a block "
+                        "of that release (`after:` this one), never a note on this one" % ", ".join(later))
         else:
             domain = [k for k in SCAFFOLD_DOMAIN if b.get(k)]
             domain += ["owner of boundary %s" % bd.get("id") for bd in feat.boundaries if str(bd.get("owner")) == i]
@@ -1312,7 +1323,30 @@ def deps_many(feat, bids):
     return [touched[k] for k in sorted(touched)], adrs
 
 
-def spec_hash(feat, bid):
+def own_consumers(feat, bd, bid):
+    """The consumers of boundary `bd` that belong to block `bid`'s spec (and weld): a consumer's is
+    itself — other consumers never bind it; the owner's are those of its release or an earlier one (a
+    later release's consumer is a new pair, proven by its own contract test when it integrates)."""
+    if str(bd.get("owner")) != bid:
+        return [c for c in feat.consumers(bd) if c == bid]
+    order, mine = release_names(feat), str(feat.row.get(bid, {}).get("release"))
+    if mine not in order:
+        return feat.consumers(bd)
+    return [c for c in feat.consumers(bd) if str(feat.row.get(c, {}).get("release")) not in order
+            or order.index(str(feat.row[c].get("release"))) <= order.index(mine)]
+
+
+def spec_view(feat, bid, text):
+    """A block file as its spec: each Dependencies line lists only the block's own consumers."""
+    for bd in feat.touched(bid):
+        cons = own_consumers(feat, bd, bid)
+        if cons != feat.consumers(bd):
+            text = re.sub(r"(?m)^(- `%s` \([^)]*\) — consumers: ).*?( · contract_test: )" % re.escape(str(bd.get("id"))),
+                          lambda m: m.group(1) + (", ".join("`%s`" % c for c in cons) or "none") + m.group(2), text)
+    return text
+
+
+def spec_hash(feat, bid, own=True):
     """A block: its file's content (not its folder) + manifest row + touched boundary rows + ADRs.
     Any other id (a pre-release group): its rework/<id>-*.md files + the same dependencies of the
     blocks its first rework file names, each once."""
@@ -1326,10 +1360,13 @@ def spec_hash(feat, bid):
         bids = sorted(fm["blocks"])
     for b in bids:
         locs = feat.files().get(b) or _raise(UsageError("block %s has no block file" % b))
-        h.update(read(locs[0][2]).encode())
+        text = read(locs[0][2])
+        h.update((spec_view(feat, b, text) if own else text).encode())
         h.update(json.dumps({k: v for k, v in feat.row[b].items() if k not in ORDER_FIELDS}, sort_keys=True).encode())
     touched, adrs = deps_many(feat, bids)
-    for bd in touched:
+    for bd in touched:  # a later release's consumer is not in an earlier block's spec
+        if own and "consumers" in bd and len(bids) == 1:
+            bd = dict(bd, consumers=own_consumers(feat, bd, bids[0]))
         h.update(json.dumps(bd, sort_keys=True).encode())
     for ref, path in adrs:
         h.update((read(path) if path else "missing:" + ref).encode())
@@ -1342,7 +1379,13 @@ def review_stale(feat, bid, s):
     if not old:
         return ["no review proof for %s" % bid]
     why = [] if old.get("sha") == s else ["reviewed sha %s, not %s" % (old.get("sha"), s)]
-    return why + ([] if old.get("spec_hash") == spec_hash(feat, bid) else ["the spec changed after the review"])
+    return why + ([] if spec_current(feat, bid, old.get("spec_hash")) else ["the spec changed after the review"])
+
+
+def spec_current(feat, bid, recorded):
+    """A recorded spec hash still judges the current spec: today's hash, or the one a proof recorded
+    before later-release consumers left a block's spec (v0.25.4) while nothing else changed."""
+    return recorded in (spec_hash(feat, bid), spec_hash(feat, bid, own=False))
 
 
 def gate_hash(repo, gate, globs):
@@ -1395,8 +1438,10 @@ def cmd_status(a):
     for bid, locs in sorted(feat.files().items()):
         if locs[0][0] == "doing" and not feat.integrated(bid) and not worktree_of(repo, PREFIX + bid):
             add("doing_without_worktree", bid, "in doing/, not integrated, no worktree on %s%s" % (PREFIX, bid))
-        if locs[0][0] == "done" and not feat.finishable(bid):
-            add("done_unwelded", bid, "in done/ but not integrated or a boundary it touches is not welded")
+        if locs[0][0] == "done" and not (feat.integrated(bid) and all(feat.integrated(str(bd.get("owner")))
+                                                                      for bd in feat.touched(bid))):
+            # a consumer added after it finished is a new pair, proven by its contract test when it integrates
+            add("done_unwelded", bid, "in done/ but it or the owner of a boundary it touches is not integrated")
     for i, st, fm, _, _ in feat.nodes():
         if fm.get("type") == "spike" and str(fm.get("central")).lower() == "true" and st == "doing" \
                 and not spike_dir_state(feat, repo, i):
@@ -1413,7 +1458,7 @@ def cmd_status(a):
     for p in sorted(glob.glob(os.path.join(feat.dir, "review-proof", "*.json"))):
         i, rec = os.path.basename(p)[:-5], load_json(p) or {}
         try:
-            stale = rec.get("spec_hash") != spec_hash(feat, i)
+            stale = not spec_current(feat, i, rec.get("spec_hash"))
         except UsageError:
             stale = True
         if stale:

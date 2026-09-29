@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.25.3 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.25.4 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -262,6 +262,12 @@ another feature's work for a gap in yours.
 > returned block goes straight to review, an interrupted one continues from its commits. A state move
 > rewrites the decision-note links to the moved file; the automated render check also fires each
 > screen's closing actions.
+>
+> **v0.25.4:** a later release's consumer on a boundary is a new pair — proven by its own contract
+> test when it integrates — so it neither reopens nor un-welds the blocks of earlier releases, and a
+> consumer's spec never includes the other consumers. Later-release work is a block of that release,
+> never a note on an earlier one (lint `release.later_work`); a `ui` block pins the entry points its
+> composition block drives; a render check is seen red once and fails fast.
 
 ## Going deeper
 

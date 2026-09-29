@@ -8,7 +8,7 @@ description: "mismAgent model movement. Derives building-blocks.yaml and its sta
 
 # build-manifest — the model → build bridge
 
-Emits `<output_dir>/features/<feature>/building-blocks.yaml` — the worker-composer's only input. You
+Emits `<output_dir>/features/<feature>/building-blocks.yaml`, the worker-composer's only input. You
 author only the YAML; `MM manifest render F` (`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`,
 `F` = the feature folder) renders one block file per row — never hand-patch one (a legacy manifest: rule 22). The
 manifest is a **consequence of the model**: every field has a reader.
@@ -35,31 +35,28 @@ files and per-type standard.
 
 ## Boundaries — what crosses a seam is PINNED, never invented in parallel
 1. **Pin the Published Language** under the context-map's canonical names: `pinned_types` are
-   primitives or shared-kernel VOs, never the supplier's domain type. A limit, unit or identifier a
-   consumer shows or validates comes from its owner through the boundary (the owner picks how), never
-   re-declared.
+   primitives or shared-kernel VOs, never the supplier's domain type. A limit, unit or id a consumer
+   shows or validates comes from its owner through the boundary, never re-declared.
 2. **Pin recursively:** a composite type cited in a `pinned_types` row has its own row (or is a
-   primitive / an already-pinned VO). Pin **every** boundary-crossing event, even one whose
-   consumer is not modeled yet.
+   primitive / an already-pinned VO). Pin **every** boundary-crossing event, even an unconsumed one.
 3. **Keys:** for every id/correlation key, `keys:` pins who mints it, by what rule, and its stability
    (across versions, hot changes, republication). The pinned type carries **the key the consumer
-   operates with**; a transport-only key with no pinned map to it: fix it here.
+   operates with**, never a transport-only key.
    A string key minted or decoded by ≥ 2 contexts is a candidate for a shared-kernel VO.
-4. **Granularity is a decision:** when a quantity crosses a seam and becomes units downstream, or
-   enters a conserved invariant, unit-vs-quantity must already be decided in the model. Implicit →
-   stop and ask (tactical-modeler or user).
+4. **Granularity is a decision:** a quantity crossing a seam into units downstream, or into a
+   conserved invariant, has unit-vs-quantity decided in the model. Implicit → ask (tactical-modeler
+   or user).
 5. **Reads come from preconditions too:** a command whose precondition reads another context's state
    is a boundary — project it into `consumes`.
-6. **Every `view_shape` field has a source** — a consumed event's field, a boundary's
-   `pinned_types`, or the write-path input. No source → refuse at generation. A read-model that
+6. **Every `view_shape` field has a source**: a consumed event's field, a boundary's
+   `pinned_types`, or the write-path input — else refuse. A read-model that
    supplies a boundary has `view_shape` ≡ that boundary's pinned type (one Published Language). Event
    fields are consumer-driven (derived from the consuming folds); their types live once, in the
    shared kernel.
 7. **Consumption guarantees:** a field someone orders by is pinned in an orderable format. A fold
    over > 1 writer stream for the same key needs single-writer-per-key **or** a commutative fold.
-   Order, duplicates/replay and the fold rule live in the **Decision** of the boundary owner's ADR;
-   the fold's `tests_nl` cover the admitted permutations and
-   duplicates. No declared guarantee → bounce to the architect, never assume order.
+   Order, duplicates/replay and the fold rule live in the boundary owner's ADR **Decision**; the
+   fold's `tests_nl` cover its admitted permutations and duplicates. No declared guarantee → bounce to the architect, never assume order.
 8. **`contract_test`:** `invariant-test` on an aggregate boundary, `consumer-driven` on port and
    read-model. A boundary an earlier feature introduced is reused, never redeclared.
 9. **Confinement checks for every aggregate:** from `invariant_fields` and `tables` derive three
@@ -94,7 +91,8 @@ files and per-type standard.
     files, a ui-kit, a schema/migration set) → one owner block, no domain rules. The **composition
     root** (the app's wiring; `composition_root:` in `architecture.md`) is extended in place only by
     each release's one `composition: true` block, `after:` its other blocks; they publish what it
-    wires from their own dirs.
+    wires from their own dirs — a `ui` block, in `tests_nl`, the public entry points it is driven by
+    (open, refresh, close).
 15. **Every prescribed capability names its owner module** (a local store, a sync engine):
     in the block's module list, or stated in the spec.
 16. **Group infrastructure by module:** the adapters of one infrastructure module are one block that
@@ -110,7 +108,8 @@ files and per-type standard.
     to end), as few waves as the dependency graph allows — never bent to fit (domain in the
     scaffold, a boundary owned by the wrong block). Present the R0 cut to the user at the `tests_nl`
     checkpoint. A release is a point on the line (its tag), never a code layer: later releases extend
-    the code in place; no `tests_nl` asserts release history — a feature a user setting switches off
+    the code in place **through blocks of their own** (`after:` the one they extend), never a note on
+    a done block; no `tests_nl` asserts release history — a feature a user setting switches off
     stays testable behavior.
 20. **Central risks are wave-0 spikes:** every `central: true` spike of the context-map (and every
     risk the architect flagged) has a `type: spike` node with `central: true`: flag the

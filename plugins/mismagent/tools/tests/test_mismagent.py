@@ -1362,6 +1362,36 @@ class TestV023(Base):
         r = self.status()["resume"][0]
         self.assertEqual((r["attempt"], r["handoff"], r["result"]), (2, None, None))                       # the rework has not returned
 
+    def test_a_later_release_consumer_is_neither_an_earlier_blocks_spec_nor_its_weld(self):
+        feat = lambda: mismagent.Feature(self.feat)
+        h = {b: mismagent.spec_hash(feat(), b) for b in ("agg-order", "svc-order", "rm-orders")}
+        self.put("building-blocks.yaml", MANIFEST.replace("consumers: [svc-order, rm-orders]", "consumers: [svc-order]"))
+        self.assertEqual(mismagent.spec_hash(feat(), "agg-order"), h["agg-order"])    # R1 consumer: not the R0 owner's
+        self.assertEqual(mismagent.spec_hash(feat(), "svc-order"), h["svc-order"])    # another consumer never binds it
+        self.put("building-blocks.yaml", MANIFEST.replace("consumers: [svc-order, rm-orders]", "consumers: [rm-orders]"))
+        self.assertNotEqual(mismagent.spec_hash(feat(), "agg-order"), h["agg-order"])  # its own release's consumer is
+        self.put("building-blocks.yaml", MANIFEST)
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        for b in ("agg-order", "svc-order"):
+            self.integrate(b)
+        self.assertTrue(feat().finishable("agg-order"))       # rm-orders (R1) not integrated: R0 still finishes
+        self.assertTrue(feat().finishable("svc-order"))
+        self.assertFalse(feat().welded(feat().bnd["b-order"]))
+
+    def test_a_later_releases_work_as_a_note_on_an_earlier_block_is_a_lint_gap(self):
+        self.put("building-blocks.yaml", MANIFEST.replace("    commands: [PlaceOrder]\n",
+                 "    commands: [PlaceOrder]\n    notes: \"R1 extends this query in place\"\n", 1))
+        self.assertIn(("release.later_work", "svc-order"), self.gaps()[0])
+        self.move("svc-order", "done")
+        self.assertNotIn(("release.later_work", "svc-order"), self.gaps()[0])        # history, never reopened
+
+    def test_a_proof_recorded_on_the_full_consumer_list_stays_valid(self):
+        feat = mismagent.Feature(self.feat)
+        full = mismagent.spec_hash(feat, "agg-order", own=False)
+        self.assertTrue(mismagent.spec_current(feat, "agg-order", full))
+        self.assertFalse(mismagent.spec_current(feat, "agg-order", "0" * 64))
+
     def test_a_state_move_rewrites_the_decision_links_to_the_moved_file(self):
         class F:
             dir = self.feat

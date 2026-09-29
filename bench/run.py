@@ -54,6 +54,17 @@ def status(tool, fdir, integration):
     return out
 
 
+def released(tool, fdir, integration, rn):
+    """The confirmation record of release `rn` (`release list` → `confirmed`), or None."""
+    p = subprocess.run([sys.executable, tool, "release", "list", fdir, rn, "--integration", integration],
+                       capture_output=True, text=True)
+    try:
+        out = json.loads(p.stdout)
+    except ValueError:
+        raise Stop("status-error", "mismagent.py release list exit %d: %s" % (p.returncode, (p.stdout + p.stderr).strip()[-400:]))
+    return out.get("confirmed") if isinstance(out, dict) else None
+
+
 def _sha_field(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -190,6 +201,8 @@ def run(a):
         st = None if fresh else status(tool, fdir, integration)
         if st and st["outcome"] in STOP_OUTCOMES:
             return summary(st["outcome"], "before any firing: " + why_stop(st))
+        if st and a.until_release and released(tool, fdir, integration, a.until_release):
+            return summary("released", "before any firing: %s is already confirmed" % a.until_release)
         before = snapshot(fdir)
         while True:
             remaining = a.total_usd - spent
@@ -214,6 +227,9 @@ def run(a):
                     p.returncode, out.get("subtype"), str(out.get("result") or p.stderr).strip()[-400:]))
             st = status(tool, fdir, integration)
             rec["status"] = st["outcome"]
+            conf = a.until_release and released(tool, fdir, integration, a.until_release)
+            if conf:
+                return summary("released", "%s confirmed: %s" % (a.until_release, json.dumps(conf, ensure_ascii=False)))
             if st["outcome"] in STOP_OUTCOMES:
                 return summary(st["outcome"], why_stop(st))
             now = snapshot(fdir)
@@ -241,6 +257,8 @@ def parse(argv=None):
                          "and is re-read on every turn")
     ap.add_argument("--prompt-file", help="extra instructions appended to the command (e.g. simulated-user rules)")
     ap.add_argument("--integration", help="the integration branch (default integration/<feature>)")
+    ap.add_argument("--until-release", metavar="RN",
+                    help="also stop (outcome `released`) once release RN is confirmed — a scenario's phase boundary")
     ap.add_argument("--feature-dir", help="F, when it cannot be found under --project")
     ap.add_argument("--claude-bin", default="claude", help=argparse.SUPPRESS)  # tests: a simulated CLI
     a = ap.parse_args(argv)

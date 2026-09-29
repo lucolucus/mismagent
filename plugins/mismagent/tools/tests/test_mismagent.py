@@ -1856,6 +1856,18 @@ class TestV024(Base):
         self.put("profile.md", "```yaml\nsides:\n  app: {path: a}\n  admin: {path: b}\n```\n", base=self.out)
         self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # one line, two sides
 
+    def test_a_wave_is_a_barrier_within_its_side(self):
+        self.write_feature(MANIFEST.replace("    consumes: [b-order]\n    commands: [PlaceOrder]\n",
+                                            "    commands: [PlaceOrder]\n", 1))   # svc-order: no declared dependency
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        r = self.run_tool("ready", self.feat, expect=0)
+        self.assertEqual([x["id"] for x in r["ready"]], ["agg-order"])                  # wave 1 alone
+        self.assertIn({"id": "svc-order", "reason": "after, not integrated: agg-order"}, r["excluded"])
+        self.integrate("agg-order")
+        self.assertIn("svc-order", [x["id"] for x in self.run_tool("ready", self.feat, expect=0)["ready"]])
+
     def test_code_paths_name_existing_code_and_leave_other_blocks_specs_alone(self):
         before = {b: self.spec_hash(b) for b in ("agg-order", "svc-order")}
         self.put("src/orders/api.py", "x\n", base=self.repo)

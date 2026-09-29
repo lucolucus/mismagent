@@ -95,8 +95,9 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
-  only full `- <block-id>` lines count, prose is ignored —, every consumed boundary's owner and every
-  `after:` block **integrated** (not necessarily `done`). Order: `wave`, then release (the `releases:` keys in
+  only full `- <block-id>` lines count, prose is ignored —, every consumed boundary's owner, every
+  `after:` block and every non-scaffold block of an earlier `wave` of the same side **integrated** (not
+  necessarily `done`) — a wave is a barrier: a shared owner (kernel types, schema) is used implicitly. Order: `wave`, then release (the `releases:` keys in
   order, then undeclared labels in natural order), then manifest order. The cap is the composer's.
 - **move**: blocks `todo→doing`, `doing→todo`, `doing→done` (only if finishable); spike/cleanup
   nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`. A

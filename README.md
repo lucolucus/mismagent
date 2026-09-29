@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.26.1 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.26.2 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -280,6 +280,9 @@ another feature's work for a gap in yours.
 >
 > **v0.26.1:** `code_paths` may name code an earlier block still owes: lint checks them only once
 > the block's `after:` blocks are integrated (a greenfield R1 extends R0's code before it exists).
+>
+> **v0.26.2:** a wave is a barrier within its side — a block is ready only once the earlier waves of its
+> side are integrated (a shared owner such as kernel types is used without a declared dependency).
 
 ## Going deeper
 

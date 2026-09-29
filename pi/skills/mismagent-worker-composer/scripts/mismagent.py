@@ -1707,6 +1707,11 @@ def ready_state(feat):
         waiting = [str((feat.bnd.get(c) or {}).get("owner")) for c in feat.consumes(bid)]
         waiting = [o for o in waiting if not feat.integrated(o)]
         before = [x for x in after_of(feat, bid) if not feat.integrated(x)]
+        w = b.get("wave") if isinstance(b.get("wave"), int) else 0  # a wave is a barrier within its side: a
+        before += [str(x.get("id")) for x in feat.blocks  # shared owner (kernel, schema) is used implicitly
+                   if isinstance(x.get("wave"), int) and x["wave"] < w and x.get("type") != "scaffold"
+                   and (x.get("side") is None or b.get("side") is None or x.get("side") == b.get("side"))
+                   and not feat.integrated(str(x.get("id"))) and str(x.get("id")) not in before]
         blocking = [s[0] for s in spikes if bid in s[1]]
         if os.path.isfile(os.path.join(feat.dir, "open-questions", bid + ".md")):
             excluded.append({"id": bid, "reason": "parked: open-questions/%s.md" % bid})

@@ -63,5 +63,9 @@ release. Nothing else stops for you.
    is recorded and renewed when its configuration changes.
 8. **Release = a tag and a merge onto the base branch**, both only with the user's explicit
    consent naming commit and destination; never a push unasked.
-9. **In doubt, stop and ask.** A slow or hanging step is a strategy to replace (back to the
+9. **Existing code is an input.** Once a side has code, design and build read it first (`MM
+   codemap`, scoped): reuse what fits in meaning and placement, else remodel; a remodel or duplicate
+   is a recorded decision planned as blocks (`code_paths`); touched code is rationalized where it can
+   be, behavior proven preserved.
+10. **In doubt, stop and ask.** A slow or hanging step is a strategy to replace (back to the
    architect), never something to wait out.

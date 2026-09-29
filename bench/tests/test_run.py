@@ -49,10 +49,10 @@ out = s["out"]
 print(out if isinstance(out, str) else json.dumps(out))
 sys.exit(s.get("code", 0))
 '''
-# The fake tool: `status` prints the scripted status.
+# The fake tool: `status` and `release list` print the scripted status.
 SIM_TOOL = r'''#!/usr/bin/env python3
 import json, os, sys
-st = json.load(open(os.path.join(sys.argv[2], "sim-status.json")))
+st = json.load(open(os.path.join(sys.argv[3] if sys.argv[1] == "release" else sys.argv[2], "sim-status.json")))
 print(json.dumps(st)); sys.exit(1 if st.get("anomalies") else 0)
 '''
 
@@ -144,6 +144,37 @@ class RunnerTest(Sim):
         self.assertTrue(all("--resume" not in a for a in argv))
         self.assertEqual([a[a.index("--max-budget-usd") + 1] for a in argv], ["4.0000", "2.0000", "0.5000"])
         self.assertEqual(out["session_id"], "s-3")
+
+    def test_per_firing_cap_defaults_to_the_total(self):
+        self.scenario([{"out": res(1.0), "status": st("done")}])
+        args = ["--project", self.repo, "--feature", "shop", "--plugin-dir", self.plugin, "--total-usd", "7",
+                "--claude-bin", self.claude, "--resume-sessions"]
+        self.assertEqual(run.run(run.parse(args))["outcome"], "done")
+        argv = self.calls()[0]["argv"]
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "7.0000")
+
+    def test_until_release_stops_once_the_release_is_confirmed(self):
+        conf = {"tag": "shop-R0", "sha": "abc", "merge_to": "main"}
+        self.scenario([{"out": res(1.0, sid="s-1"), "write": self.progress(1)},
+                       {"out": res(1.0, sid="s-2"), "status": st("work", confirmed=conf)}])
+        out = self.run_it(total=10, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 2))
+        self.assertIn("shop-R0", out["reason"])
+        self.set_status(st("work", confirmed=conf))                                    # already confirmed: no firing
+        out = self.run_it(total=10, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 0))
+
+    def test_until_release_fires_through_an_idle_that_only_awaits_confirmation(self):
+        await_conf = st("idle", waiting=["release R0: releasable, awaiting the user's confirmation (`release confirm`)"])
+        self.set_status(await_conf)
+        self.scenario([{"out": res(1.0), "status": st("idle", confirmed={"tag": "shop-R0"})}])
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 1))
+        self.set_status(await_conf)                                                    # without the flag: stops
+        self.assertEqual(self.run_it(total=5, per=4, resume=False)["outcome"], "idle")
+        self.set_status(st("idle", waiting=["open question: open-questions/x.md"]))   # a real wait still stops
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("idle", 0))
 
     def test_total_budget_stops(self):
         self.scenario([{"out": res(4.0), "write": self.progress(1)}, {"out": res(8.0), "write": self.progress(2)}])

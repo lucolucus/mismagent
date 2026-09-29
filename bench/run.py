@@ -54,6 +54,17 @@ def status(tool, fdir, integration):
     return out
 
 
+def released(tool, fdir, integration, rn):
+    """The confirmation record of release `rn` (`release list` → `confirmed`), or None."""
+    p = subprocess.run([sys.executable, tool, "release", "list", fdir, rn, "--integration", integration],
+                       capture_output=True, text=True)
+    try:
+        out = json.loads(p.stdout)
+    except ValueError:
+        raise Stop("status-error", "mismagent.py release list exit %d: %s" % (p.returncode, (p.stdout + p.stderr).strip()[-400:]))
+    return out.get("confirmed") if isinstance(out, dict) else None
+
+
 def _sha_field(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -165,6 +176,15 @@ def budget_exhausted(out):
     return "budget" in str(out.get("subtype", "")).lower()
 
 
+def stops(st, a):
+    """Whether a status ends the run. With --until-release, an `idle` whose every waiting item is a
+    release awaiting the user's confirmation does not: the simulated user confirms in the next firing."""
+    if st["outcome"] not in STOP_OUTCOMES:
+        return False
+    return not (a.until_release and st["outcome"] == "idle" and st.get("waiting")
+                and all("awaiting the user's confirmation" in w for w in st["waiting"]))
+
+
 def why_stop(st):
     why = st.get("anomalies") if st["outcome"] == "anomaly" else st.get("waiting")
     return json.dumps(why, ensure_ascii=False)[:400] if why else st["outcome"]
@@ -188,8 +208,10 @@ def run(a):
         fresh = subprocess.run(["git", "-C", a.project, "rev-parse", "--verify", "-q", "refs/heads/" + integration],
                                capture_output=True).returncode != 0
         st = None if fresh else status(tool, fdir, integration)
-        if st and st["outcome"] in STOP_OUTCOMES:
+        if st and stops(st, a):
             return summary(st["outcome"], "before any firing: " + why_stop(st))
+        if st and a.until_release and released(tool, fdir, integration, a.until_release):
+            return summary("released", "before any firing: %s is already confirmed" % a.until_release)
         before = snapshot(fdir)
         while True:
             remaining = a.total_usd - spent
@@ -214,7 +236,10 @@ def run(a):
                     p.returncode, out.get("subtype"), str(out.get("result") or p.stderr).strip()[-400:]))
             st = status(tool, fdir, integration)
             rec["status"] = st["outcome"]
-            if st["outcome"] in STOP_OUTCOMES:
+            conf = a.until_release and released(tool, fdir, integration, a.until_release)
+            if conf:
+                return summary("released", "%s confirmed: %s" % (a.until_release, json.dumps(conf, ensure_ascii=False)))
+            if stops(st, a):
                 return summary(st["outcome"], why_stop(st))
             now = snapshot(fdir)
             rec["progress"] = now != before
@@ -231,7 +256,7 @@ def parse(argv=None):
     ap.add_argument("--feature", required=True)
     ap.add_argument("--plugin-dir", required=True)
     ap.add_argument("--total-usd", type=float, required=True)
-    ap.add_argument("--per-firing-usd", type=float, required=True)
+    ap.add_argument("--per-firing-usd", type=float, help="cap per firing (default: the total); a cap below one dispatch wave's cost cuts the wave and wastes its work")
     ap.add_argument("--model")
     ap.add_argument("--permission-mode", help="passed to claude -p (headless runs need one that allows tools, "
                                                "e.g. bypassPermissions in an isolated project)")
@@ -241,9 +266,12 @@ def parse(argv=None):
                          "and is re-read on every turn")
     ap.add_argument("--prompt-file", help="extra instructions appended to the command (e.g. simulated-user rules)")
     ap.add_argument("--integration", help="the integration branch (default integration/<feature>)")
+    ap.add_argument("--until-release", metavar="RN",
+                    help="also stop (outcome `released`) once release RN is confirmed — a scenario's phase boundary")
     ap.add_argument("--feature-dir", help="F, when it cannot be found under --project")
     ap.add_argument("--claude-bin", default="claude", help=argparse.SUPPRESS)  # tests: a simulated CLI
     a = ap.parse_args(argv)
+    a.per_firing_usd = a.total_usd if a.per_firing_usd is None else a.per_firing_usd
     if not (a.total_usd > 0 and a.per_firing_usd > 0):
         ap.error("--total-usd and --per-firing-usd must be > 0")
     a.project, a.plugin_dir = os.path.abspath(a.project), os.path.abspath(a.plugin_dir)

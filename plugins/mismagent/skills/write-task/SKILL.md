@@ -1,6 +1,6 @@
 ---
 name: write-task
-description: 'mismAgent model: writes the two node files that are not blocks — type: spike (an unknown, with its closure protocol) and type: cleanup (removing a deprecated published symbol, gated by ready_when) — under features/<feature>/tasks/<side>/<state>/.'
+description: 'mismAgent model: writes the two non-block node files — type: spike (an unknown, with its closure protocol) and type: cleanup (removing a deprecated published symbol, gated by ready_when) — under features/<feature>/tasks/<side>/<state>/.'
 user-invocable: false
 ---
 
@@ -38,18 +38,17 @@ central: false          # true = an unproven capability the product stands on: t
 `build-manifest` fills it.
 
 ### Closing a spike (protocol)
-An open spike **blocks** its consumers; close it like this, never by "deleting it":
-1. **Where the decision lives:** if **mechanizable** → an **ADR** (with `enforced_by` checks if the
-   constraint is mechanical); if **discursive** (e.g. UX) → folded into the **ACs / `tests_nl` of the consuming
-   block**, with a dated note.
-2. **The spike node goes to `done/`** (not deleted) with a `resolution:` field pointing to the
-   consumer of the decision (`resolution: ADR-NNNN` or `resolution: AC of <block-id>`) — non-zombie trace.
-3. **Who closes it:** in `build` the worker-composer moves it (sole git-writer of state) — a
+An open spike **blocks** its consumers; close it thus, never by deleting it:
+1. **Where the decision lives:** **mechanizable** → an **ADR** (with `enforced_by` checks if the
+   constraint is mechanical); **discursive** (e.g. UX) → folded into the **ACs / `tests_nl` of the
+   consuming block**, with a dated note.
+2. **The spike node goes to `done/`** with a `resolution:` field pointing to the decision's
+   consumer (`resolution: ADR-NNNN` or `resolution: AC of <block-id>`) — non-zombie trace.
+3. **Who closes it:** in `build` the worker-composer (sole git-writer of state) — a
    `central: true` spike it dispatched sits in `doing/` with its evidence in
-   `features/<feature>/spikes/<id>.md` until the user decides; the decision is recorded by
-   `write-adr` (or folded into the consuming blocks' ACs by `build-manifest`), then the composer
-   moves the node to `done/`; in
-   `explore`/`model` the conductor closes it mechanically once the user's answer is recorded: the
+   `features/<feature>/spikes/<id>.md` until the user decides; `write-adr` records the decision (or
+   `build-manifest` folds it into the consuming blocks' ACs), then the composer moves the node to
+   `done/`; in `explore`/`model` the conductor closes it mechanically once the user's answer is recorded: the
    context-map entry `[x]` with its `D-NNNN`/ADR reference, the node (if any) to `done/` with its
    `resolution:`. An answer never replaces the evidence a closure criterion demands.
 
@@ -68,12 +67,11 @@ ready_when: "no-consumer-uses:<deprecated-symbol>"
 <the old operation/type + its tests, after ALL consumers have migrated>
 
 ## Readiness condition (ready_when)
-No consumer references `<deprecated-symbol>` anymore — verifiable: grep the consumers' paths for it
-(zero matches) and/or a contract test asserting "no calls to v1". While the condition
-is false the node stays in `backlog/` as an **explicit pending** (the worker-composer's readiness
-reports it), NEVER a deadlock.
+No consumer references `<deprecated-symbol>` anymore — verifiable: grep the consumers' paths (zero
+matches) and/or a contract test asserting "no calls to v1". While false, the node stays in
+`backlog/` as an **explicit pending** (the worker-composer's readiness reports it), NEVER a deadlock.
 ```
 
 ## Outcome
-Path of the node, id, kind (`spike`/`cleanup`), side, and which blocks/tasks it unblocks (spike)
-or which deprecated symbol it retires under what `ready_when` (cleanup).
+Node path, id, kind (`spike`/`cleanup`), side, and which blocks/tasks it unblocks (spike) or
+which deprecated symbol it retires under what `ready_when` (cleanup).

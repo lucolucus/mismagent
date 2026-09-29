@@ -30,8 +30,8 @@ the thing already exists. Your output is a verdict.
 6. **Missing cases.** Empty state, error, dirty data, concurrent access, volumes.
 7. **Already solved.** Is there already something in the repo/domain that does it (grep)? Then why again?
    **Skip this front under `validation_mode: greenfield_from_requirements`:** a prior
-   implementation is not ground truth — do not read it, argue from it or demand it. The other fronts
-   stand.
+   implementation is not ground truth — do not read it, argue from it or demand it. This project's own
+   code (the codemap you get) is not one: check it. The other fronts stand.
 
 **Default rule:** when in doubt, **RESHAPE** or **KILL**, never a courtesy PROCEED.
 

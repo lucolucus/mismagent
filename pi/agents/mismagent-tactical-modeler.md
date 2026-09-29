@@ -22,7 +22,8 @@ respect the profile's boundary rules.
 - the project context-map (contexts, relationships, canonical names);
 - the feature's `tactical-model.md` and its **"Seeds for the tactical"** — read from the file,
   absorb them into the tactical sections, then empty them;
-- optionally the challenger's critique, `research/`, `materials.sample`.
+- optionally the challenger's critique, `research/`, `materials.sample`;
+- the codemap part you get: existing aggregates, VOs, invariants — reuse or remodel (methodology rule 9).
 
 ## Procedure — tactical EventStorming, written in domain language
 For each context **this feature touches**, fill `write-tactical-model`'s sections (aggregates,

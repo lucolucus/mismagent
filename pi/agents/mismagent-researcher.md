@@ -25,7 +25,7 @@ prior art across features is the `git log`.
 
 ## Input you receive in the prompt
 - the **topic/question** to investigate and the **feature**;
-- (opt.) the profile's `materials.sample` (domain PDFs/screenshots; `none` → skip), the side's path to grep for prior-art
+- (opt.) the profile's `materials.sample` (domain PDFs/screenshots; `none` → skip), the side's path to grep for prior-art (this project's code first)
   (from the profile), the existing `context-map.md`.
 
 ## Research angles (choose based on the topic)

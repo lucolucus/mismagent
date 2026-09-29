@@ -51,6 +51,11 @@ python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated cla
   is re-read every turn — in run 6 the resumed composer was 72% of all tokens), always with
   `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`. `--resume-sessions` keeps the old single resumed session.
   `--prompt-file` text is appended to the command (e.g. simulated-user rules).
+- **Phase boundary** (`--until-release RN`): also stops, outcome `released`, once release RN is
+  confirmed (`release list` → `confirmed`) — so a scenario can inject a change between releases.
+- **Per-firing cap** (`--per-firing-usd`, default: the total): it must fit a whole dispatch wave —
+  in run 6 a $6 cap cut 4–5 parallel workers mid-wave and the next firing re-dispatched them ($19.5
+  for one integration).
 - **Cost** = each fresh session's `total_cost_usd`; with `--resume-sessions`, the deltas of the cumulative one. Missing, invalid or decreasing →
   stop `cost-invalid`, never a silent zero. The cap follows the CLI's accounting, not the invoice.
 - **Minimum Claude Code: 2.1.277** — earlier versions report each invocation's own cost, not the
@@ -117,3 +122,9 @@ and keep the file with the comparison; an aggregate with tokens from an unpriced
 
 Limits: attribution is text matching on the dispatch's own words; completion evidence is only what
 the feature folder given holds (a folder whose `integrated/` was not kept reports fewer completions).
+
+# scenarios/ — structured validation runs
+
+A scenario fixes its hypotheses, phases, budgets, stop rules, simulated-user policy and external
+acceptance **before** the run. `scenarios/cassa-structured/` (three releases, a change request, a
+second feature): read `scenario.md`, then `run-scenario.sh <run-dir> [--from <phase>]`.

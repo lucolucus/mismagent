@@ -7,20 +7,24 @@ write the full command the calling prompt resolved — `python3 "@@MISMAGENT_SKI
 the path quoted — so each Bash call stands alone (no word splitting, nothing kept between calls). `F` = `<output_dir>/features/<feature>/`
 (a project root with a single feature resolves to it). **One repository per project**: the repo is the
 git toplevel of `F` (for `diff-range`, of the working directory). A block's branch is `block/<id>`.
-Output: JSON on stdout (`pack`: Markdown). Exit `0` ok · `1` refused / anomaly / gap (the JSON says
+`MM <command> --help` states what each command reads, writes and refuses. Output: JSON on stdout (`pack`: Markdown). Exit `0` ok · `1` refused / anomaly / gap (the JSON says
 why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 `python3 -m unittest discover -s tools/tests`.
 
 | Command | Output |
 |---|---|
-| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
+| `MM status F --integration B` | `{ok, anomalies:[{kind, id, detail}], outcome, work:[…], waiting:[…], resume:[{id, branch, worktree, uncommitted, attempt, commits, handoff, result[, progress:{attempt, head, next, fresh}]}]}` — exit 1 if any anomaly |
 | `MM lint F` · `MM lint --adrs <dir>` | `{ok, manifest: legacy\|rendered, gaps:[{rule, where, gap, bounce_to}], deferred:[{where, file, until}]}` (`--adrs`: no `manifest`) |
 | `MM why check <file>` | `{ok, file, entries, active, errors:[{id, rule, error}]}` — read-only; no manifest needed |
-| `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` |
+| `MM why import <decisions.md> --handoff <h>` · `MM why check <h> --into <decisions.md>` | `{ok, file, mapping:{local: final}, appended, unchanged, …}` — a handoff's heading ids are local; `check --into` writes nothing |
+| `MM why append <file> --entry <entry-file>` | `{ok:true, file, appended, updated, unchanged, superseded}` or `{ok:false, refused[, errors]}` — `MM why append --help` lists the rules |
+| `MM why template [<file>]` | Markdown: a valid entry skeleton, the file's next id |
+| `MM question close F <id> --decision D-NNNN` | `{ok:true, id, decision, path, git, relinked}` or `{ok:false, refused}` — `relinked`: `F/decisions.md` links to the moved file rewritten (also on `move`) |
 | `MM manifest render F` | `{ok:true, written, unchanged, orphans}` or `{ok:false, refused, problems:[{id, problem}]}` |
 | `MM ready F` | `{ready:[{id, type, wave, release}], excluded:[{id, reason}], finishable:[id], open_spikes:[{id, state, central, unblocks}], resume:[…]}` |
-| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
-| `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path |
+| `MM move F <id> --to todo\|doing\|done` | `{ok:true, id, from, to, path, git, relinked[, progress_removed]}` or `{ok:false, id, from, refused}` (no `to`: nothing moved) |
+| `MM pack F <id> --extra FILE…` | Markdown headed `spec_hash: <h>`; every section carries its `source:` path; `## Existing code`: the block's `code_paths` (to change) and the `entry_files` of the modules serving its and its consumed owners' (context, side) — a module serves its `contexts:`, else the context named like its id (read-only), a composition block's side root — paths only, never in `spec_hash` |
+| `MM codemap <output_dir> --ref <sha> [--side S] [--module M] [--files]` | Markdown: per side (profile `sides:`), per module (`modules:` of architecture.md, else per directory), the files git tracks at the ref (`--files` lists them, entry files `*`). Discovery only: a module's contract stays the project's dependency lint |
 | `MM progress record F <id> --head <sha> --spec-hash <h> --json <checkpoint> [--extra <path>]…` | `{ok:true, id, file, attempt}` or `{ok:false, refused, problems}` |
 | `MM diff-range --base B --head X` | `{base_sha, head_sha, merge_base, range, files:[{status, path}]}` |
 | `MM proof record F review <id> --sha S --spec-hash H` · `MM proof check F review <id> --sha S` | `{recorded, sha}` or `{refused, reviewed, current}` · `{fresh, stale_because}` |
@@ -31,6 +35,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
 | `MM release close F <Rn> --entries <json> [--replace <finding>…]` · `MM release waive F <Rn> --entries <json> [--replace <finding>…]` | `{ok:true, release, action, lines, findings, replaced, file}` or `{ok:false, refused, problems}` |
 | `MM release group F <Rn> --id pre-<Rn>-<k> --lines <line>:<finding>…` | `{ok:true, id, file, blocks, findings, context, unchanged}` or `{ok:false, refused, problems}` |
 | `MM release confirm F <Rn> --integration B --sha S --tag TAG --merge-to BASE --base-sha T --by <user> --consent <ref>` | `{ok:true, confirmed, release, sha, tag, merge_to, base_sha_before, partial, unchanged}` or `{ok:false, refused, problems}` |
+| `MM review template F <id> --attempt N --reviewer verifier\|code-review --sha S --spec-hash H [--out <path>]` | the report skeleton (JSON; `--out`: written there, `{ok:true, file}`) or `{ok:false, refused}` |
+| `MM review ingest F <id> --attempt N --depth standard\|deep --file <report> [--file <report>] --sha S --spec-hash H [--answered D-NNNN]…` | `{ok:true, action: promote\|rework\|park\|decide\|blocked, reason, rework: <path>\|null, counts:{HIGH, MED, LOW, failures}, appended, proof, objections:[{reviewer, about, text}][, warnings][, answered][, proof_dropped][, repeat]}` or `{ok:false, refused:"nothing written", problems}` |
+| `MM rework write F <id> --reason candidate-red\|merge-conflict\|other --evidence <file>\|-` | `{ok:true, action: rework\|park, rework: <path>\|null, reason, proof_dropped}` or `{ok:false, refused:"nothing written", problems}` |
+| `MM state commit F -m <message> --integration B` | `{ok:true, committed:false}` · `{ok:true, committed:true, sha, paths:[…]}` or `{ok:false, refused[, outside\|open\|paths]}` |
 
 ## Exact semantics
 
@@ -60,7 +68,10 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   `done/`, no open question (open LOW lines never prevent it). `ready: []` alone is never `idle`.
 - **resume** (`status` and `ready`) = each block in `doing/` not integrated, with its branch, its
   worktree (null if none) and the count of uncommitted changes there: facts, never a diagnosis — a
-  dirty tree with no commit also describes a worker still running. With `F/progress/<id>.json`, the
+  dirty tree with no commit also describes a worker still running. `attempt` = 1 + rework cycles;
+  `commits` = commits only `block/<id>` holds; `handoff` = `.worktrees/returns/<feature>/<id>-<attempt>.md`
+  or null; `result` = the last `RESULT:` line the worker appended there on returning (null: it never
+  returned). With `F/progress/<id>.json`, the
   entry gains `progress: {attempt, head, next, fresh}` — `fresh` ⇔ its `head` is still `block/<id>`'s
   tip, its `spec_hash` the current one and the block's worktree clean (a change after the checkpoint
   is unverified work); a stale one is reported (`fresh: false`), never an anomaly.
@@ -77,11 +88,16 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   file, **no progress** (`no progress since attempt N`: the head is the previous record's and `done`
   is unchanged). An integrated block's progress is ignored; `move --to done` deletes it
   (`git rm` if tracked; `progress_removed`).
+- **question close** moves `F/open-questions/<id>.md` to `F/open-questions/closed/<id>.md` (`<id>-2.md`… if
+  closed before; `git mv` if tracked) and appends `Closed by D-NNNN on <date>` (UTC). Refused, nothing
+  moved: no such top-level question, `D-NNNN` not an entry of `F/decisions.md` (record the answer
+  first). `status` and `ready` read only the top-level files: a closed question neither waits nor parks.
 - **ready** = in `todo/`, in the manifest, no `F/open-questions/<id>.md`; while a `scaffold` block of
   the feature is not both integrated and in `done/`, only scaffolds (the open spikes stay listed); not named in the
   `## Unblocks` of a spike node (`tasks/<side>/<state>/<id>.md`, `type: spike`) that is not `done` —
-  only full `- <block-id>` lines count, prose is ignored —, every consumed boundary's owner and every
-  `after:` block **integrated** (not necessarily `done`). Order: `wave`, then release (the `releases:` keys in
+  only full `- <block-id>` lines count, prose is ignored —, every consumed boundary's owner, every
+  `after:` block and every non-scaffold block of an earlier `wave` of the same side **integrated** (not
+  necessarily `done`) — a wave is a barrier: a shared owner (kernel types, schema) is used implicitly. Order: `wave`, then release (the `releases:` keys in
   order, then undeclared labels in natural order), then manifest order. The cap is the composer's.
 - **move**: blocks `todo→doing`, `doing→todo`, `doing→done` (only if finishable); spike/cleanup
   nodes `backlog|todo→doing`, `doing→done`. Nothing else. A tracked file moves with `git mv`. A
@@ -160,11 +176,90 @@ why) · `2` usage or input error (an unreadable manifest names its line). Tests:
   removes whatever exists of the candidate (worktree, directory, metadata) — also a half-created one
   — and keeps `candidate/<id>` as evidence. No revert, no timeout. Candidates live in the
   git-common-dir; block worktrees and packs do not (`LOOP.md`, Worktrees).
+- **review ingest** — the composer's one step from the reviewers' reports to an action; it never
+  reads the findings. **Retry first**: each accepted ingestion is recorded in
+  `F/review-ingest/<id>-<attempt>.json` (the sha, the depth, the reports' content hashes, the
+  result). The same id + attempt with the same reports, sha and depth returns that result again
+  (`repeat: true`), writing nothing — checked **before** the spec, so a group whose own rework file
+  moved its spec hash is retried identically; the same attempt with other reports is refused (a new
+  review is a new attempt) — except a `decide` result ingested again with `--answered` (below); the
+  record keeps the answers, so the same answers retry identically. **Validated first, whole** (any problem → `{ok:false, refused:"nothing
+  written", problems}`, exit 1; every field type-checked before use — a malformed report is refused,
+  never a crash): each `--file` parses and matches the report schema (below); the set is exactly
+  the depth's reviewers, each once (`standard`: `verifier`; `deep`: `verifier` + `code-review`);
+  every report's `id`, `attempt`, `sha` (resolved) and `spec_hash` equal the arguments; `S` is the
+  tip of `block/<id>` (a pre-release group `pre-<Rn>-<k>` too: its branch is `block/pre-<Rn>-<k>`);
+  `H` is the id's **current** spec hash (never substituted: a changed spec is reviewed again); a
+  block with MED/LOW findings has a release. Then, for **every** attempt (a failed one's deferrals
+  are real too): each MED/LOW finding whose `fix` is not `Decision` is appended to
+  `F/pre-release.md` as `- [ ] <release> · <block> · <sev> · <at> · <issue> · <reviewer> · <date>`
+  (`<release>` = the block's row, or the group's `rework/<id>-1.md` frontmatter; `<date>` = today
+  UTC; `·` in a field becomes `-`). For a group, `<block>` is one of its `blocks:` — the one whose
+  grouped lines cite the finding's file, when exactly one does, else the first (a legacy group with
+  no `blocks:`: the group id) — and `<issue>` starts `[pre-<Rn>-<k>] `, so `release group` accepts
+  the line later. **Idempotent**: a line with the same release, block, sev, at and issue (any mark)
+  is not appended again (`appended` = the new lines). Then ONE `action`, the first that applies:
+  1. `decide` — a finding with `fix: Decision` or a code-review `BLOCKED`: a human/product choice
+     (`reason` = the questions). `--answered D-NNNN` (repeatable; each an entry of `F/decisions.md`,
+     at least one Decision finding or `BLOCKED` to answer, else refused) marks them answered: a HIGH
+     `Decision` then counts as no HIGH, the next actions apply, and `answered` lists the notes;
+  2. `blocked` — a verifier `SKIP`: a strategy problem outside the block (`reason` = its failures);
+  3. `rework` — any failure, a `FAIL`, a HIGH, a `CHANGES`: ONE `F/rework/<id>-<n>.md` (`n` = the
+     highest existing + 1) with the verdicts, the report paths, every failure, every HIGH finding
+     (with its fix and evidence) and the MED/LOW `Patch` ones. **Cap**: rework cycles = the id's
+     `rework/<id>-<n>.md` files (a group's `-1` is its spec, not a cycle); with 2 already → `park`
+     (`reason` starts `rework cap`, no file written): the composer parks it;
+  4. `promote` — every report passes, no HIGH, no failure: the review proof is recorded exactly as
+     `proof record F review <id> --sha S --spec-hash H` does (`proof: true`).
+  Every other action **drops** `F/review-proof/<id>.json` (`proof_dropped`: whether one existed), so
+  `proof check` and `compose start` refuse until a later attempt promotes. `counts` sums every
+  report's findings by severity and its failures; `objections` = every report's objections, each on
+  one line with its reviewer (a text over 40 words truncated to 40, with a `warnings` entry) — the composer records them in the decision note's `Debate`/`Result`
+  without reading the reports. Exit 0 whatever the action.
+- **rework write** — a rework cycle that is not a review's: a red candidate (gate or contract test),
+  a merge conflict at `compose start`, `other`. Writes the next `F/rework/<id>-<n>.md` (`reason:` +
+  `## Evidence` = the `--evidence` file, or stdin with `-`; non-empty) under the **same** numbering
+  and cap as `review ingest` — at the cap `{ok:true, action:"park", rework:null, reason:"rework
+  cap…"}`, nothing written; a group's `-1` is its spec. Drops the review proof (`proof_dropped`).
+  Refused, nothing written: an id that is neither a block nor a group, unreadable or empty evidence.
+- **state commit** — the composer's bookkeeping, nothing else. Refused (`ok:false`, nothing staged,
+  exit 1): the checkout that owns `F` is not on `--integration` (`B`); a candidate is open (commit
+  before `compose start` or after `compose promote`, never between); `<output_dir>` (the trunk that
+  holds `F`, e.g. `.mismagent/`) is the repository root or outside it; anything **outside**
+  `<output_dir>` is already staged (`outside`: unstage it). Otherwise it stages every changed, new
+  (not ignored) and deleted path under `<output_dir>` (`git add -A -- <output_dir>`) — never a path
+  outside it, which stays as it was — and commits them with `-m` under the repository's configured
+  identity: `{committed:true, sha, paths}`; nothing to commit → `{ok:true, committed:false}`. A
+  failing commit (e.g. a hook) → `refused` with git's message, the paths left staged.
+
+## Review reports — `review ingest`'s input
+
+One JSON file per reviewer, written by the reviewer to the path the composer designates
+(`<repo>/.worktrees/reviews/<feature>/<id>-<attempt>-<verifier|code-review>.json`, ignored, never
+committed) — its only write. `review template` with `--out <path>` writes the skeleton below, identity
+filled and each value a placeholder stating its rule (left unfilled, it is refused):
+```json
+{"version": 1, "id": "<block or group id>", "attempt": 1, "reviewer": "verifier",
+ "sha": "<the reviewed head>", "spec_hash": "<the reviewed pack's>", "verdict": "PASS",
+ "checks": ["what was run and its result"], "failures": ["<an AC or check that failed>"],
+ "findings": [{"sev": "MED", "at": "src/a.py:12", "issue": "<what>", "fix": "Defer",
+               "evidence": "<why: the line, the failing input>"}],
+ "objections": [{"about": "D-0003", "text": "<the objection, ≤ 40 words>"}],
+ "notes": "<anything else, e.g. D-NNNN cited>"}
+```
+`objections` (optional) = `[{"about": "D-NNNN" | "<topic>", "text": "<≤ 40 words; longer is truncated>"}]`: the
+reviewer's objections to a recorded or proposed decision, returned by `review ingest`.
+`verdict`: verifier `PASS | FAIL | SKIP`, code-review `APPROVE | CHANGES | BLOCKED`; `SKIP` = the
+check cannot run for a reason outside the block (a strategy problem). `failures`: non-empty strings,
+none with `PASS`/`APPROVE`. Each finding has exactly `sev` (`HIGH | MED | LOW`), `at`
+(ONE location: `file:line[-line]`, `path#symbol` or `path`; a list such as `a.py:3,9` is refused), `issue`, `fix` (`Patch` = fix it now · `Defer` = file it for
+the release · `Decision` = a human/product choice), `evidence` (a string, may be empty). `checks`
+and `notes` are optional (any JSON), `objections` optional (shape above); any other key is refused.
 
 ## Releases — `F/pre-release.md`, records, confirm
 
-**Line** (one per deferred finding): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
-`<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]` or `path#symbol` (a symbol does not
+**Line** (one per deferred finding; `review ingest` appends them, idempotently): `- [ ] <release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`;
+`<sev>` ∈ `HIGH | FAIL | MED | LOW`; `<locator>` = `file:line[-line]`, `path#symbol` or `path` (a symbol does not
 rot). Marks: `[ ]` open · `[x]` closed · `[~]` waived — flipped only by `release close|waive`; text
 after the seventh field is an annotation. **Identity** = a hash of the seven fields (`finding`, 12
 hex), never the mark, the line number or an annotation: the line number only **selects**, and every
@@ -223,7 +318,8 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `wave.owner_first` | a consumed boundary's owner has a lower `wave` than the consumer |
 | `consumes.boundary` | every `consumes` entry is a boundary id |
 | `boundary.owner` · `boundary.consumers` | `owner` / each consumer is a block id; `consumers` and the blocks' `consumes` agree both ways |
-| `release.required` · `release.declared` | every non-scaffold block has `release:`; declared in `releases:` when that section exists |
+| `code_paths.shape` · `code_paths.exist` | `code_paths` is a list of repo-relative paths; a not-done block whose `after:` are all integrated names paths committed at the checkout's HEAD (the existing code it changes; before that the code is still owed, so no gap; new files need none) |
+| `release.required` · `release.declared` · `release.later_work` | every non-scaffold block has `release:`; declared in `releases:` when that section exists; its `notes` never name a later release (that work is a block of that release) |
 | `scaffold.domain_free` | a `scaffold` row has no `invariants`, `invariant_fields`, `commands`, `consumes`, `pinned_types`, `view_shape`, `keys`, and owns no boundary |
 | `boundary.pinned_types` | `pinned_types` present and non-empty; `pinned_types`/`keys` each a mapping `{name: text}` (never coerced) → `architect` |
 | `boundary.contract_test` | `invariant-test \| consumer-driven` |
@@ -239,7 +335,7 @@ Each gap names its `bounce_to` (`build-manifest` unless noted).
 | `manifest.build_order` | no `build_order:` (read by nothing; order with `after:`) |
 | `composition.valid` | `composition` is `true \| false`, never `true` on a `scaffold` |
 | `composition.unique` · `composition.last` | at most one `composition: true` block per (`release`, `side`); its `after:` lists every other non-scaffold block of that (`release`, `side`) — the single writer of the composition root, last by construction. A manifest without the flag: no gap |
-| `composition.root` | a `composition: true` block exists → `<output_dir>/architecture.md` holds `composition_root: <path>` on one non-heading line, the path non-empty (bullet or backticks allowed) → `architect` |
+| `composition.root` | each side with a `composition: true` block has a root in `<output_dir>/architecture.md`: `composition_roots: {<side>: <path>}` in a YAML block (it wins), else one `composition_root: <path>` non-heading line, the path non-empty (bullet or backticks allowed) → `architect` |
 | `composition.chain` | a `composition: true` block's `after:` lists the composition block of the nearest earlier release (release order: `releases:` keys, then other labels) that has one on the same `side` |
 | `why.<rule>` · `why.scope` | when `F/decisions.md` exists: every `why check` error, and each active entry's `block:`/`boundary:`/`release:` scope names a row / a release of the manifest → `recorder` (who wrote the entry) |
 | `release.finding` | every `- [ ]` line of `pre-release.md` has the seven fields, a severity, a locator → `composer` |
@@ -265,7 +361,8 @@ the decider by writing. Build: during review/rework the composer only **collects
 objections and the rework's evidence; it **records** them once the block is promoted (its links then
 resolve on the line), `Debate`/`Result` already filled from what it collected. Explore/model: the conductor records the
 challenger's debate and the user's choice at each checkpoint (`KILL`/`RESHAPE` included);
-`build-manifest` records an open question's answer before deleting `open-questions/<id>.md`.
+`build-manifest` records an open question's answer before deleting `open-questions/<id>.md`; the
+composer, having recorded one, closes it with `MM question close F <id> --decision D-NNNN`.
 Reviewers and the challenger stay read-only: they cite `D-NNNN` in their `NOTES`. The recorder
 writes each returned entry to a file and adds it with `MM why append F/decisions.md --entry <file>`
 (never a hand edit of the file); an allowed edit below is the same command with the whole updated

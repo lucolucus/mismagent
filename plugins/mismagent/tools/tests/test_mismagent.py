@@ -796,6 +796,48 @@ class TestWhy(Base):
     def rules(self, text):
         return {(e["id"], e["rule"]) for e in self.why(text, 1)["errors"]}
 
+    def test_a_handoff_imports_with_local_ids_idempotently(self):
+        d = os.path.join(self.tmp, "imp")
+        path = self.put("decisions.md", note("D-0001") + "\n" + note("D-0002"), base=d)
+        h = self.put("h.md", note("D-0001", Decision="first local") + "\n" +
+                     note("D-0002", Decision="second local", Debate="builds on D-0001; unlike D-0002 above") +
+                     "\nRESULT: READY-FOR-REVIEW\nBLOCK: agg-order\n", base=d)
+        out = self.run_tool("why", "check", h, "--into", path, expect=0)                 # dry: nothing written
+        self.assertEqual(out["mapping"], {"D-0001": "D-0003", "D-0002": "D-0004"})
+        self.assertNotIn("D-0003", mismagent.read(path))
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)
+        self.assertEqual((out["appended"], out["unchanged"]), (["D-0003", "D-0004"], []))
+        text = mismagent.read(path)
+        self.assertIn("- Debate: builds on D-0003; unlike D-0004 above", text)           # local refs remapped
+        self.assertNotIn("RESULT:", text)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)             # a retry adds nothing
+        self.assertEqual((out["appended"], out["unchanged"]), ([], ["D-0003", "D-0004"]))
+        self.assertEqual(mismagent.read(path), text)
+        bad = self.put("bad.md", note("D-0001", Docs="[x](missing.md)"), base=d)
+        out = self.run_tool("why", "check", bad, "--into", path, expect=1)
+        self.assertIn("link.missing", {e["rule"] for e in out["errors"]})
+        self.assertEqual(mismagent.read(path), text)
+
+    def test_a_handoff_import_survives_cycles_updates_and_rejects_malformed_notes(self):
+        d = os.path.join(self.tmp, "imp2")
+        path = self.put("decisions.md", note("D-0001"), base=d)
+        h = self.put("x-1.md", note("D-0001", Debate="see D-0002") + "\n" + note("D-0002", Debate="see D-0001"), base=d)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)
+        self.assertEqual((out["mapping"], out["appended"]), ({"D-0001": "D-0002", "D-0002": "D-0003"}, ["D-0002", "D-0003"]))
+        text = mismagent.read(path)
+        self.assertIn("- Debate: see D-0003", text)                                       # mapped once, never twice
+        self.assertEqual(self.run_tool("why", "import", path, "--handoff", h, expect=0)["appended"], [])  # cycle: no-op
+        self.put("x-1.md", note("D-0001", Debate="see D-0002; the reviewer agreed") + "\n" +
+                 note("D-0002", Debate="see D-0001"), base=d)
+        out = self.run_tool("why", "import", path, "--handoff", h, expect=0)              # an allowed update
+        self.assertEqual((out["appended"], out["updated"]), ([], ["D-0002"]))
+        self.assertEqual(len(mismagent.parse_notes(path)[0]), 3)
+        for bad in ("## D-0001 · Parser choice\n", note("D-0001").replace("- Question: Which parser?\n",
+                                                                           "- Question: Which\n  parser?\n")):
+            self.put("y-1.md", bad, base=d)
+            out = self.run_tool("why", "check", os.path.join(d, "y-1.md"), "--into", path, expect=1)
+            self.assertEqual(out["errors"][0]["rule"], "handoff.line")
+
     def test_valid_file_before_any_manifest(self):
         d = os.path.join(self.tmp, "early")
         path = self.put("decisions.md", note("D-0001") + note("D-0002", Supersedes="D-0001"), base=d)
@@ -1167,7 +1209,7 @@ class TestV023(Base):
     # -- core ----------------------------------------------------------------------------------------
     def test_findings_identity_is_the_seven_fields_not_the_line(self):
         self.put("pre-release.md", "x\n" + fline("R0", "agg-order", "MED", "src/a.py#Order.total", "i")[0] +
-                 "- [ ] R0 · agg-order · MED · src/a.py · no anchor · v · d\n- [ ] R0 · agg-order · MED · a.py:1\n"
+                 "- [ ] R0 · agg-order · MED · src/a.py:3,9 · a list · v · d\n- [ ] R0 · agg-order · MED · a.py:1\n"
                  "- [x] R0 · agg-order · MID · a.py:1 · i · v · d\n")
         f = mismagent.parse_findings(mismagent.Feature(self.feat))
         self.assertEqual((f[0]["line"], f[0]["locator"]), (2, "src/a.py#Order.total"))
@@ -1334,11 +1376,80 @@ class TestV023(Base):
         self.put("src/half.py", "work in progress\n", base=wt)
         out = self.status()
         self.assertEqual(out["outcome"], "work")
-        self.assertEqual(out["resume"], [{"id": "agg-order", "branch": "block/agg-order", "worktree": wt, "uncommitted": 1}])
-        self.assertIn("resume: agg-order (doing, not integrated; worktree %s, 1 uncommitted)" % wt, out["work"])
+        self.assertEqual(out["resume"], [{"id": "agg-order", "branch": "block/agg-order", "worktree": wt, "uncommitted": 1,
+                                          "attempt": 1, "commits": 0, "handoff": None, "result": None}])
+        self.assertIn("resume: agg-order (doing, not integrated; worktree %s, 1 uncommitted, attempt 1, 0 commits, "
+                      "no return)" % wt, out["work"])
         self.assertNotIn("interrupt", json.dumps(out))
         self.assertEqual(self.run_tool("ready", self.feat, expect=0)["resume"], out["resume"])
         self.assertEqual(mismagent.read(os.path.join(wt, "src", "half.py")), "work in progress\n")   # untouched
+
+    def test_a_resume_entry_tells_a_returned_worker_from_an_interrupted_one(self):
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        self.run_tool("move", self.feat, "agg-order", "--to", "doing", expect=0)
+        wt = self.block_wt("agg-order")
+        self.commit(wt, "src/a.py", "ac1\n")
+        self.commit(wt, "src/b.py", "ac2\n")
+        r = self.status()["resume"][0]
+        self.assertEqual((r["attempt"], r["commits"], r["handoff"]), (1, 2, None))      # interrupted, work committed
+        h = self.put(os.path.join(".worktrees", "returns", os.path.basename(self.feat), "agg-order-1.md"), "entries\n",
+                     base=self.repo)
+        r = self.status()["resume"][0]
+        self.assertEqual((r["handoff"], r["result"]), (h, None))                       # entries so far, no return
+        self.put(h, "entries\nRESULT: CHECKPOINT\n\nmore\nRESULT: READY-FOR-REVIEW\nBLOCK: agg-order\n", base=self.repo)
+        self.assertEqual(self.status()["resume"][0]["result"], "READY-FOR-REVIEW")      # returned: review it
+        self.put("rework/agg-order-1.md", "# Rework agg-order — cycle 1\n")
+        r = self.status()["resume"][0]
+        self.assertEqual((r["attempt"], r["handoff"], r["result"]), (2, None, None))                       # the rework has not returned
+
+    def test_a_later_release_consumer_is_neither_an_earlier_blocks_spec_nor_its_weld(self):
+        feat = lambda: mismagent.Feature(self.feat)
+        h = {b: mismagent.spec_hash(feat(), b) for b in ("agg-order", "svc-order", "rm-orders")}
+        self.put("building-blocks.yaml", MANIFEST.replace("consumers: [svc-order, rm-orders]", "consumers: [svc-order]"))
+        self.assertEqual(mismagent.spec_hash(feat(), "agg-order"), h["agg-order"])    # R1 consumer: not the R0 owner's
+        self.assertEqual(mismagent.spec_hash(feat(), "svc-order"), h["svc-order"])    # another consumer never binds it
+        self.put("building-blocks.yaml", MANIFEST.replace("consumers: [svc-order, rm-orders]", "consumers: [rm-orders]"))
+        self.assertNotEqual(mismagent.spec_hash(feat(), "agg-order"), h["agg-order"])  # its own release's consumer is
+        self.put("building-blocks.yaml", MANIFEST)
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        for b in ("agg-order", "svc-order"):
+            self.integrate(b)
+        self.assertTrue(feat().finishable("agg-order"))       # rm-orders (R1) not integrated: R0 still finishes
+        self.assertTrue(feat().finishable("svc-order"))
+        self.assertFalse(feat().welded(feat().bnd["b-order"]))
+
+    def test_a_later_releases_work_as_a_note_on_an_earlier_block_is_a_lint_gap(self):
+        self.put("building-blocks.yaml", MANIFEST.replace("    commands: [PlaceOrder]\n",
+                 "    commands: [PlaceOrder]\n    notes: \"R1 extends this query in place\"\n", 1))
+        self.assertIn(("release.later_work", "svc-order"), self.gaps()[0])
+        self.move("svc-order", "done")
+        self.assertNotIn(("release.later_work", "svc-order"), self.gaps()[0])        # history, never reopened
+
+    def test_a_release_refusal_names_the_unexpected_and_the_missing_flags(self):
+        out = self.run_tool("release", "close", self.feat, "R0", "--entries", "[]", "--integration", "feature/shop")
+        self.assertIn("not an option of close: --integration", out["error"])
+        out = self.run_tool("release", "list", self.feat, "R0")
+        self.assertIn("missing: --integration", out["error"])
+
+    def test_a_proof_recorded_on_the_full_consumer_list_stays_valid(self):
+        feat = mismagent.Feature(self.feat)
+        full = mismagent.spec_hash(feat, "agg-order", own=False)
+        self.assertTrue(mismagent.spec_current(feat, "agg-order", full))
+        self.assertFalse(mismagent.spec_current(feat, "agg-order", "0" * 64))
+
+    def test_a_state_move_rewrites_the_decision_links_to_the_moved_file(self):
+        class F:
+            dir = self.feat
+        self.put("decisions.md", "- Docs: [q](open-questions/q1.md), [s](./tasks/app/backlog/s1.md#result), "
+                                 "[other](open-questions/q10.md)\n")
+        j = lambda *x: os.path.join(self.feat, *x)
+        self.assertEqual(mismagent.relink_notes(F, j("open-questions", "q1.md"), j("open-questions", "closed", "q1.md")), 1)
+        self.assertEqual(mismagent.relink_notes(F, j("tasks", "app", "backlog", "s1.md"), j("tasks", "app", "done", "s1.md")), 1)
+        self.assertEqual(mismagent.read(j("decisions.md")), "- Docs: [q](open-questions/closed/q1.md), "
+                         "[s](tasks/app/done/s1.md#result), [other](open-questions/q10.md)\n")
 
     # -- confirm (git) -------------------------------------------------------------------------------
     def releasable_line(self):
@@ -1731,6 +1842,476 @@ class TestV024(Base):
         self.put("architecture.md", "- **composition_root:** `src/app/main`\n", base=self.out)
         self.run_tool("lint", self.feat, expect=0)
 
+    def test_composition_roots_are_resolved_per_side(self):
+        self.write_feature(self.comp("    composition: true\n    after: [agg-order]\n    side: app\n"))
+        self.put("architecture.md", "# A\n\n```yaml\ncomposition_roots:\n  admin: src/admin\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # none for side app
+        self.put("architecture.md", "# A\n\n- `composition_root: legacy/one`\n\n```yaml\ncomposition_roots:\n"
+                 "  admin: src/admin\n  app: src/app\n```\n", base=self.out)
+        self.run_tool("lint", self.feat, expect=0)
+        self.assertEqual(mismagent.composition_root(mismagent.Feature(self.feat), "app"), "src/app")  # map wins
+        self.put("architecture.md", "# A\n\n```yaml\ncomposition_roots:\n  app: null\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # a null root is none
+        self.put("architecture.md", "- `composition_root: one/root`\n", base=self.out)
+        self.put("profile.md", "```yaml\nsides:\n  app: {path: a}\n  admin: {path: b}\n```\n", base=self.out)
+        self.assertIn(("composition.root", "architecture.md"), self.gaps()[0])        # one line, two sides
+
+    def test_a_wave_is_a_barrier_within_its_side(self):
+        self.write_feature(MANIFEST.replace("    consumes: [b-order]\n    commands: [PlaceOrder]\n",
+                                            "    commands: [PlaceOrder]\n", 1))   # svc-order: no declared dependency
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "doing", expect=0)
+        self.integrate("scaffold-app")
+        self.run_tool("move", self.feat, "scaffold-app", "--to", "done", expect=0)
+        r = self.run_tool("ready", self.feat, expect=0)
+        self.assertEqual([x["id"] for x in r["ready"]], ["agg-order"])                  # wave 1 alone
+        self.assertIn({"id": "svc-order", "reason": "after, not integrated: agg-order"}, r["excluded"])
+        self.integrate("agg-order")
+        self.assertIn("svc-order", [x["id"] for x in self.run_tool("ready", self.feat, expect=0)["ready"]])
+
+    def test_code_paths_name_existing_code_and_leave_other_blocks_specs_alone(self):
+        before = {b: self.spec_hash(b) for b in ("agg-order", "svc-order")}
+        self.put("src/orders/api.py", "x\n", base=self.repo)
+        self.put("src/local-only.py", "x\n", base=self.repo)                             # never committed
+        sh(self.repo, "git", "add", "src/orders/api.py")
+        sh(self.repo, "git", "commit", "-q", "-m", "api")
+        m = MANIFEST.replace("    view_shape: { orderId: string, total: int }\n",
+                             "    view_shape: { orderId: string, total: int }\n    code_paths: [src/orders/api.py, src/gone.py]\n", 1)
+        self.write_feature(m)
+        self.assertIn(("code_paths.exist", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace(", src/gone.py", ", src/local-only.py"))
+        self.assertIn(("code_paths.exist", "rm-orders"), self.gaps()[0])               # the committed tree counts
+        self.write_feature(m.replace(", src/gone.py", ""))
+        self.assertNotIn(("code_paths.exist", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "src/orders/api.py"))
+        self.assertIn(("code_paths.shape", "rm-orders"), self.gaps()[0])
+        self.write_feature(m.replace("    code_paths: [", "    after: [agg-order]\n    code_paths: [", 1))
+        self.assertNotIn(("code_paths.exist", "rm-orders"), self.gaps()[0])            # agg-order owes that code yet
+        self.assertEqual({b: self.spec_hash(b) for b in before}, before)               # only its own row changed
+        self.write_feature(m.replace("[src/orders/api.py, src/gone.py]", "[/abs/path]"))
+        self.assertIn("code_paths", json.dumps(self.run_tool("manifest", "render", self.feat)))
+
+    def test_the_pack_names_the_code_to_change_and_the_entry_files_to_read(self):
+        self.put("src/orders/api.py", "x\n", base=self.repo)
+        self.write_feature(MANIFEST.replace("    commands: [PlaceOrder]\n", "    commands: [PlaceOrder]\n"
+                                            "    code_paths: [src/orders/api.py]\n", 1))
+        self.put("architecture.md", "# A\n\n```yaml\nmodules:\n  - id: orders\n    root: src/orders\n"
+                 "    entry_files: [src/orders/api.py, src/orders/ports.py]\n  - id: reports\n    root: src/reports\n"
+                 "    entry_files: [src/reports/api.py]\n```\n", base=self.out)
+        md = self.run_tool("pack", self.feat, "svc-order", expect=0)
+        sec = md[md.index("## Existing code"):]
+        self.assertIn("To change (`code_paths`):\n- `src/orders/api.py`", sec)
+        self.assertIn("- `src/orders/ports.py`", sec)                                    # its context's entry
+        self.assertNotIn("src/reports", sec.split("## ")[1])                             # not its dependency
+
+    def test_codemap_groups_by_module_marks_entry_files_and_skips_the_output_dir(self):
+        for f in ("src/orders/api.py", "src/orders/impl/x.py", "src/reports/r.py", "tools/t.sh"):
+            self.put(f, "x\n", base=self.repo)
+        self.put("profile.md", "# P\n\n```yaml\nsides:\n  app:\n    path: src\n```\n", base=self.out)
+        sh(self.repo, "git", "add", ".")
+        sh(self.repo, "git", "commit", "-q", "-m", "code")
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--files", expect=0)
+        self.assertIn("modules unknown", md)
+        self.assertIn("- **orders** `src/orders` — 2 files", md)
+        self.assertNotIn(".mismagent", md)
+        self.assertNotIn("tools/t.sh", md)                                              # outside the side
+        self.put("architecture.md", "# A\n\n```yaml\nmodules:\n  - id: ord\n    side: app\n    root: src/orders\n"
+                 "    entry_files: [src/orders/api.py]\n```\n", base=self.out)
+        self.put("profile.md", "# P\n\n```yaml\nsides:\n  app:\n    path: src\n  ops:\n    path: tools\n```\n",
+                 base=self.out)
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--side", "ops", "--files", expect=0)
+        self.assertIn("(outside any module) — 1 files: `tools/t.sh`", md)             # ops: its own fallback
+        md = self.run_tool("codemap", self.out, "--ref", "main", "--files", "--module", "ord", expect=0)
+        self.assertIn("  - * `src/orders/api.py`", md)
+        self.assertIn("  - `src/orders/impl/x.py`", md)
+        self.assertNotIn("src/reports", md)
+
+
+def finding(sev, at, issue, fix="Defer", evidence="seen in the diff"):
+    return {"sev": sev, "at": at, "issue": issue, "fix": fix, "evidence": evidence}
+
+
+class TestV025(Base):
+    """v0.25: `review ingest` (reports → one action) and `state commit` (the bookkeeping, exactly)."""
+
+    def setUp(self):
+        super().setUp()
+        self.wt = self.block_wt("svc-order")
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc\n")
+        self.rdir = os.path.join(self.tmp, "reviews")
+
+    def report(self, reviewer, verdict, findings=(), failures=(), attempt=1, bid="svc-order", **over):
+        r = dict(version=1, id=bid, attempt=attempt, reviewer=reviewer, sha=self.tip,
+                 spec_hash=self.spec_hash(bid), verdict=verdict, checks=["gate green"], failures=list(failures),
+                 findings=list(findings), notes="")
+        r.update(over)
+        path = os.path.join(self.rdir, "%s-%d-%s.json" % (bid, attempt, reviewer))
+        os.makedirs(self.rdir, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(r, f)
+        return path
+
+    def ingest(self, *files, bid="svc-order", depth="standard", attempt=1, sha=None, h=None, expect=0):
+        args = ["review", "ingest", self.feat, bid, "--attempt", str(attempt), "--depth", depth,
+                "--sha", sha or self.tip, "--spec-hash", h or self.spec_hash(bid)]
+        for f in files:
+            args += ["--file", f]
+        return self.run_tool(*args, expect=expect)
+
+    def pre(self):
+        p = os.path.join(self.feat, "pre-release.md")
+        return [l for l in mismagent.read(p).splitlines() if l.startswith("- [")] if os.path.isfile(p) else []
+
+    # -- review ingest -------------------------------------------------------------------------------
+    def test_standard_pass_promotes_records_the_proof_and_files_deferrals_once(self):
+        f = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "naming · unclear"),
+                                             finding("LOW", "src/svc.txt#Svc.run", "a comment")])
+        out = self.ingest(f)
+        self.assertEqual((out["ok"], out["action"], out["rework"], out["proof"], out["appended"]),
+                         (True, "promote", None, True, 2))
+        self.assertEqual(out["counts"], {"HIGH": 0, "MED": 1, "LOW": 1, "failures": 0})
+        self.assertTrue(self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip,
+                                      expect=0)["fresh"])
+        lines = self.pre()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("- [ ] R0 · svc-order · MED · src/svc.txt:1 · naming - unclear · verifier · "))
+        self.run_tool("lint", self.feat, expect=0)                                  # well-formed seven-field lines
+        again = self.ingest(f)                                                       # an identical retry
+        self.assertEqual(again, dict(out, repeat=True))                              # the recorded result
+        self.assertEqual(self.pre(), lines)
+        f2 = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "naming · unclear")], attempt=2)
+        self.assertEqual(self.ingest(f2, attempt=2)["appended"], 0)                  # a finding is filed once
+        self.assertEqual(self.pre(), lines)
+        self.compose("start", "svc-order", expect=0)                                 # the proof is the real one
+
+    def test_deep_needs_both_reports_and_everything_must_match(self):
+        v = self.report("verifier", "PASS", [finding("MED", "a.py:1", "x")])
+        out = self.ingest(v, depth="deep", expect=1)
+        self.assertEqual(out["refused"], "nothing written")
+        self.assertIn("depth deep requires a code-review report", out["problems"])
+        self.assertEqual(self.pre(), [])
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "review-proof", "svc-order.json")))
+        self.assertIn("depth standard takes no code-review report",
+                      self.ingest(v, self.report("code-review", "APPROVE"), expect=1)["problems"])
+        parent = sh(self.wt, "git", "rev-parse", "HEAD~1")
+        self.assertIn("not the tip of block/svc-order", self.ingest(v, sha=parent, expect=1)["problems"][0])
+        self.assertIn("not the current spec hash", self.ingest(v, h="0" * 64, expect=1)["problems"][0])
+        bad = self.report("verifier", "PASS", sha=parent)
+        self.assertIn("is not --sha", " ".join(self.ingest(bad, expect=1)["problems"]))
+        bad = self.report("verifier", "PASS", attempt=2)
+        self.assertIn("attempt 2, not 1", " ".join(self.ingest(bad, expect=1)["problems"]))
+        bad = self.report("verifier", "APPROVE", findings=[{"sev": "MED", "at": "a.py", "issue": "x"}])
+        probs = " ".join(self.ingest(bad, expect=1)["problems"])
+        self.assertIn("verdict 'APPROVE'", probs)
+        self.assertIn("keys must be exactly", probs)
+        self.assertEqual(self.pre(), [])
+        v = self.report("verifier", "PASS", [finding("MED", "a.py:1", "x")])        # the bad ones overwrote it
+        c = self.report("code-review", "APPROVE", [finding("LOW", "b.py:2", "y")])
+        out = self.ingest(v, c, depth="deep")
+        self.assertEqual((out["action"], out["appended"]), ("promote", 2))
+        self.assertTrue(self.pre()[1].endswith(" · code-review · " + self.pre()[1].split(" · ")[-1]))
+
+    def test_fail_writes_one_rework_file_per_cycle_then_parks_at_the_cap(self):
+        v = self.report("verifier", "FAIL", [finding("HIGH", "src/svc.txt:1", "total can go negative", "Patch"),
+                                             finding("MED", "src/svc.txt:2", "dup")], failures=["AC2 red"])
+        out = self.ingest(v)
+        self.assertEqual((out["action"], out["proof"], out["appended"]), ("rework", False, 1))
+        self.assertEqual(out["rework"], os.path.join(self.feat, "rework", "svc-order-1.md"))
+        text = mismagent.read(out["rework"])
+        for s in ("AC2 red", "total can go negative", "## HIGH findings"):
+            self.assertIn(s, text)
+        self.assertNotIn("dup", text)                                                # a Defer stays in pre-release
+        self.assertEqual(self.ingest(v)["rework"], out["rework"])                    # same attempt: same file
+        other = self.report("verifier", "FAIL", failures=["another"])                # same attempt, other report
+        self.assertIn("already ingested", self.ingest(other, expect=1)["problems"][0])
+        self.assertEqual(len(self.pre()), 1)
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "review-proof", "svc-order.json")))
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc 2\n")
+        c = self.report("code-review", "CHANGES", [finding("HIGH", "src/svc.txt:1", "still", "Patch")], attempt=2)
+        v2 = self.report("verifier", "PASS", attempt=2)
+        out = self.ingest(v2, c, depth="deep", attempt=2)
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "svc-order-2.md"))
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc 3\n")
+        out = self.ingest(self.report("verifier", "FAIL", failures=["AC2 red"], attempt=3), attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("park", None))
+        self.assertIn("rework cap", out["reason"])
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "rework", "svc-order-3.md")))
+        ev = self.put("red.txt", "contract test b-order red\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual((out["ok"], out["action"], out["rework"]), (True, "park", None))   # the same cap
+
+    def test_rework_write_numbers_like_ingest_and_drops_the_proof(self):
+        self.ingest(self.report("verifier", "PASS"))
+        ev = self.put("red.txt", "gate red: 2 failing tests\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "svc-order-1.md"))
+        self.assertIn("gate red: 2 failing tests", mismagent.read(out["rework"]))
+        self.assertIn("candidate-red", mismagent.read(out["rework"]))
+        self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=1)
+        self.compose("start", "svc-order", expect=1)
+        out = self.ingest(self.report("verifier", "FAIL", failures=["x"], attempt=2), attempt=2)
+        self.assertEqual(os.path.basename(out["rework"]), "svc-order-2.md")
+        self.run_tool("rework", "write", self.feat, "svc-order", "--reason", "merge-conflict", "--evidence",
+                      os.path.join(self.tmp, "none.txt"), expect=1)
+        self.run_tool("rework", "write", self.feat, "nope", "--reason", "other", "--evidence", ev, expect=1)
+
+    def test_a_non_promote_outcome_invalidates_the_review_proof(self):
+        cases = [("FAIL", self.report, dict(failures=["AC1 red"]), "rework"),
+                 ("PASS", self.report, dict(findings=[finding("LOW", "a.py:1", "which?", "Decision")]), "decide"),
+                 ("SKIP", self.report, dict(failures=["no runner"]), "blocked")]
+        n = 0
+        for verdict, rep_, kw, action in cases:
+            n += 1
+            out = self.ingest(rep_("verifier", "PASS", attempt=n), attempt=n)
+            self.assertEqual(out["action"], "promote")
+            self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=0)
+            n += 1
+            out = self.ingest(rep_("verifier", verdict, attempt=n, **kw), attempt=n)
+            self.assertEqual((out["action"], out["proof_dropped"]), (action, True), verdict)
+            self.run_tool("proof", "check", self.feat, "review", "svc-order", "--sha", self.tip, expect=1)
+            self.compose("start", "svc-order", expect=1)
+
+    def test_malformed_types_are_refused_never_a_crash(self):
+        for over in (dict(reviewer=["verifier"]), dict(reviewer=None), dict(verdict=["PASS"]), dict(attempt="1"),
+                     dict(version="1"), dict(failures="x"), dict(failures=[1]), dict(findings="x"),
+                     dict(findings=[{"sev": 1, "at": "a:1", "issue": "i", "fix": "Defer", "evidence": ""}]),
+                     dict(findings=[{"sev": "LOW", "at": "a:1", "issue": "i", "fix": "Defer", "evidence": None}]),
+                     dict(id=3), dict(sha=None), dict(objections="x"), dict(objections=[{"about": "D-0001"}]),
+                     dict(findings=[{"sev": "LOW", "at": "a.py:127,142", "issue": "i", "fix": "Defer", "evidence": ""}])):
+            path = self.report("verifier", "PASS")
+            with open(path) as f:
+                r = dict(json.load(f), **over)
+            with open(path, "w") as f:
+                json.dump(r, f)
+            out = self.ingest(path, expect=1)
+            self.assertEqual(out["refused"], "nothing written", over)
+        path = os.path.join(self.rdir, "list.json")
+        with open(path, "w") as f:
+            f.write("[1, 2]")
+        self.assertIn("not a JSON object", self.ingest(path, expect=1)["problems"][0])
+
+    def test_objections_are_returned_compact(self):
+        f = self.report("verifier", "PASS", objections=[{"about": "D-0003", "text": "the cache  key\nignores the tenant"}])
+        out = self.ingest(f)
+        self.assertEqual(out["objections"], [{"reviewer": "verifier", "about": "D-0003",
+                                              "text": "the cache key ignores the tenant"}])
+
+    def test_decision_decides_first_and_skip_is_blocked(self):
+        out = self.ingest(self.report("verifier", "PASS", [finding("MED", "a.py:1", "which rounding?", "Decision")]))
+        self.assertEqual((out["action"], out["proof"], out["appended"]), ("decide", False, 0))
+        self.assertIn("which rounding?", out["reason"])
+        out = self.ingest(self.report("verifier", "PASS", attempt=2), self.report("code-review", "BLOCKED", attempt=2),
+                          depth="deep", attempt=2)
+        self.assertEqual(out["action"], "decide")
+        out = self.ingest(self.report("verifier", "SKIP", failures=["the gate cannot run here"], attempt=3), attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("blocked", None))
+        self.assertIn("the gate cannot run here", out["reason"])
+        out = self.ingest(self.report("verifier", "SKIP", [finding("HIGH", "a.py:1", "which store?", "Decision")],
+                                      failures=["no runner"], attempt=4), attempt=4)
+        self.assertEqual(out["action"], "decide")                                    # a Decision comes first
+        self.assertEqual(glob.glob(os.path.join(self.feat, "rework", "*")), [])
+
+    def group(self):
+        self.put("rework/pre-R0-1-1.md", "---\nrelease: R0\nblocks: [agg-order, svc-order]\nfindings: [abcdefabcdef]"
+                 "\n---\n- [ ] R0 · agg-order · MED · src/a.txt:1 · naming · verifier · 2026-09-24\n"
+                 "- [ ] R0 · svc-order · MED · src/svc.txt:3 · naming · verifier · 2026-09-24\n")
+        wt = self.block_wt("pre-R0-1")
+        self.tip = self.commit(wt, "src/g.txt", "g\n")
+        return wt
+
+    def test_a_release_group_id_is_ingested_on_its_branch_and_retried_identically(self):
+        wt = self.group()
+        f = self.report("verifier", "FAIL", [finding("HIGH", "src/g.txt:1", "broken", "Patch"),
+                                             finding("LOW", "src/svc.txt:9", "style"),
+                                             finding("LOW", "src/other.txt:1", "wording")], bid="pre-R0-1")
+        out = self.ingest(f, bid="pre-R0-1")
+        self.assertEqual((out["action"], os.path.basename(out["rework"])), ("rework", "pre-R0-1-2.md"))
+        self.assertIn("cycle 1 of 2", out["reason"])                                 # -1 is the group's spec
+        pre = self.pre()
+        self.assertTrue(pre[0].startswith("- [ ] R0 · svc-order · LOW · src/svc.txt:9 · [pre-R0-1] style · verifier"))
+        self.assertTrue(pre[1].startswith("- [ ] R0 · agg-order · LOW · src/other.txt:1 · [pre-R0-1] wording"))
+        again = self.ingest(f, bid="pre-R0-1", h="0" * 64)                          # the spec moved with its rework file
+        self.assertEqual(again, dict(out, repeat=True))
+        self.assertEqual(self.pre(), pre)
+        self.assertEqual(len(glob.glob(os.path.join(self.feat, "rework", "pre-R0-1-*.md"))), 2)
+        stale = self.report("verifier", "PASS", bid="pre-R0-1", attempt=2, spec_hash="0" * 64)
+        self.assertIn("not the current spec hash", self.ingest(stale, bid="pre-R0-1", attempt=2, h="0" * 64,
+                                                               expect=1)["problems"][0])
+        self.tip = self.commit(wt, "src/g.txt", "g2\n")
+        out = self.ingest(self.report("verifier", "PASS", bid="pre-R0-1", attempt=2), bid="pre-R0-1", attempt=2)
+        self.assertEqual((out["action"], out["proof"]), ("promote", True))
+        self.review("pre-R0-1", h=self.spec_hash("pre-R0-1"))                        # same proof path as `proof record`
+        h = self.findings_of_release()
+        self.run_tool("release", "group", self.feat, "R0", "--id", "pre-R0-2", "--lines", h, expect=0)
+
+    def findings_of_release(self):
+        f = [x for x in mismagent.parse_findings(mismagent.Feature(self.feat)) if "[pre-R0-1] style" in x["text"]][0]
+        return "%d:%s" % (f["line"], f["finding"])
+
+    def test_a_release_group_parks_after_two_rework_cycles(self):
+        wt = self.group()
+        for n in (1, 2):
+            out = self.ingest(self.report("verifier", "FAIL", failures=["red %d" % n], bid="pre-R0-1", attempt=n),
+                              bid="pre-R0-1", attempt=n)
+            self.assertEqual(os.path.basename(out["rework"]), "pre-R0-1-%d.md" % (n + 1))
+            self.tip = self.commit(wt, "src/g.txt", "g%d\n" % n)
+        out = self.ingest(self.report("verifier", "FAIL", failures=["red 3"], bid="pre-R0-1", attempt=3),
+                          bid="pre-R0-1", attempt=3)
+        self.assertEqual((out["action"], out["rework"]), ("park", None))
+        ev = self.put("red.txt", "red\n", base=self.tmp)
+        out = self.run_tool("rework", "write", self.feat, "pre-R0-1", "--reason", "candidate-red", "--evidence", ev,
+                            expect=0)
+        self.assertEqual(out["action"], "park")
+
+    # -- state commit --------------------------------------------------------------------------------
+    def state(self, expect, msg="state"):
+        return self.run_tool("state", "commit", self.feat, "-m", msg, "--integration", "feature/shop", expect=expect)
+
+    def test_state_commit_only_the_output_dir_on_the_integration_checkout(self):
+        self.assertIn("not feature/shop", self.state(1)["refused"])                  # the checkout is on main
+        sh(self.repo, "git", "checkout", "-q", "feature/shop")
+        self.assertEqual(self.state(0), {"ok": True, "committed": False})
+        self.put("gone.md", "x\n")
+        sh(self.repo, "git", "add", ".mismagent")
+        sh(self.repo, "git", "commit", "-q", "-m", "gone")
+        os.remove(os.path.join(self.feat, "gone.md"))
+        self.put("rework/svc-order-1.md", "new\n")
+        self.put("README", "changed\n", base=self.repo)
+        sh(self.repo, "git", "add", "README")
+        out = self.state(1)
+        self.assertEqual(out["outside"], ["README"])
+        sh(self.repo, "git", "reset", "-q", "README")                                # unstaged: left alone
+        out = self.state(0, "bookkeeping")
+        self.assertTrue(out["committed"])
+        self.assertEqual(sorted(out["paths"]), [".mismagent/features/shop/gone.md",
+                                                ".mismagent/features/shop/rework/svc-order-1.md"])
+        self.assertEqual(sh(self.repo, "git", "log", "-1", "--format=%s"), "bookkeeping")
+        self.assertEqual(sh(self.repo, "git", "rev-parse", "feature/shop"), out["sha"])
+        self.assertEqual(sh(self.repo, "git", "status", "--porcelain"), "M README")
+        self.assertEqual(self.state(0), {"ok": True, "committed": False})
+
+
+class TestV0252(Base):
+    """v0.25.2: open questions close, report templates, lenient `at`/objections, --answered, why rules."""
+    report, ingest, pre = TestV025.report, TestV025.ingest, TestV025.pre
+
+    def setUp(self):
+        Base.setUp(self)
+        self.wt = self.block_wt("svc-order")
+        self.tip = self.commit(self.wt, "src/svc.txt", "svc\n")
+        self.rdir = os.path.join(self.tmp, "reviews")
+
+    def notes(self, *ids):
+        return self.put("decisions.md", "# Decision notes — shop\n\n" + "\n".join(note(i) for i in ids))
+
+    # -- 1 · open questions close --------------------------------------------------------------------
+    def test_a_question_closes_on_a_recorded_decision_and_stops_waiting_or_parking(self):
+        for q in ("ui-turno", "catalogo-categorie-cmd", "scaffold-app"):
+            self.put("open-questions/%s.md" % q, "# Open question — %s\n\n## Decision — user\n- chosen: A\n" % q)
+        status = lambda: self.run_tool("status", self.feat, "--integration", "feature/shop")["waiting"]
+        self.assertIn("open question: open-questions/ui-turno.md", status())
+        self.assertIn({"id": "scaffold-app", "reason": "parked: open-questions/scaffold-app.md"},
+                      self.run_tool("ready", self.feat)["excluded"])
+        close = lambda q, d, expect: self.run_tool("question", "close", self.feat, q, "--decision", d, expect=expect)
+        self.assertIn("record the answer first", close("ui-turno", "D-0023", 1)["refused"])   # no decisions.md
+        self.notes("D-0020", "D-0023")
+        self.assertIn("not an entry", close("ui-turno", "D-0099", 1)["refused"])
+        self.assertIn("no open question", close("nope", "D-0020", 1)["refused"])
+        sh(self.repo, "git", "add", ".")
+        sh(self.repo, "git", "commit", "-q", "-m", "questions")
+        out = close("ui-turno", "D-0023", 0)
+        self.assertEqual((out["path"], out["git"]), (os.path.join(self.feat, "open-questions", "closed", "ui-turno.md"),
+                                                    True))
+        self.assertRegex(mismagent.read(out["path"]), r"chosen: A\n\nClosed by D-0023 on \d{4}-\d{2}-\d{2}\n$")
+        self.assertFalse(os.path.exists(os.path.join(self.feat, "open-questions", "ui-turno.md")))
+        self.assertEqual(close("catalogo-categorie-cmd", "D-0020", 0)["git"], True)
+        close("scaffold-app", "D-0020", 0)
+        self.assertFalse([w for w in status() if w.startswith("open question")])
+        self.assertIn("scaffold-app", [r["id"] for r in self.run_tool("ready", self.feat)["ready"]])
+        self.assertIn("no open question", close("ui-turno", "D-0023", 1)["refused"])      # closed once
+        self.put("open-questions/ui-turno.md", "parked again\n")
+        self.assertTrue(close("ui-turno", "D-0023", 0)["path"].endswith("closed/ui-turno-2.md"))
+
+    # -- 2 · report templates and lenient ingest -----------------------------------------------------
+    def template(self, reviewer, *extra, expect=0, attempt=1):
+        return self.run_tool("review", "template", self.feat, "svc-order", "--attempt", str(attempt), "--reviewer",
+                             reviewer, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"), *extra,
+                             expect=expect)
+
+    def test_a_filled_template_ingests_on_the_first_attempt_an_unfilled_one_never(self):
+        t = self.template("code-review")
+        self.assertEqual(set(t), set(mismagent.REPORT_KEYS + mismagent.REPORT_OPTIONAL))
+        self.assertEqual((t["id"], t["attempt"], t["sha"], t["reviewer"]), ("svc-order", 1, self.tip, "code-review"))
+        self.assertIn("never a list", t["findings"][0]["at"])
+        self.assertIn("at most 40 words", t["objections"][0]["text"])
+        path = os.path.join(self.rdir, "svc-order-1-verifier.json")
+        self.assertEqual(self.template("verifier", "--out", path)["file"], path)
+        self.assertEqual(self.ingest(path, expect=1)["refused"], "nothing written")    # placeholders refused
+        with open(path) as f:
+            r = json.load(f)
+        r.update(verdict="PASS", failures=[], notes="")
+        r["findings"][0].update(sev="LOW", at="src/svc.txt", issue="naming", fix="Defer")
+        r["objections"][0].update(about="D-0003", text="w " * 45)
+        with open(path, "w") as f:
+            json.dump(r, f)
+        out = self.ingest(path)
+        self.assertEqual((out["action"], out["appended"]), ("promote", 1))
+        self.assertEqual(out["warnings"], ["svc-order-1-verifier.json objection 0: 45 words, truncated to 40"])
+        self.assertEqual(len(out["objections"][0]["text"].split()), 40)
+        self.assertIn(" · LOW · src/svc.txt · naming · ", self.pre()[0])                # a path alone is a locator
+        self.run_tool("lint", self.feat, expect=0)
+        self.template("verifier", "--spec-hash", "0" * 64, expect=1)                     # last --spec-hash wins
+        self.run_tool("review", "template", self.feat, "svc-order", "--attempt", "1", "--sha", self.tip,
+                      "--spec-hash", self.spec_hash("svc-order"), expect=2)             # no --reviewer
+
+    # -- 3 · an answered decision promotes without a new review --------------------------------------
+    def test_answered_decide_promotes_the_same_attempt(self):
+        f = self.report("verifier", "PASS", [finding("MED", "src/svc.txt:1", "loosen rule 5?", "Decision")])
+        self.assertEqual(self.ingest(f)["action"], "decide")
+        ans = lambda *d, expect=0: self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "1", "--depth",
+                                                 "standard", "--file", f, "--sha", self.tip, "--spec-hash",
+                                                 self.spec_hash("svc-order"), *[x for i in d for x in ("--answered", i)],
+                                                 expect=expect)
+        self.assertIn("no such entry", ans("D-0023", expect=1)["problems"][0])          # record it first
+        self.notes("D-0022", "D-0023")
+        out = ans("D-0023", "D-0022")
+        self.assertEqual((out["action"], out["proof"], out["answered"]), ("promote", True, ["D-0022", "D-0023"]))
+        self.assertIn("answered by D-0022, D-0023", out["reason"])
+        self.assertEqual(ans("D-0022", "D-0023"), dict(out, repeat=True))                # recorded with its answers
+        self.assertIn("already ingested", ans("D-0022", expect=1)["problems"][0])        # promote is final
+        self.assertIn("already ingested", self.ingest(f, expect=1)["problems"][0])      # answers dropped: refused
+        self.compose("start", "svc-order", expect=0)
+        mark = mismagent.load_json(os.path.join(self.feat, "review-ingest", "svc-order-1.json"))
+        self.assertEqual(mark["answered"], ["D-0022", "D-0023"])
+
+    def test_answered_needs_a_decision_and_leaves_other_failures(self):
+        self.notes("D-0023")
+        p = self.report("verifier", "PASS")
+        out = self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "1", "--depth", "standard",
+                            "--file", p, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"),
+                            "--answered", "D-0023", expect=1)
+        self.assertIn("no Decision finding", out["problems"][0])
+        self.assertEqual(self.pre(), [])
+        p = self.report("verifier", "FAIL", [finding("HIGH", "a.py:1", "which store?", "Decision")],
+                        failures=["AC2 red"], attempt=2)
+        out = self.run_tool("review", "ingest", self.feat, "svc-order", "--attempt", "2", "--depth", "standard",
+                            "--file", p, "--sha", self.tip, "--spec-hash", self.spec_hash("svc-order"),
+                            "--answered", "D-0023", expect=0)
+        self.assertEqual(out["action"], "rework")                                      # the failure still counts
+
+    # -- 4 · why rules discoverable --------------------------------------------------------------------
+    def test_why_help_states_the_rules_and_the_template_appends(self):
+        p = subprocess.run([sys.executable, TOOL, "why", "append", "--help"], capture_output=True, text=True)
+        for s in ("ONE", "physical line", "ALL THREE", "Revisit 20", "highest id + 1", "≤ 220"):
+            self.assertIn(s, p.stdout)
+        path = self.notes("D-0001", "D-0004")
+        tpl = subprocess.run([sys.executable, TOOL, "why", "template", path], capture_output=True, text=True).stdout
+        self.assertTrue(tpl.startswith("### D-0005 · "))
+        entry = self.put("entry.md", tpl, base=self.tmp)
+        self.assertEqual(self.run_tool("why", "append", path, "--entry", entry, expect=0)["appended"], ["D-0005"])
+        self.run_tool("why", "check", expect=2)
+
 
 class TestPromptInvocations(unittest.TestCase):
     """Every `MM …` / `mismagent.py …` invocation written in the plugin's Markdown must parse."""
@@ -1749,14 +2330,15 @@ class TestPromptInvocations(unittest.TestCase):
 
     @staticmethod
     def argv(rest):
-        """Placeholders → dummies: `<a|b>` → a, `<…>` → x, `record|check` → record, `[opt]` → opt, `GLOB…` → GLOB."""
+        """Placeholders → dummies: `<a|b>` → a, `<…>` → x (`1` after an integer option such as
+        `--attempt`), `record|check` → record, `[opt]` → opt, `GLOB…` → GLOB."""
         rest = re.sub(r"<([^>]*)>", lambda m: m.group(1).split("|")[0] if "|" in m.group(1) else "x", rest)
         out = []
         for tok in shlex.split(rest.replace("[", " ").replace("]", " ")):
             tok = tok.rstrip("…")
             if tok:
                 out.append(tok.split("|")[0] if not tok.startswith("-") else tok)
-        return out
+        return [("1" if out[k - 1] in ("--attempt",) and not t.isdigit() else t) if k else t for k, t in enumerate(out)]
 
     def test_every_invocation_parses(self):
         parser, seen, bad = mismagent.build_parser(), 0, []
@@ -1766,8 +2348,10 @@ class TestPromptInvocations(unittest.TestCase):
             except ValueError as e:
                 bad.append("%s: `%s` -> %s" % (where, span, e))
                 continue
-            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress") else 1):
+            if len(argv) <= (2 if argv and argv[0] in ("proof", "compose", "why", "manifest", "release", "progress", "review", "state", "rework", "question") else 1):
                 continue  # a name reference (`MM status`), not an invocation
+            if "--help" in argv or "-h" in argv:
+                continue  # a pointer to a command's help, not an invocation
             seen += 1
             try:
                 with open(os.devnull, "w") as null, redirect_stderr(null):

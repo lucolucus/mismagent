@@ -20,7 +20,8 @@ Require the explore gate: the feature's `product-brief.md` and a project `<outpu
 covering the contexts this feature touches. Missing → stop: finish `$mismagent-explore` first.
 
 ## Steps — resume at the first missing artifact
-Each signal is read at the scope of the artifact it guards: feature signals in
+A side with code: every dispatch below gets the relevant part of `MM codemap <output_dir> --ref <B>`
+(methodology rule 9). Each signal is read at the scope of the artifact it guards: feature signals in
 `features/<feature>/`, project signals in the `<output_dir>` root. An empty feature folder never
 means the trunk is missing.
 

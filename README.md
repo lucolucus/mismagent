@@ -183,7 +183,7 @@ belongs to the **boundary** (the file the feature that introduced it opened, ext
 and an open spike carries the `owner:` of the feature that raised it — so a check never mistakes
 another feature's work for a gap in yours.
 
-> **v0.13.0 changes this layout (breaking); v0.24.0 is the current version.** Before, everything
+> **v0.13.0 changes this layout (breaking); v0.26.2 is the current version.** Before, everything
 > (the context map included) lived in `<output_dir>/<feature>/`, so a second feature forked the
 > ubiquitous language and re-deliberated the stack. No shim: in an existing project,
 > move `context-map.md`, `decisions/`, `architetture/` and `infra-notes.md` up to the `<output_dir>`
@@ -239,6 +239,50 @@ another feature's work for a gap in yours.
 > findings relevant to the block. The dependency lint also checks published signatures; the scaffold
 > turns on the build tool's parallelism and cache and scans only files git tracks or would track.
 > `bench/cost.py` reports where a run's tokens went.
+>
+> **v0.25.0 — the composer diet:** in run 6 the composer was 73% of the build's tokens, half of its
+> context being subagent returns. Reviewers now write their full report to a file and return a verdict
+> line; `MM review ingest` validates the reviewer set, files MED/LOW, writes the rework file or records
+> the proof, and returns one `action`; `MM rework write` covers a red candidate or a merge conflict.
+> Workers write decision entries to a handoff file; `MM state commit` does the bookkeeping commits; the
+> composer asks `MM <command> --help` instead of reading whole docs, and ends each firing after one
+> completed dispatch wave (the next firing is a fresh session).
+>
+> **v0.25.1:** a worker commits at every green AC, so an interrupted session loses at most one AC and
+> its successor continues from the branch's commits instead of starting over.
+>
+> **v0.25.2:** `MM question close` (an answered open question stops parking its block), `MM review
+> template` (reviewers fill a pre-filled report), `review ingest --answered D-NNNN` (an answered decision
+> needs no code to promote), `MM why template` and the entry rules in `why append --help`. The render
+> check is automated in the gate by default; a manual one must be proven launchable and capturable by
+> the wave-0 scaffold.
+>
+> **v0.25.3:** a resumed firing reads facts, not prose: `MM status` → `resume` gives each block's
+> `attempt`, its own `commits` and the `result` its worker appended to the handoff on returning — a
+> returned block goes straight to review, an interrupted one continues from its commits. A state move
+> rewrites the decision-note links to the moved file; the automated render check also fires each
+> screen's closing actions.
+>
+> **v0.25.4:** a later release's consumer on a boundary is a new pair — proven by its own contract
+> test when it integrates — so it neither reopens nor un-welds the blocks of earlier releases, and a
+> consumer's spec never includes the other consumers. Later-release work is a block of that release,
+> never a note on an earlier one (lint `release.later_work`); a `ui` block pins the entry points its
+> composition block drives; a render check is seen red once and fails fast.
+>
+> **v0.26.0 — existing code is an input of the whole flow.** Once a side has code, design and build
+> read it first: `MM codemap` (per side and module, from git; a module's contract stays the project's
+> own dependency lint) feeds explore, model and the architect; reuse what fits, else remodel — a remodel
+> or a duplicate is a recorded decision, planned as blocks whose `code_paths` name the existing code
+> they change, and touched code is rationalized where it can be. The pack's `## Existing code` gives a
+> worker the paths to change and the entry files to read. Also: `composition_roots` per side, worker
+> handoffs imported with composer-assigned ids (`MM why import`, idempotent), a re-used worktree
+> merged up to the line first, and the release path closes once, after the last fix.
+>
+> **v0.26.1:** `code_paths` may name code an earlier block still owes: lint checks them only once
+> the block's `after:` blocks are integrated (a greenfield R1 extends R0's code before it exists).
+>
+> **v0.26.2:** a wave is a barrier within its side — a block is ready only once the earlier waves of its
+> side are integrated (a shared owner such as kernel types is used without a declared dependency).
 
 ## Going deeper
 

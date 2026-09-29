@@ -39,8 +39,8 @@ ADR, its config derived from `architecture.md`'s module map:
 - The config **lives in the side's path** (wired by the wave-0 `scaffold`): it runs in the
   worker's gate loop, the verifier and CI; on a module rename the worker maintains it.
 - Style rules (empty-catch, mutability) join the same linter's ruleset where it has them.
-- **Published signatures cross boundaries too:** the lint checks the declared published surface
-  (public signatures, nested types, re-exports) against its Published Language (pinned and
+- **Module contracts cross boundaries too:** the lint checks each module's declared contract
+  (exported signatures, nested types, re-exports) against its Published Language (pinned and
   shared-kernel types, declared error shapes); the build graph re-exports no inner module. A
   violating and a conforming fixture prove it.
 - **This is the ADR checks' mechanism:** the style ADR's `enforced_by` names the lint config as its

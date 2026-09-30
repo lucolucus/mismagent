@@ -11,6 +11,6 @@
 - A test that is hard to write often signals mixed responsibilities or a hidden dependency: note it for the refactor, don't force it.
 - Time is an input: inject clock and scheduler; never a real sleep to order events; await async outcomes with the stack's async assertion or the codebase's one wait helper.
 - A red you cannot explain: reduce it to the smallest failing case before touching production code.
-- Block-specific evidence (invariants, contracts, contention, rendering) belongs to the block-type skill.
+- Acceptance tests drive the application's use cases below the interface; the UI gets a thin smoke test.
 
 Sources: tests and feedback — [Beck, *Extreme Programming Explained*](https://www.informit.com/store/extreme-programming-explained-embrace-change-9780201616415); readable tests — [Freeman & Pryce, *Growing Object-Oriented Software, Guided by Tests*, ch. 21](https://www.oreilly.com/library/view/growing-object-oriented-software/9780321574442/ch21.html).

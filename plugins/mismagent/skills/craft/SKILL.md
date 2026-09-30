@@ -1,6 +1,6 @@
 ---
 name: craft
-description: 'mismAgent build: the XP inner loop (red, green, refactor) with on-demand references, each read only for the concrete problem seen. Loaded once by the worker.'
+description: 'mismAgent build: the XP inner loop (red, green, refactor) with on-demand references, each read only for the concrete problem seen. Loaded by the builder; the review table by the reviewer and the architect.'
 user-invocable: false
 ---
 
@@ -13,4 +13,4 @@ Per acceptance criterion:
    Exit: obstacle removed, tests green, obligations met. No obstacle → no change; another aesthetic preference does not reopen the loop.
 4. Next criterion.
 
-Read a reference only for a problem you see, never by block type. The project's `code-rules.md` narrows, extends or overrides these heuristics: deliberate rules win, never over contracts, boundaries or security.
+Read a reference only for a problem you see. The project's `ARCHITECTURE.md` (layering, error policy) and its `conventions` skill (how code is written there, the model slice) narrow or override these heuristics: their decisions win. `references/review-table.md` is how the code will be reviewed.

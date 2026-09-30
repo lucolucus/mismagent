@@ -306,7 +306,7 @@ class RunnerTest(Sim):
         self.assertEqual((out["outcome"], out["firings"], out["total_cost_usd"]), ("done", 1, 1.0))
 
 
-REAL_PLUGIN = os.path.join(os.path.dirname(os.path.dirname(HERE)), "plugins", "mismagent")
+REAL_PLUGIN = os.path.join(os.path.dirname(os.path.dirname(HERE)), "attic", "v0.26", "plugin")  # run.py drives the v0.26 flow
 REAL_MANIFEST = """\
 blocks:
   - id: scaffold-app

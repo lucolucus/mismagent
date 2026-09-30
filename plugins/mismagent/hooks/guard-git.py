@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""PreToolUse(Bash) guard: workers and the verifier never merge, push, rebase, hard-reset or move
-block state — the worker-composer does. Main-session calls pass untouched.
+"""PreToolUse(Bash) guard: the builder, the reviewer and the architect never merge, push, rebase,
+hard-reset, switch branches, delete branches, stash, tag or move slice state — the conductor
+(/mismagent:build) does. Commits are allowed. Main-session calls pass untouched.
 
 It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines, tokenizes each segment (shlex),
 skips env assignments and git's global options (`-C <path>`, `-c <kv>`, `--no-pager`, …), then
 judges the git subcommand. Partial protection by design: it reads the literal command text, so an
 indirection (a script, an alias, `eval`, `sh -c`, a variable) can slip past. It backs the prompts'
-invariant; it does not replace it.
+invariant; it does not replace it (`mm check --base` is the real guard).
 """
 import json
 import os
@@ -14,7 +15,7 @@ import re
 import shlex
 import sys
 
-GUARDED = ("mismagent-worker", "mismagent-verifier")
+GUARDED = ("mismagent-builder", "mismagent-reviewer", "mismagent-architect")
 # global options that consume the next token as their value (the `--opt=value` form needs no skip)
 TAKES_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
 PREFIXES = {"env", "command", "exec", "time", "nohup", "sudo", "then", "do", "else", "!", "{"}
@@ -60,12 +61,15 @@ def git_call(seg):
 
 
 def violation(sub, args):
-    if sub in ("merge", "push", "rebase"):
+    if sub in ("merge", "push", "rebase", "checkout", "switch", "stash", "tag"):
         return "git " + sub
     if sub == "reset" and "--hard" in args:
         return "git reset --hard"
-    if sub == "mv" and any(re.search(r"(^|/)blocks/", a) for a in args):
-        return "git mv of a block's state"
+    if sub == "branch" and any(a in ("-d", "-D", "--delete") or re.match(r"^-[a-zA-Z]*[dD]", a)
+                               for a in args):
+        return "git branch --delete"
+    if sub == "mv" and any(re.search(r"(^|/)\.mismagent/slices(/|$)", a) for a in args):
+        return "git mv of a slice's state"
     return None
 
 
@@ -85,9 +89,8 @@ for seg in segments(command):
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": (
-                "%s is denied to %s: merges and state moves belong to the worker-composer "
-                "(/mismagent:worker-composer). Leave your work on your branch and return your "
-                "result." % (what, agent)),
+                "%s is denied to %s: state moves, merges and tags belong to the conductor "
+                "(/mismagent:build). Commit your work and return your result." % (what, agent)),
         }}))
         break
 sys.exit(0)

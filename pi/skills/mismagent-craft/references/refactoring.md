@@ -3,7 +3,7 @@
 **When:** a concrete obstacle has been identified and must be removed.
 
 - Name the obstacle and the expected result before transforming.
-- Preserve observable behavior and contracts: public signatures, pinned types, declared errors.
+- Preserve observable behavior and contracts: exported signatures, pinned types, declared errors.
 - Small verified steps: one transformation, run the tests, then the next.
 - Keep structural change separate from new behavior — never both in one step.
 - A smell (duplication, mixed responsibilities, scattered navigation, a long parameter list) calls for a diagnosis; it is not an automatic violation.

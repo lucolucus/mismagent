@@ -18,7 +18,8 @@ sides' paths; respect the profile's boundary rules.
   survived;
 - the existing project `context-map.md` — read it first and reuse its canonical names verbatim;
 - the material the profile declares (`materials.sample`; `none` → nothing to hunt). With `validation_mode: greenfield_from_requirements` the stated requirements are the
-  only domain source — never model from a prior implementation.
+  only domain source — never model from a prior implementation (this project's own code is not one);
+- the codemap part you get: map this feature's contexts onto the existing modules (methodology rule 9).
 
 ## Procedure — big-picture EventStorming, strategic level only (write in domain language)
 1. **Domain events** over time, in the past tense — enough to see flows and boundaries.

@@ -411,11 +411,15 @@ class Feature:
     def integrated(self, bid):
         return load_json(os.path.join(self.dir, "integrated", bid + ".json"))
 
-    def welded(self, bd):
-        return all(self.integrated(x) for x in [str(bd.get("owner"))] + self.consumers(bd))
+    def welded(self, bd, for_bid=None):
+        """Owner and consumers integrated; `for_bid`: only the consumers of its release or an earlier
+        one — a later release's consumer adds a pair (proven by its contract test when it integrates),
+        it never reopens work already done."""
+        cons = self.consumers(bd) if for_bid is None else own_consumers(self, bd, for_bid)
+        return all(self.integrated(x) for x in [str(bd.get("owner"))] + cons)
 
     def finishable(self, bid):
-        return bool(self.integrated(bid)) and all(self.welded(bd) for bd in self.touched(bid))
+        return bool(self.integrated(bid)) and all(self.welded(bd, bid) for bd in self.touched(bid))
 
     def nodes(self):
         """spike/cleanup nodes: [(id, state, frontmatter, body, path)] under tasks/<side>/<state>/."""
@@ -447,13 +451,14 @@ def _words(text):
     return len(URL.sub(" ", MD_LINK.sub(lambda m: m.group(0)[:m.group(0).rfind("](") + 1], text)).split())
 
 
-def parse_notes(path):
-    """([entry], [error]) — an entry: {id, title, line, fields, text}; an error: {id, rule, error}."""
+def parse_notes(path, text=None):
+    """([entry], [error]) — an entry: {id, title, line, fields, text}; an error: {id, rule, error}.
+    `text`: the content to parse instead of the file's."""
     entries, errors, cur = [], [], None
 
     def err(i, rule, msg):
         errors.append({"id": i, "rule": rule, "error": msg})
-    for n, line in enumerate(read(path).splitlines(), 1):
+    for n, line in enumerate((read(path) if text is None else text).splitlines(), 1):
         if line.startswith("###") or re.match(r"^\s+#|^#+\s*D-\d", line):  # malformed: an error, never skipped
             m = NOTE_HEAD.match(line)
             if not m:
@@ -478,11 +483,12 @@ def parse_notes(path):
     return entries, errors
 
 
-def check_notes(path):
-    """{ok, file, entries, active, errors} — exact checks of the decision-note format."""
-    if not os.path.isfile(path):
+def check_notes(path, text=None):
+    """{ok, file, entries, active, errors} — exact checks of the decision-note format. `text`: check this
+    content as if it were `path` (links resolved from its directory), without writing anything."""
+    if text is None and not os.path.isfile(path):
         raise UsageError("%s not found" % path)
-    entries, errors = parse_notes(path)
+    entries, errors = parse_notes(path, text)
     base, ids, by = os.path.dirname(os.path.abspath(path)), [e["id"] for e in entries], {}
 
     def err(i, rule, msg):
@@ -511,8 +517,8 @@ def check_notes(path):
             datetime.date.fromisoformat(meta[0] if meta else "")
         except ValueError:
             err(i, "meta.date", "Meta must start with an ISO date (YYYY-MM-DD)")
-        if not re.match(r"^(feature|(block|boundary):[A-Za-z0-9_.-]+)$", kv.get("scope", "")):
-            err(i, "meta.scope", "scope %r is not feature | block:<id> | boundary:<id>" % kv.get("scope"))
+        if not re.match(r"^(feature|(block|boundary|release):[A-Za-z0-9_.-]+)$", kv.get("scope", "")):
+            err(i, "meta.scope", "scope %r is not feature | block:<id> | boundary:<id> | release:<Rn>" % kv.get("scope"))
         if kv.get("status") not in ("accepted", "superseded"):
             err(i, "meta.status", "status %r is not accepted | superseded" % kv.get("status"))
         if "sha" in kv and not re.match(r"^[0-9a-f]{7,40}$", kv["sha"]):
@@ -604,18 +610,18 @@ def note_update_ok(old, new):
     return keep(old) == keep(new) and adr(old) in ([], adr(new))
 
 
-def why_append(path, entry_path):
+def why_append(path, entry_path, entry_text=None, dry=False):
     """Append the entry file's entries to `path` — only if the result passes `why check`. The entries
     carry their ids (nothing is assigned); an identical entry already present is a no-op; the same id
     with other content is refused unless it is an update (`note_update_ok`), replaced in place. The one
     other edit to an old entry: `status: accepted` → `superseded` when a new entry `Supersedes` it.
     Nothing is written unless everything validates."""
-    if not os.path.isfile(entry_path):
+    if entry_text is None and not os.path.isfile(entry_path):
         raise UsageError("--entry %s not found" % entry_path)
     if not os.path.isdir(os.path.dirname(os.path.abspath(path))):
         raise UsageError("the directory of %s does not exist" % path)
     old = read(path) if os.path.isfile(path) else ""
-    have, new = dict(note_blocks(old)), note_blocks(read(entry_path))
+    have, new = dict(note_blocks(old)), note_blocks(read(entry_path) if entry_text is None else entry_text)
     if not new:
         return {"ok": False, "refused": "the entry file holds no `### D-NNNN · <title>` entry"}
     add, same, upd = [], [], []
@@ -641,31 +647,123 @@ def why_append(path, entry_path):
                 text, flipped = text.replace(b, nb, 1), flipped + [sup.group(1)]
     if add:
         text = (text.rstrip("\n") + "\n\n" if text.strip() else "") + "\n\n".join(b for _, b in add) + "\n"
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(text)
-    try:
-        r = check_notes(tmp)
-    except UsageError:
-        os.remove(tmp)
-        raise
+    mdir = os.path.dirname(os.path.abspath(path))
+    if os.path.isfile(os.path.join(mdir, "building-blocks.yaml")):  # a feature's notes: scopes checked first
+        feat = Feature(mdir)
+        bad = [{"id": i, "rule": "meta.scope", "error": why} for i, block in add + upd
+               for m in [re.search(r"^- Meta:.*?\bscope:\s*([^;\s]+)", block, re.M)] if m
+               for why in [scope_problem(feat, m.group(1))] if why]
+        if bad:
+            return {"ok": False, "refused": "a scope names nothing of the manifest: nothing written", "errors": bad}
+    r = check_notes(path, text)  # in memory, links resolved from path's directory
     if not r["ok"]:
-        os.remove(tmp)
         return {"ok": False, "refused": "the file would not pass `why check`", "errors": r["errors"]}
-    os.replace(tmp, path) if add or upd else os.remove(tmp)
+    if (add or upd) and not dry:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
     return {"ok": True, "file": path, "appended": [i for i, _ in add], "updated": [i for i, _ in upd],
             "unchanged": same, "superseded": flipped}
 
 
+def handoff_notes(handoff):
+    """([(local id, block)], [error]) — a worker handoff's decision entries: everything before its
+    return (the first `RESULT:` line), an optional `# ` title aside; each other line is a note heading,
+    a `- Field:` line or blank — anything else is an error, never dropped."""
+    entries, errors = [], []
+    for n, line in enumerate(read(handoff).splitlines(), 1):
+        if line.startswith("RESULT:"):
+            break
+        m = NOTE_HEAD.match(line)
+        if m:
+            entries.append([m.group(1), [line]])
+        elif re.match(r"^- [A-Za-z]+:", line) and entries:
+            entries[-1][1].append(line)
+        elif line.strip() and not (line.startswith("# ") and not entries):
+            errors.append({"id": "line %d" % n, "rule": "handoff.line", "error": "neither a `### D-NNNN · <title>` "
+                           "heading nor a `- <Field>: <one line>` line of a note: %r" % line[:60]})
+    return [(i, "\n".join(ls)) for i, ls in entries], errors
+
+
+def why_import(path, handoff, dry=False):
+    """Import a handoff's entries into `path`. Its heading ids are LOCAL: the composer assigns the final
+    ids (the next free ones, in order), references to local ids are rewritten, and the mapping is kept
+    in `handoff-imports.json` beside `path` (key: the handoff's file name) — a retry reuses it, so an
+    imported entry is a no-op or an allowed update (`why_append`), cycles included. `dry`: validate in
+    memory, write nothing."""
+    if not os.path.isfile(handoff):
+        raise UsageError("--handoff %s not found" % handoff)
+    entries, errors = handoff_notes(handoff)
+    if errors:
+        return {"ok": False, "refused": "the handoff's notes section is malformed: nothing written", "errors": errors}
+    old = read(path) if os.path.isfile(path) else ""
+    ledger_path = os.path.join(os.path.dirname(os.path.abspath(path)), "handoff-imports.json")
+    ledger = load_json(ledger_path) or {}
+    key = os.path.basename(handoff)
+    mapping = dict(ledger.get(key) or {})
+    have = {i for i, _ in note_blocks(old)}
+    mapping = {k: v for k, v in mapping.items() if v in have}  # a mapping whose entry is gone is void
+    nxt = max([int(i[2:]) for i in have], default=0)
+    for i, _ in entries:
+        if i not in mapping:
+            nxt += 1
+            mapping[i] = "D-%04d" % nxt
+    remap = lambda body: re.sub(r"\bD-\d{4}\b", lambda x: mapping.get(x.group(0), x.group(0)), body)
+    out = []
+    for i, b in entries:
+        head, _, body = b.partition("\n")
+        out.append(re.sub(r"^###\s+D-\d{4}", "### " + mapping[i], head, count=1) + ("\n" + remap(body) if body else ""))
+    if not out:
+        return {"ok": True, "file": path, "mapping": {}, "appended": [], "updated": [], "unchanged": []}
+    r = why_append(path, handoff, entry_text="\n\n".join(out) + "\n", dry=dry)
+    if r["ok"] and not dry and (r["appended"] or r["updated"] or ledger.get(key) != mapping):
+        ledger[key] = mapping
+        write_json(ledger_path, ledger)
+    return dict(r, file=path, mapping=mapping)
+
+
+def why_template(path):
+    """A valid entry skeleton (it passes `why check` as printed): the next id of `path` (D-0001 when
+    none), today, scope feature; every `<…>` states its field's rule."""
+    ids = [int(e["id"][2:]) for e in parse_notes(path)[0]] if path and os.path.isfile(path) else []
+    caps = lambda k: "≤ %d words" % NOTE_FIELDS[k]
+    f = [("Meta", "%s; scope: feature; status: accepted" % datetime.date.today().isoformat()),
+         ("Question", "<the question, one line, %s>" % caps("Question")),
+         ("Options", "<2-3 real alternatives and why each loses, %s>" % caps("Options")),
+         ("Hypothesis", "<what should hold, %s>" % caps("Hypothesis")),
+         ("Check", "<how it was checked and what counts as success, %s>" % caps("Check")),
+         ("Result", "untested — <reason; or the result with a link to its evidence, %s>" % caps("Result")),
+         ("Debate", "none"),
+         ("Decision", "<the choice, %s>" % caps("Decision")),
+         ("By", "decided: <who>; recorded: <who>"),
+         ("Docs", "[<doc title>](https://example.invalid/replace-with-1-to-3-links)"),
+         ("Revisit", "<when to reopen it, %s>" % caps("Revisit"))]
+    return "### D-%04d · <title, ≤ %d words>\n%s" % (max(ids, default=0) + 1, TITLE_CAP,
+                                                    "".join("- %s: %s\n" % kv for kv in f))
+
+
 def cmd_why(a):
+    if a.op == "template":
+        if a.entry:
+            raise UsageError("why template takes no --entry")
+        sys.stdout.write(why_template(a.file))
+        return 0
+    if not a.file:
+        raise UsageError("why %s takes <file>" % a.op)
     if a.op == "append":
-        if not a.entry:
+        if not a.entry or a.handoff or a.into:
             raise UsageError("why append takes --entry <file>")
         r = why_append(a.file, a.entry)
         return emit(r, 0 if r["ok"] else 1)
-    if a.entry:
-        raise UsageError("why check takes no --entry")
-    r = check_notes(a.file)
+    if a.op == "import":
+        if not a.handoff or a.entry or a.into:
+            raise UsageError("why import takes <decisions.md> --handoff <file>")
+        r = why_import(a.file, a.handoff)
+        return emit(r, 0 if r["ok"] else 1)
+    if a.entry or a.handoff:
+        raise UsageError("why check takes <file> [--into <decisions.md>]")
+    r = why_import(a.into, a.file, dry=True) if a.into else check_notes(a.file)
     return emit(r, 0 if r["ok"] else 1)
 
 
@@ -716,10 +814,75 @@ def boundary_shape(bd):
                 str(n).strip() and not isinstance(v, (dict, list)) for n, v in bd[k].items()))]
 
 
+COMP_ROOT = re.compile(r"composition_root:[ \t*_`'\"]*([^\s`'\"*#][^\s`'\"*]*)")  # same line, a path token
+COMP_LINE = ("Composition: extend the existing composition at %s in place — never wrap it; the other blocks of "
+             "this release publish what you wire.")
+
+
+FENCE = re.compile(r"^```ya?ml[^\n]*\n(.*?)^```", re.M | re.S)
+
+
+def yaml_section(path, key):
+    """The value of top-level `key` in the first fenced YAML block of a Markdown file that has it."""
+    for m in FENCE.finditer(read(path)) if os.path.isfile(path) else []:
+        try:
+            doc = parse_yaml(m.group(1))
+        except YamlError:
+            continue
+        if key in doc:
+            return doc[key]
+    return None
+
+
+def composition_root(feat, side=None):
+    """The composition root of `side`: `composition_roots: {<side>: <path>}` in a YAML block of the
+    trunk's architecture.md, else the legacy `composition_root: <path>` line (one side); None when absent."""
+    p = os.path.join(feat.odir, "architecture.md")
+    roots = yaml_section(p, "composition_roots")
+    if isinstance(roots, dict) and roots:
+        r = roots.get(side)
+        return r.strip() if isinstance(r, str) and r.strip() else None
+    sides = yaml_section(os.path.join(feat.odir, "profile.md"), "sides")
+    if side is not None and isinstance(sides, dict) and len(sides) > 1:
+        return None  # a single `composition_root:` line never serves several sides
+    for line in read(p).splitlines() if os.path.isfile(p) else []:
+        m = None if line.lstrip().startswith("#") else COMP_ROOT.search(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def compositions(feat):
+    """The valid `composition: true` rows (a scaffold never is one)."""
+    return [b for b in feat.blocks if b.get("composition") is True and b.get("type") != "scaffold"]
+
+
+def earlier_compositions(feat, b):
+    """[id] — the composition blocks of the same side in releases before `b`'s, nearest release first
+    (release order: the `releases:` keys, then the other labels)."""
+    order = release_names(feat)
+    rel = str(b.get("release"))
+    if rel not in order:
+        return []
+    out = [x for x in compositions(feat) if x.get("side") == b.get("side") and str(x.get("release")) in order
+           and order.index(str(x.get("release"))) < order.index(rel)]
+    return [str(x.get("id")) for x in sorted(out, key=lambda x: -order.index(str(x.get("release"))))]
+
+
+def code_paths_ok(cp):
+    """None, or a list of repo-relative paths (no absolute path, no `..`)."""
+    return cp is None or (isinstance(cp, list) and all(
+        isinstance(x, str) and x.strip() and not x.startswith("/") and ".." not in x.split("/") for x in cp))
+
+
 def render_block(feat, b):
     """(text, [missing input]) — the block file `manifest render` writes for manifest row `b`."""
     i, t, missing = str(b.get("id") or ""), b.get("type"), []
     tests = b.get("tests_nl") or []
+    if b.get("composition") is not None and not isinstance(b["composition"], bool):
+        missing.append("composition %r is not true | false" % (b["composition"],))
+    if not code_paths_ok(b.get("code_paths")):
+        missing.append("code_paths %r is not a list of repo-relative paths" % (b.get("code_paths"),))
     if not SLUG.match(i):
         missing.append("id %r is not a slug" % i)
     if t not in BLOCK_TYPES:
@@ -755,7 +918,10 @@ def render_block(feat, b):
             fm.append("%s: %s" % (k, "[]" if v == [] else yaml_scalar(v)))
     out = fm + ["---", "# %s" % i, ""]
     if b.get("what") or t != "scaffold":
-        out += ["## What to do", str(b.get("what") or "").strip(), ""]
+        out += ["## What to do", str(b.get("what") or "").strip()]
+        if b.get("composition") is True and t != "scaffold":  # the wiring obligation reaches the worker via the spec
+            out.append(COMP_LINE % (composition_root(feat, b.get("side")) or "<composition_root in architecture.md>"))
+        out.append("")
     if b.get("invariants"):
         out += ["## Invariants"] + ["- %s" % x for x in b["invariants"]] + [""]
     if tests or t != "scaffold":
@@ -898,6 +1064,8 @@ def lint(feat):
         i, t, w = str(b.get("id")), b.get("type"), b.get("wave")
         if t not in BLOCK_TYPES:
             gap("type.valid", i, "type %r is not one of %s" % (t, ", ".join(BLOCK_TYPES)))
+        if not code_paths_ok(b.get("code_paths")):
+            gap("code_paths.shape", i, "code_paths %r is not a list of repo-relative paths" % (b.get("code_paths"),))
         if not isinstance(w, int) or isinstance(w, bool) or w < 0:
             gap("wave.valid", i, "wave %r is not a non-negative integer" % (w,))
         elif (w == 0) != (t == "scaffold"):
@@ -916,6 +1084,24 @@ def lint(feat):
                 gap("release.required", i, "non-scaffold block without release:")
             elif labels is not None and str(rel) not in labels:
                 gap("release.declared", i, "release %s is not in the releases: section" % rel)
+            if feat.state_of(i) != "done" and code_paths_ok(b.get("code_paths")) and b.get("code_paths") \
+                    and all(feat.integrated(x) for x in after_of(feat, i)):  # before: the code it extends is still owed
+                try:
+                    repo = feat.repo()
+                except UsageError:
+                    repo = None
+                gone = [x for x in b["code_paths"] if repo and not git(repo, "ls-tree", "HEAD", "--", x.rstrip("/"),
+                                                                        check=False).stdout.strip()]
+                if gone:
+                    gap("code_paths.exist", i, "code_paths name no existing file or directory: %s (they are the "
+                        "existing code the block changes; new files need no entry)" % ", ".join(gone))
+            if rel and (labels is None or str(rel) in labels) and feat.state_of(i) != "done":
+                order = release_names(feat)
+                later = [r for r in order[order.index(str(rel)) + 1:] if str(rel) in order
+                         and re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(r), str(b.get("notes") or ""))]
+                if later:
+                    gap("release.later_work", i, "its notes name later release %s: that release's work is a block "
+                        "of that release (`after:` this one), never a note on this one" % ", ".join(later))
         else:
             domain = [k for k in SCAFFOLD_DOMAIN if b.get(k)]
             domain += ["owner of boundary %s" % bd.get("id") for bd in feat.boundaries if str(bd.get("owner")) == i]
@@ -964,6 +1150,7 @@ def lint(feat):
                 gap("after.block", i, "after %r is not another block id" % (x,))
     for cyc in dep_cycles(feat):
         gap("after.cycle", " → ".join(cyc), "a cycle of after/boundary dependencies: nothing in it can ever be ready")
+    gaps += composition_gaps(feat)
     files, rendered = feat.files(), manifest_mode(feat) == "rendered"
     for i, locs in files.items():
         if i not in feat.row:
@@ -1035,11 +1222,66 @@ def lint(feat):
         for e in check_notes(notes)["errors"]:
             gap("why." + e["rule"], "decisions.md " + e["id"], e["error"], "recorder")
         for e in active_notes(notes):
-            kind, _, i = e["scope"].partition(":")
-            if i and i not in (feat.row if kind == "block" else feat.bnd):
-                gap("why.scope", "decisions.md " + e["id"], "scope %s: no such %s in the manifest" % (e["scope"], kind),
-                    "recorder")
+            why = scope_problem(feat, e["scope"])
+            if why:
+                gap("why.scope", "decisions.md " + e["id"], why, "recorder")
+    gaps += release_gaps(feat)
     return gaps, deferred
+
+
+def composition_gaps(feat):
+    """lint's composition rules: `composition` is a boolean, never on a scaffold; at most one
+    `composition: true` block per (release, side), whose `after:` lists every other non-scaffold block
+    of that (release, side); any such block needs `composition_root:` in architecture.md. A manifest
+    without the flag has none of these gaps."""
+    gaps, comps = [], []
+
+    def gap(rule, where, text, to="build-manifest"):
+        gaps.append({"rule": rule, "where": where, "gap": text, "bounce_to": to})
+    for b in feat.blocks:
+        i, v = str(b.get("id")), b.get("composition")
+        if v is None:
+            continue
+        if not isinstance(v, bool):
+            gap("composition.valid", i, "composition %r is not true | false" % (v,))
+        elif v and b.get("type") == "scaffold":
+            gap("composition.valid", i, "a scaffold is never the composition block: the composition wires a release")
+        elif v:
+            comps.append(b)
+    key = lambda b: (str(b.get("release")), str(b.get("side")) if b.get("side") is not None else "(no side)")
+    groups = {}
+    for b in comps:
+        groups.setdefault(key(b), []).append(str(b.get("id")))
+    for (rel, side), ids in sorted(groups.items()):
+        if len(ids) > 1:
+            gap("composition.unique", ", ".join(ids), "release %s, side %s: %d composition blocks — exactly one "
+                "wires a release into the app" % (rel, side, len(ids)))
+    for b in comps:
+        i = str(b.get("id"))
+        sibs = [str(x.get("id")) for x in feat.blocks if x is not b and x.get("type") != "scaffold"
+                and x.get("composition") is not True and key(x) == key(b)]
+        missing = [s for s in sibs if s not in after_of(feat, i)]
+        if missing:
+            gap("composition.last", i, "after: lacks %s — the composition block comes after every other block of "
+                "its (release, side)" % ", ".join(missing))
+    for b in comps:
+        prev = earlier_compositions(feat, b)
+        if prev and prev[0] not in after_of(feat, str(b.get("id"))):
+            gap("composition.chain", str(b.get("id")), "after: lacks %s — the composition block of the nearest "
+                "earlier release on the same side: the root is extended release after release, in order" % prev[0])
+    for side in sorted({str(b.get("side")) for b in comps if not composition_root(feat, b.get("side"))}):
+        gap("composition.root", "architecture.md", "a block of side %s has composition: true but "
+            "<output_dir>/architecture.md names no composition root for it (`composition_roots: {<side>: <path>}`, "
+            "or one `composition_root: <path>` for a single side)" % side, "architect")
+    return gaps
+
+
+def scope_problem(feat, scope):
+    """None if a decision note's scope names something of the manifest; else why not."""
+    kind, _, i = scope.partition(":")
+    have = feat.row if kind == "block" else feat.bnd if kind == "boundary" else \
+        release_names(feat) if kind == "release" else None
+    return None if not i or have is None or i in have else "scope %s: no such %s in the manifest" % (scope, kind)
 
 
 # ---- git ----------------------------------------------------------------------------------------
@@ -1156,22 +1398,78 @@ def deps(feat, bid):
     return sorted(feat.touched(bid), key=lambda b: str(b.get("id"))), adrs
 
 
-def spec_hash(feat, bid):
+def group_spec(feat, gid):
+    """A pre-release group: (its rework/<gid>-*.md files, the frontmatter of <gid>-1.md). Its
+    `blocks:` must be manifest rows; a legacy group (no frontmatter) has no blocks."""
+    rw = sorted(glob.glob(os.path.join(feat.dir, "rework", gid + "-*.md")))
+    if not rw:
+        raise UsageError("%s is neither a block nor an id with rework/%s-<n>.md" % (gid, gid))
+    first = os.path.join(feat.dir, "rework", gid + "-1.md")
+    fm = board.parse_frontmatter(read(first))[0] if os.path.isfile(first) else {}
+    blocks = fm.get("blocks") if isinstance(fm.get("blocks"), list) else []
+    ghost = [b for b in blocks if b not in feat.row]
+    if ghost:
+        raise UsageError("rework/%s-1.md names blocks not in the manifest: %s" % (gid, ", ".join(ghost)))
+    return rw, dict(fm, blocks=blocks)
+
+
+def deps_many(feat, bids):
+    """deps() of several blocks, each boundary and ADR once."""
+    touched, adrs, seen = {}, [], set()
+    for bid in bids:
+        t, a = deps(feat, bid)
+        touched.update((str(bd.get("id")), bd) for bd in t)
+        for ref, path in a:
+            if (path or "missing:" + ref) not in seen:
+                seen.add(path or "missing:" + ref)
+                adrs.append((ref, path))
+    return [touched[k] for k in sorted(touched)], adrs
+
+
+def own_consumers(feat, bd, bid):
+    """The consumers of boundary `bd` that belong to block `bid`'s spec (and weld): a consumer's is
+    itself — other consumers never bind it; the owner's are those of its release or an earlier one (a
+    later release's consumer is a new pair, proven by its own contract test when it integrates)."""
+    if str(bd.get("owner")) != bid:
+        return [c for c in feat.consumers(bd) if c == bid]
+    order, mine = release_names(feat), str(feat.row.get(bid, {}).get("release"))
+    if mine not in order:
+        return feat.consumers(bd)
+    return [c for c in feat.consumers(bd) if str(feat.row.get(c, {}).get("release")) not in order
+            or order.index(str(feat.row[c].get("release"))) <= order.index(mine)]
+
+
+def spec_view(feat, bid, text):
+    """A block file as its spec: each Dependencies line lists only the block's own consumers."""
+    for bd in feat.touched(bid):
+        cons = own_consumers(feat, bd, bid)
+        if cons != feat.consumers(bd):
+            text = re.sub(r"(?m)^(- `%s` \([^)]*\) — consumers: ).*?( · contract_test: )" % re.escape(str(bd.get("id"))),
+                          lambda m: m.group(1) + (", ".join("`%s`" % c for c in cons) or "none") + m.group(2), text)
+    return text
+
+
+def spec_hash(feat, bid, own=True):
     """A block: its file's content (not its folder) + manifest row + touched boundary rows + ADRs.
-    Any other id (e.g. a pre-release group): its rework/<id>-*.md files."""
+    Any other id (a pre-release group): its rework/<id>-*.md files + the same dependencies of the
+    blocks its first rework file names, each once."""
     h = hashlib.sha256()
-    if bid not in feat.row:
-        rw = sorted(glob.glob(os.path.join(feat.dir, "rework", bid + "-*.md")))
-        if not rw:
-            raise UsageError("%s is neither a block nor an id with rework/%s-<n>.md" % (bid, bid))
+    if bid in feat.row:
+        bids = [bid]
+    else:
+        rw, fm = group_spec(feat, bid)
         for p in rw:
             h.update(read(p).encode())
-        return h.hexdigest()
-    locs = feat.files().get(bid) or _raise(UsageError("block %s has no block file" % bid))
-    h.update(read(locs[0][2]).encode())
-    h.update(json.dumps({k: v for k, v in feat.row[bid].items() if k not in ORDER_FIELDS}, sort_keys=True).encode())
-    touched, adrs = deps(feat, bid)
-    for bd in touched:
+        bids = sorted(fm["blocks"])
+    for b in bids:
+        locs = feat.files().get(b) or _raise(UsageError("block %s has no block file" % b))
+        text = read(locs[0][2])
+        h.update((spec_view(feat, b, text) if own else text).encode())
+        h.update(json.dumps({k: v for k, v in feat.row[b].items() if k not in ORDER_FIELDS}, sort_keys=True).encode())
+    touched, adrs = deps_many(feat, bids)
+    for bd in touched:  # a later release's consumer is not in an earlier block's spec
+        if own and "consumers" in bd and len(bids) == 1:
+            bd = dict(bd, consumers=own_consumers(feat, bd, bids[0]))
         h.update(json.dumps(bd, sort_keys=True).encode())
     for ref, path in adrs:
         h.update((read(path) if path else "missing:" + ref).encode())
@@ -1184,7 +1482,13 @@ def review_stale(feat, bid, s):
     if not old:
         return ["no review proof for %s" % bid]
     why = [] if old.get("sha") == s else ["reviewed sha %s, not %s" % (old.get("sha"), s)]
-    return why + ([] if old.get("spec_hash") == spec_hash(feat, bid) else ["the spec changed after the review"])
+    return why + ([] if spec_current(feat, bid, old.get("spec_hash")) else ["the spec changed after the review"])
+
+
+def spec_current(feat, bid, recorded):
+    """A recorded spec hash still judges the current spec: today's hash, or the one a proof recorded
+    before later-release consumers left a block's spec (v0.25.4) while nothing else changed."""
+    return recorded in (spec_hash(feat, bid), spec_hash(feat, bid, own=False))
 
 
 def gate_hash(repo, gate, globs):
@@ -1221,6 +1525,62 @@ def suspect_generated(repo, globs):
     return out
 
 
+# ---- codemap: where the existing code is (discovery, never authority) ----------------------------
+def codemap(odir, ref, side=None, module=None, files=False):
+    """Markdown: per side (profile `sides:`), per module (architecture.md `modules:` — {id, side, root,
+    entry_files}) else per top directory, the files git tracks at `ref`, entry files marked. A module's
+    contract stays the project's (its dependency lint); this only says where to start reading."""
+    p = subprocess.run(["git", "-C", odir, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if p.returncode:
+        raise UsageError("%s is not inside a git repository" % odir)
+    repo, s = p.stdout.strip(), need_sha(p.stdout.strip(), ref)
+    skip = os.path.relpath(os.path.abspath(odir), repo).replace(os.sep, "/") + "/"
+    tracked = [f for f in git(repo, "ls-tree", "-r", "--name-only", s).stdout.splitlines()
+               if not f.startswith(skip) and not f.startswith(".worktrees/")]
+    sides = yaml_section(os.path.join(odir, "profile.md"), "sides")
+    sides = {str(k): str((v or {}).get("path", ".")) for k, v in sides.items()} if isinstance(sides, dict) else {"-": "."}
+    mods = yaml_section(os.path.join(odir, "architecture.md"), "modules")
+    mods = [m for m in mods if isinstance(m, dict) and m.get("root")] if isinstance(mods, list) else []
+    under = lambda f, root: root in (".", "", "./") or f == root.rstrip("/") or f.startswith(root.rstrip("/") + "/")
+    note = "" if mods else " No `modules:` in architecture.md: modules unknown, grouped by directory."
+    out = ["# Code map at %s" % s[:12], "",
+           "Discovery only: a module's contract is the project's (its dependency lint enforces it); entry files (*) are where to start "
+           "reading." + note, ""]
+    for sd, root in sorted(sides.items()):
+        if side and sd != side:
+            continue
+        mine = [f for f in tracked if under(f, root)]
+        out += ["## Side %s (`%s`, %d files)" % (sd, root, len(mine)), ""]
+        own = [m for m in mods if m.get("side") is None or str(m.get("side")) == sd]
+        if own:  # this side's modules, as declared
+            groups = [(str(m.get("id")), str(m["root"]), [str(e) for e in m.get("entry_files") or []]) for m in own]
+        else:  # this side's top directories, under its root
+            pre = "" if root in (".", "", "./") else root.rstrip("/") + "/"
+            groups = [(d, pre + d, []) for d in sorted({f[len(pre):].split("/")[0] for f in mine if "/" in f[len(pre):]})]
+        seen = set()
+        for mid, base, entries in groups:
+            if module and mid != module:
+                continue
+            fs = [f for f in mine if under(f, base)]
+            seen.update(fs)
+            out.append("- **%s** `%s` — %d files%s" % (mid, base, len(fs), "; entry: " + ", ".join(
+                "`%s`" % e for e in entries) if entries else ""))
+            if files:
+                out += ["  - %s`%s`" % ("* " if any(under(f, e) for e in entries) else "", f) for f in fs]
+        rest = [f for f in mine if f not in seen]
+        if rest and not module:
+            shown = rest if files else rest[:12]
+            out.append("- (outside any module) — %d files: %s" % (len(rest), ", ".join("`%s`" % f for f in shown)
+                                                                   + ("" if len(shown) == len(rest) else " …")))
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
+def cmd_codemap(a):
+    sys.stdout.write(codemap(os.path.abspath(a.output_dir), a.ref, a.side, a.module, a.files))
+    return 0
+
+
 # ---- commands -----------------------------------------------------------------------------------
 def emit(obj, code=0):
     print(json.dumps(obj, indent=2, ensure_ascii=False))
@@ -1237,8 +1597,10 @@ def cmd_status(a):
     for bid, locs in sorted(feat.files().items()):
         if locs[0][0] == "doing" and not feat.integrated(bid) and not worktree_of(repo, PREFIX + bid):
             add("doing_without_worktree", bid, "in doing/, not integrated, no worktree on %s%s" % (PREFIX, bid))
-        if locs[0][0] == "done" and not feat.finishable(bid):
-            add("done_unwelded", bid, "in done/ but not integrated or a boundary it touches is not welded")
+        if locs[0][0] == "done" and not (feat.integrated(bid) and all(feat.integrated(str(bd.get("owner")))
+                                                                      for bd in feat.touched(bid))):
+            # a consumer added after it finished is a new pair, proven by its contract test when it integrates
+            add("done_unwelded", bid, "in done/ but it or the owner of a boundary it touches is not integrated")
     for i, st, fm, _, _ in feat.nodes():
         if fm.get("type") == "spike" and str(fm.get("central")).lower() == "true" and st == "doing" \
                 and not spike_dir_state(feat, repo, i):
@@ -1255,13 +1617,14 @@ def cmd_status(a):
     for p in sorted(glob.glob(os.path.join(feat.dir, "review-proof", "*.json"))):
         i, rec = os.path.basename(p)[:-5], load_json(p) or {}
         try:
-            stale = rec.get("spec_hash") != spec_hash(feat, i)
+            stale = not spec_current(feat, i, rec.get("spec_hash"))
         except UsageError:
             stale = True
         if stale:
             add("stale_review_proof", i, "the spec changed after the review of %s" % rec.get("sha"))
-    res, work, waiting = outcome(feat, out, repo)
-    return emit({"ok": not out, "anomalies": out, "outcome": res, "work": work, "waiting": waiting}, 1 if out else 0)
+    res, work, waiting = outcome(feat, out, repo, line)
+    return emit({"ok": not out, "anomalies": out, "outcome": res, "work": work, "waiting": waiting,
+                 "resume": resume_candidates(feat, repo)}, 1 if out else 0)
 
 
 def lint_adrs(adir):
@@ -1344,6 +1707,11 @@ def ready_state(feat):
         waiting = [str((feat.bnd.get(c) or {}).get("owner")) for c in feat.consumes(bid)]
         waiting = [o for o in waiting if not feat.integrated(o)]
         before = [x for x in after_of(feat, bid) if not feat.integrated(x)]
+        w = b.get("wave") if isinstance(b.get("wave"), int) else 0  # a wave is a barrier within its side: a
+        before += [str(x.get("id")) for x in feat.blocks  # shared owner (kernel, schema) is used implicitly
+                   if isinstance(x.get("wave"), int) and x["wave"] < w and x.get("type") != "scaffold"
+                   and (x.get("side") is None or b.get("side") is None or x.get("side") == b.get("side"))
+                   and not feat.integrated(str(x.get("id"))) and str(x.get("id")) not in before]
         blocking = [s[0] for s in spikes if bid in s[1]]
         if os.path.isfile(os.path.join(feat.dir, "open-questions", bid + ".md")):
             excluded.append({"id": bid, "reason": "parked: open-questions/%s.md" % bid})
@@ -1365,23 +1733,278 @@ def ready_state(feat):
 
 
 def cmd_ready(a):
-    return emit(ready_state(Feature(a.feature_dir)))
+    feat = Feature(a.feature_dir)
+    try:
+        repo = feat.repo()
+    except UsageError:
+        repo = None
+    return emit(dict(ready_state(feat), resume=resume_candidates(feat, repo)))
 
 
-PRE_LINE = re.compile(r"^\s*[-*]\s+\[([ xX~])\]\s+(.*\S)\s*$")
+PRE_LINE = re.compile(r"^(\s*[-*]\s+\[)([ xX~])(\]\s+)(.*\S)\s*$")
 
 
-def open_findings(feat):
-    """[(line number, text)] — the open `- [ ]` lines of F/pre-release.md (`[x]` fixed, `[~]` waived)."""
+# ---- findings and releases (F/pre-release.md; the format and the policy are CLI.md's) --------------
+SEVS, UNWAIVABLE = ("HIGH", "FAIL", "MED", "LOW"), ("HIGH", "FAIL")
+LOCATOR = re.compile(r"^(\S+?)(?::\d+(?:-\d+)?|#\S+)$|^([^\s:#,]+)$")  # file:line[-line] · path#symbol · path
+MARKS = {" ": "open", "x": "closed", "X": "closed", "~": "waived"}
+FINDING_FIELDS = ("release", "block", "sev", "locator", "issue", "reviewer", "date")
+RECORD_KEYS = {"close": ("line", "finding", "sha", "by", "evidence"),
+               "waive": ("line", "finding", "by", "consent", "reason", "risk", "revisit")}
+TAG_KEY = "mismagent-release"
+
+
+def finding_id(fields):
+    """The identity of a finding: a hash of its seven original fields (never the mark, the line
+    number or a trailing annotation) — the line number is only a selector."""
+    return hashlib.sha256("\x1f".join(fields).encode()).hexdigest()[:12]
+
+
+def parse_findings(feat):
+    """[{line, mark, text, release, finding, block, sev, locator, …}] of the `- [ ]` lines of
+    F/pre-release.md; a malformed line carries `error` (and no `finding`)."""
     path = os.path.join(feat.dir, "pre-release.md")
-    lines = read(path).splitlines() if os.path.isfile(path) else []
-    return [(n, m.group(2)) for n, m in ((n, PRE_LINE.match(l)) for n, l in enumerate(lines, 1)) if m and m.group(1) == " "]
+    out = []
+    for n, l in enumerate(read(path).splitlines() if os.path.isfile(path) else [], 1):
+        m = PRE_LINE.match(l)
+        if not m:
+            continue
+        parts = [p.strip() for p in m.group(4).split("·")]
+        f = {"line": n, "mark": MARKS[m.group(2)], "text": m.group(4), "release": parts[0]}
+        if len(parts) < len(FINDING_FIELDS) or not all(parts[:len(FINDING_FIELDS)]):
+            f["error"] = "not `<release> · <id> · <sev> · <locator> · <issue> · <reviewer> · <date>`"
+        elif parts[2] not in SEVS:
+            f["error"] = "severity %r is not %s" % (parts[2], " | ".join(SEVS))
+        elif not LOCATOR.match(parts[3]):
+            f["error"] = "locator %r is not `file:line[-line]`, `path#symbol` or `path`" % parts[3]
+        else:
+            f.update(zip(FINDING_FIELDS, parts))
+            f["finding"] = finding_id(parts[:len(FINDING_FIELDS)])
+        out.append(f)
+    return out
+
+
+def release_names(feat, findings=()):
+    """The releases in order: the `releases:` keys, then the other labels (blocks', findings')."""
+    rel = feat.manifest.get("releases")
+    names = [str(x) for x in rel] if isinstance(rel, dict) else []
+    labels = {str(b.get("release")) for b in feat.blocks if b.get("release")} | {f["release"] for f in findings}
+    return names + sorted(labels - set(names), key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", s)])
+
+
+def decisions_path(feat, rn):
+    return os.path.join(feat.dir, "release-decisions", rn + ".md")
+
+
+def read_records(feat, rn):
+    """(doc, [record], [error]) of F/release-decisions/<rn>.md — its ONE ```json block
+    `{"records": [...]}`. doc is None when the block is absent (no file, or legacy prose only) or
+    unreadable (then an error says so); only valid records are returned."""
+    path = decisions_path(feat, rn)
+    if not os.path.isfile(path):
+        return None, [], []
+    found = re.findall(r"^```json[ \t]*\n(.*?)^```[ \t]*$", read(path), re.S | re.M)
+    if len(found) > 1:
+        return None, [], ["%d ```json blocks: exactly one holds the records" % len(found)]
+    if not found:
+        return None, [], []
+    try:
+        doc = json.loads(found[0])
+    except ValueError as e:
+        return None, [], ["the ```json block does not parse: %s" % e]
+    if not isinstance(doc, dict) or not isinstance(doc.get("records"), list):
+        return None, [], ["the ```json block is not {\"records\": [...]}"]
+    recs, errs = [], []
+    for k, r in enumerate(doc["records"]):
+        bad = record_problem(r)
+        if bad:
+            errs.append("record %d: %s" % (k, bad))
+        else:
+            recs.append(r)
+    return doc, recs, errs
+
+
+def record_problem(r):
+    """None for a valid record; else what is wrong with it."""
+    keys = RECORD_KEYS.get(r.get("action")) if isinstance(r, dict) else None
+    return "not an object with action close|waive" if keys is None else next(
+        ("%s missing or empty" % x for x in keys[1:] + ("at",) if not isinstance(r.get(x), str) or not r[x].strip()),
+        None)
+
+
+def on_line(feat, repo, line_sha, bid):
+    """Block `bid` is integrated: its integrated/ record exists and — given the line — its sha is a
+    commit on the line (the same rule as the `integrated_not_on_line` anomaly)."""
+    rec = feat.integrated(bid)
+    if not rec:
+        return False
+    if not (repo and line_sha):
+        return True
+    s = rec.get("sha") if isinstance(rec, dict) else None
+    return bool(isinstance(s, str) and sha(repo, s) and is_ancestor(repo, s, line_sha))
+
+
+def locator_path(locator):
+    m = LOCATOR.match(locator)
+    return (m.group(1) or m.group(2)) if m else locator
+
+
+def closure_problem(feat, repo, line_sha, f, r):
+    """None if the close record `r` still holds for finding `f` on the line tip; else why not."""
+    ev = r["evidence"]
+    epath = os.path.join(feat.dir, ev.split("#", 1)[0])
+    if not re.match(r"^release-evidence/%s\.md(#\S*)?$" % re.escape(f["release"]), ev) or not os.path.isfile(epath):
+        return "closure evidence %s is not an existing release-evidence/%s.md" % (ev, f["release"])
+    if f["finding"] not in read(epath):
+        return "closure evidence %s does not name finding %s" % (ev, f["finding"])
+    if not repo:
+        return None
+    s = sha(repo, r["sha"])
+    if not s:
+        return "closure sha %s not found" % r["sha"]
+    if line_sha and not is_ancestor(repo, s, line_sha):
+        return "closure sha %s is not on the integration line" % r["sha"][:12]
+    if line_sha and git(repo, "diff", "--quiet", s, line_sha, "--", locator_path(f["locator"]), check=False).returncode:
+        return "%s changed after the closure at %s: verify again" % (locator_path(f["locator"]), r["sha"][:12])
+    return None
+
+
+def release_tags(repo):
+    """[{tag, target, release, merge_to, from, integration, decided, consent}] — the annotated tags
+    `release confirm` wrote."""
+    fmt = "%(refname:short)%1f%(objecttype)%1f%(*objectname)%1f%(contents)%1e"
+    out = []
+    for rec in git(repo, "for-each-ref", "--format=" + fmt, "refs/tags").stdout.split("\x1e"):
+        parts = rec.lstrip("\n").split("\x1f")
+        if len(parts) != 4 or parts[1] != "tag":
+            continue
+        m = re.search(r"^%s: (\S+)$" % TAG_KEY, parts[3], re.M)
+        b = re.search(r"^merge-to: (\S+)(?: \(from (\S+)\))?", parts[3], re.M)
+        i = re.search(r"^integration: (\S+) @ ", parts[3], re.M)
+        if m:
+            out.append({"tag": parts[0], "target": parts[2], "release": m.group(1), "merge_to": b.group(1) if b else None,
+                        "from": b.group(2) if b else None, "integration": i.group(1) if i else None,
+                        **{k: (re.search(r"^%s: (.*)$" % k, parts[3], re.M) or [None, None])[1]
+                           for k in ("decided", "consent")}})
+    return out
+
+
+def release_key(feat, rn):
+    return "%s/%s" % (os.path.basename(feat.dir), rn)
+
+
+def confirmed(feat, rn, repo, tags):
+    """The confirmation of Rn: a `release confirm` tag of it whose commit is on its merge-to branch."""
+    for t in tags:
+        if t["release"] == release_key(feat, rn) and t["merge_to"] and sha(repo, t["merge_to"]) \
+                and is_ancestor(repo, t["target"], t["merge_to"]):
+            return {"tag": t["tag"], "sha": t["target"], "merge_to": t["merge_to"]}
+    return None
+
+
+def release_eval(feat, rn, repo=None, line_sha=None, findings=None, tags=None):
+    """ONE evaluation of release Rn, shared by `status` and the `release` commands. Policy: an open
+    HIGH/FAIL/MED blocks; a MED is freed only by a verified close or a valid waiver record, a
+    HIGH/FAIL only by a verified close; a LOW never blocks (advisory, and shown as a view to every
+    later release — never copied). Releasable ⇔ Rn has blocks, all done and integrated, nothing
+    blocking, its records file readable."""
+    findings = parse_findings(feat) if findings is None else findings
+    doc, recs, errors = read_records(feat, rn)
+    last = {r["finding"]: r for r in recs}
+    order = release_names(feat, findings)
+    earlier = order[:order.index(rn)] if rn in order else []
+    blocks = [str(b.get("id")) for b in feat.blocks if str(b.get("release")) == rn and b.get("type") != "scaffold"]
+    waiting = [] if blocks else ["%s has no blocks" % rn]
+    integ = {b: on_line(feat, repo, line_sha, b) for b in blocks}
+    for b in blocks:
+        st = feat.state_of(b)
+        if st != "done" or not integ[b]:
+            waiting.append("block %s: %s%s" % (b, st, "" if integ[b] else ", not integrated" if not feat.integrated(b)
+                                               else ", its integrated sha is not on the line"))
+    blocking, advisory, waived, closed = [], [], [], []
+
+    def view(f, **kw):
+        v = {"line": f["line"], "finding": f.get("finding"), "sev": f.get("sev"), "block": f.get("block"),
+             "locator": f.get("locator"), "issue": f.get("issue")}
+        return dict(v, **kw)
+    for f in findings:
+        if f["release"] != rn:
+            if f["release"] in earlier and f.get("sev") == "LOW" and f["mark"] == "open":
+                advisory.append(view(f, release=f["release"]))
+            continue
+        if "error" in f:
+            blocking.append(view(f, reason="malformed line: " + f["error"]))
+            continue
+        r = last.get(f["finding"])
+        if f["mark"] == "closed" and r and r["action"] == "close":
+            why = closure_problem(feat, repo, line_sha, f, r)
+            if not why:
+                closed.append(view(f, sha=r["sha"], by=r["by"], evidence=r["evidence"]))
+                continue
+        elif f["mark"] == "waived" and r and r["action"] == "waive" and f["sev"] not in UNWAIVABLE:
+            waived.append(view(f, by=r["by"], reason=r["reason"], revisit=r["revisit"], consent=r["consent"]))
+            continue
+        else:
+            why = "open" if f["mark"] == "open" else "a HIGH/FAIL is never waived" if f["mark"] == "waived" and \
+                f["sev"] in UNWAIVABLE else "marked [%s] without a valid %s record%s" % (
+                    "x" if f["mark"] == "closed" else "~", "close" if f["mark"] == "closed" else "waive",
+                    " (a legacy waiver: record it with `release waive`)" if f["mark"] == "waived" else "")
+        if f["sev"] == "LOW":
+            advisory.append(view(f, release=rn))
+        else:
+            blocking.append(view(f, reason=why))
+    conf = confirmed(feat, rn, repo, release_tags(repo) if tags is None else tags) if repo else None
+    gaps = ["%s: %s: %s" % (g["rule"], g["where"], g["gap"]) for g in release_gaps(feat, only=rn)]
+    return {"release": rn, "sha": line_sha, "blocks": [{"id": b, "state": feat.state_of(b),
+                                                        "integrated": integ[b]} for b in blocks],
+            "blocking": blocking, "advisory": advisory, "waived": waived, "closed": closed, "waiting": waiting,
+            "errors": errors, "gaps": gaps,
+            "releasable": bool(blocks) and not waiting and not blocking and not errors and not gaps,
+            "confirmed": conf}
+
+
+def release_gaps(feat, only=None):
+    """lint's release rules: malformed lines; records ↔ marks (every `[x]`/`[~]` has a matching last
+    record, every record a line of its release carrying its mark); readable records files. `only`:
+    one release's gaps."""
+    gaps, findings = [], parse_findings(feat)
+
+    def gap(rule, where, text):
+        gaps.append({"rule": rule, "where": where, "gap": text, "bounce_to": "composer"})
+    for f in findings:
+        if "error" in f and only in (None, f["release"]):
+            gap("release.finding", "pre-release.md line %d" % f["line"], f["error"])
+    files = [os.path.basename(p)[:-3] for p in glob.glob(os.path.join(feat.dir, "release-decisions", "*.md"))]
+    for rn in sorted(set(release_names(feat, findings)) | set(files)):
+        if only not in (None, rn):
+            continue
+        doc, recs, errs = read_records(feat, rn)
+        for e in errs:
+            gap("release.record", "release-decisions/%s.md" % rn, e)
+        mine = {f["finding"]: f for f in findings if f.get("finding") and f["release"] == rn}
+        last = {}
+        for r in recs:
+            if r["finding"] not in mine:
+                gap("release.record_orphan", "release-decisions/%s.md" % rn,
+                    "%s record for finding %s: no such %s line in pre-release.md" % (r["action"], r["finding"], rn))
+            last[r["finding"]] = r
+        for h, f in sorted(mine.items(), key=lambda x: x[1]["line"]):
+            want, r = {"closed": "close", "waived": "waive"}.get(f["mark"]), last.get(h)
+            if want and (not r or r["action"] != want):
+                gap("release.unverified", "pre-release.md line %d" % f["line"], "marked [%s] without a %s record in "
+                    "release-decisions/%s.md%s" % ("x" if want == "close" else "~", want, rn,
+                                                   ": a legacy mark, kept but unverified" if not r else ""))
+            elif not want and r:
+                gap("release.record_orphan", "pre-release.md line %d" % f["line"],
+                    "a %s record but the line is open" % r["action"])
+    return gaps
 
 
 # lint rules whose gap makes a terminal outcome false (nothing can become ready, or work is unseen)
 TERMINAL_LINT = ("ids.present", "ids.unique", "consumes.boundary", "boundary.owner", "after.block", "after.cycle",
                  "blockfile.exists", "blockfile.unique", "blockfile.orphan", "spikes.central_node",
-                 "spikes.central_flag")
+                 "spikes.central_flag", "composition.valid", "composition.unique", "composition.last",
+                 "composition.root", "composition.chain")
 
 
 def spike_dir_state(feat, repo, sid):
@@ -1392,7 +2015,134 @@ def spike_dir_state(feat, repo, sid):
     return "running" if worktree_of(repo, "spike/" + sid) else None
 
 
-def outcome(feat, anomalies, repo=None):
+def resume_candidates(feat, repo):
+    """[{id, branch, worktree, uncommitted, attempt, commits, handoff[, progress]}] — blocks in doing/,
+    not integrated: facts for resuming them (never a diagnosis: a dirty tree also describes a worker
+    still running). `attempt` = 1 + rework cycles; `commits` = commits only block/<id> holds (on no
+    other branch but its own candidate);
+    `handoff` = .worktrees/returns/<feature>/<id>-<attempt>.md if it exists, else null; `result` = the
+    last `RESULT:` its worker appended there on returning (null: it never returned). `progress` when a checkpoint was recorded: {attempt, head, next, fresh} (a stale one is
+    reported, not an anomaly)."""
+    out = []
+    for b in feat.blocks:
+        bid = str(b.get("id"))
+        if feat.state_of(bid) == "doing" and not feat.integrated(bid):
+            wt = worktree_of(repo, PREFIX + bid) if repo else None
+            r = {"id": bid, "branch": PREFIX + bid, "worktree": wt, "uncommitted": len(dirty(wt)) if wt else None}
+            r["attempt"] = len(rework_cycles(feat, bid)[0]) + 1
+            n = git(repo, "rev-list", "--count", PREFIX + bid, "--not", "--exclude=" + PREFIX + bid,
+                    "--exclude=candidate/*", "--branches", check=False) if repo else None
+            r["commits"] = int(n.stdout) if n is not None and n.returncode == 0 else None
+            h = os.path.join(repo, ".worktrees", "returns", os.path.basename(feat.dir),
+                             "%s-%d.md" % (bid, r["attempt"])) if repo else None
+            r["handoff"] = h if h and os.path.isfile(h) else None
+            got = re.findall(r"(?m)^RESULT:\s*([A-Z-]+)", read(h)) if r["handoff"] else []
+            r["result"] = got[-1] if got else None
+            rec, fresh = progress_of(feat, repo, bid)
+            if rec:
+                r["progress"] = {"attempt": rec.get("attempt"), "head": rec.get("head"),
+                                 "next": (rec.get("checkpoint") or {}).get("next"), "fresh": fresh}
+            out.append(r)
+    return out
+
+
+# ---- progress: a worker's checkpoint at a green AC boundary (F/progress/<id>.json) ------------------
+CHECKPOINT_REQUIRED, CHECKPOINT_OPTIONAL = ("done", "next"), ("tests", "decisions", "deviations", "notes")
+
+
+def progress_path(feat, bid):
+    return os.path.join(feat.dir, "progress", bid + ".json")
+
+
+def progress_of(feat, repo, bid):
+    """(record, fresh) of F/progress/<bid>.json — (None, False) when absent, unreadable, or the block is
+    integrated (then it is history, ignored). fresh ⇔ its head is still block/<bid>'s tip, its
+    spec_hash the current one, and the block's worktree clean (a change after it = unverified work)."""
+    rec = load_json(progress_path(feat, bid))
+    if not isinstance(rec, dict) or not isinstance(rec.get("checkpoint"), dict) or feat.integrated(bid):
+        return None, False
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError:
+        cur = None
+    tip = sha(repo, PREFIX + bid) if repo else None
+    wt = worktree_of(repo, PREFIX + bid) if repo else None
+    return rec, bool(tip and rec.get("head") == tip and cur and rec.get("spec_hash") == cur
+                     and not (wt and dirty(wt)))
+
+
+def load_checkpoint(raw):
+    """(checkpoint, problem) — --json: `-` (stdin), a file, or the JSON object inline."""
+    try:
+        text = sys.stdin.read() if raw == "-" else raw if raw.lstrip().startswith("{") else \
+            read(raw) if os.path.isfile(raw) else None
+    except OSError as e:
+        return None, "--json %s: %s" % (raw, e)
+    if text is None:
+        return None, "--json %s: neither `-`, a file, nor a JSON object" % raw
+    try:
+        cp = json.loads(text)
+    except ValueError as e:
+        return None, "--json does not parse: %s" % e
+    if not isinstance(cp, dict):
+        return None, "--json is not a JSON object"
+    extra = sorted(set(cp) - set(CHECKPOINT_REQUIRED + CHECKPOINT_OPTIONAL))
+    if extra:
+        return None, "unknown keys %s (allowed: %s)" % (", ".join(extra), ", ".join(CHECKPOINT_REQUIRED + CHECKPOINT_OPTIONAL))
+    if not isinstance(cp.get("done"), list):
+        return None, "`done` is missing or not a list (the acceptance criteria done, green)"
+    if not isinstance(cp.get("next"), str) or not cp["next"].strip():
+        return None, "`next` is missing or not a non-empty string (the next action)"
+    bad = [k for k in CHECKPOINT_OPTIONAL if k in cp and not isinstance(cp[k], (str, list))]
+    return (None, "%s: a string or a list" % ", ".join(bad)) if bad else (cp, None)
+
+
+def cmd_progress(a):
+    """Record a worker's checkpoint: refused — nothing written — unless the block is a manifest row in
+    doing/, --head is block/<id>'s tip, its worktree clean, --spec-hash the current one, the checkpoint
+    well-formed, every --extra a file, and there is progress since the previous record."""
+    feat = Feature(a.feature_dir)
+    repo, bid = feat.repo(), a.id
+    if bid not in feat.row:
+        return emit({"ok": False, "refused": "nothing written", "problems": [
+            "%s is not a block of the manifest: checkpoints are for manifest blocks only" % bid]}, 1)
+    problems = [] if feat.state_of(bid) == "doing" else ["block %s is in %s, not doing/" % (bid, feat.state_of(bid))]
+    problems += ["block %s is already integrated" % bid] if feat.integrated(bid) else []
+    tip, head = sha(repo, PREFIX + bid), sha(repo, a.head)
+    if not tip:
+        problems.append("no branch %s%s" % (PREFIX, bid))
+    elif head != tip:
+        problems.append("--head %s is not the tip of %s%s (%s): commit, then record the tip" % (a.head, PREFIX, bid, tip[:12]))
+    wt = worktree_of(repo, PREFIX + bid)
+    if wt and dirty(wt):
+        problems.append("the worktree %s has uncommitted or untracked changes: commit everything before a "
+                        "checkpoint" % wt)
+    extras = [os.path.abspath(x) for x in dict.fromkeys(a.extra or [])]
+    problems += ["--extra %s not found" % x for x in extras if not os.path.isfile(x)]
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError as e:
+        cur = None
+        problems.append(str(e))
+    if cur and a.spec_hash != cur:
+        problems.append("--spec-hash is not the block's current spec hash %s: the spec changed, re-pack" % cur)
+    cp, why = load_checkpoint(a.json)
+    problems += [why] if why else []
+    path = progress_path(feat, bid)
+    old = load_json(path)
+    old = old if isinstance(old, dict) else {}
+    n = old.get("attempt")
+    n = n if isinstance(n, int) and not isinstance(n, bool) and n > 0 else 0
+    if cp and tip and old.get("head") == tip and (old.get("checkpoint") or {}).get("done") == cp["done"]:
+        problems.append("no progress since attempt %d: same head, same done list" % n)
+    if problems:
+        return emit({"ok": False, "refused": "nothing written", "problems": problems}, 1)
+    attempt = n + 1
+    write_json(path, {"head": tip, "spec_hash": cur, "attempt": attempt, "checkpoint": cp, "extras": extras})
+    return emit({"ok": True, "id": bid, "file": path, "attempt": attempt})
+
+
+def outcome(feat, anomalies, repo=None, line_sha=None):
     """(outcome, work, waiting) for a runner: anomaly · done · work (something the composer can do
     now) · idle (only work waiting on a decision or an external condition). Never guesses `done`:
     before `done`/`idle`, the TERMINAL_LINT gaps are appended to `anomalies` as `lint_gap`."""
@@ -1400,10 +2150,12 @@ def outcome(feat, anomalies, repo=None):
         return "anomaly", [], []
     r, work, waiting = ready_state(feat), [], []
     work += ["ready: " + x["id"] for x in r["ready"]] + ["finishable: " + x for x in r["finishable"]]
-    for b in feat.blocks:
-        bid = str(b.get("id"))
-        if feat.state_of(bid) == "doing" and not feat.integrated(bid):
-            work.append("in progress: %s (doing, not integrated)" % bid)
+    for x in resume_candidates(feat, repo):
+        p = x.get("progress")
+        work.append("resume: %s (doing, not integrated; worktree %s, %s uncommitted, attempt %s, %s commits, %s%s)" % (
+            x["id"], x["worktree"] or "none", "?" if x["uncommitted"] is None else x["uncommitted"], x["attempt"],
+            "?" if x["commits"] is None else x["commits"], "returned %s" % x["result"] if x["result"] else "no return",
+            "; checkpoint attempt %s, %s" % (p["attempt"], "fresh" if p["fresh"] else "stale") if p else ""))
     waiting += ["%s: %s" % (x["id"], x["reason"]) for x in r["excluded"]]
     for p in sorted(glob.glob(os.path.join(feat.dir, "open-questions", "*.md"))):
         if os.path.basename(p)[:-3] not in feat.row or feat.state_of(os.path.basename(p)[:-3]) != "todo":
@@ -1422,15 +2174,24 @@ def outcome(feat, anomalies, repo=None):
         else:
             waiting.append("%s %s in %s: waits on %s" % (kind or "node", i, st, "the user's closure decision"
                                                          if kind == "spike" else "its ready_when condition"))
-    blocks_of = {}
-    for b in feat.blocks:
-        blocks_of.setdefault(str(b.get("release")), []).append(str(b.get("id")))
-    for n, text in open_findings(feat):
-        rel = text.split("·", 1)[0].strip()
-        if all(feat.state_of(x) == "done" for x in blocks_of.get(rel, [])):
-            work.append("pre-release.md line %d (%s blocks done)" % (n, rel))
-        else:
-            waiting.append("pre-release.md line %d: %s has blocks not done" % (n, rel))
+    findings = parse_findings(feat)
+    tags = release_tags(repo) if repo else []
+    for rn in release_names(feat, findings):
+        ev = release_eval(feat, rn, repo, line_sha, findings, tags)
+        n = len(ev["blocking"])
+        if ev["confirmed"]:
+            continue
+        if ev["gaps"]:  # record ↔ mark gaps: the composer repairs them now, whatever the blocks' state
+            work.append("release %s: %d record/mark gaps to repair (`lint`)" % (rn, len(ev["gaps"])))
+        if not ev["blocks"]:  # not started: its lines wait, nothing is actionable
+            waiting.append("release %s: no blocks%s" % (rn, " (%d blocking lines wait)" % n if n else ""))
+        elif ev["waiting"]:
+            if n:
+                waiting.append("release %s: %d blocking lines wait for its blocks" % (rn, n))
+        elif n:
+            work.append("release %s: %d blocking lines (`release list`)" % (rn, n))
+        elif not ev["gaps"]:
+            waiting.append("release %s: releasable, awaiting the user's confirmation (`release confirm`)" % rn)
     if work:
         return "work", work, waiting
     anomalies += [{"kind": "lint_gap", "id": g["rule"], "detail": "%s: %s" % (g["where"], g["gap"])}
@@ -1440,6 +2201,20 @@ def outcome(feat, anomalies, repo=None):
     if waiting or any(feat.state_of(str(b.get("id"))) != "done" for b in feat.blocks):
         return "idle", [], waiting or ["blocks not done and nothing actionable"]
     return "done", [], []
+
+
+def relink_notes(feat, src, dst):
+    """Rewrite F/decisions.md links to a file that a state move relocated (src → dst): a note cites
+    the file where it was when written. Returns the number of links rewritten."""
+    npath = os.path.join(feat.dir, "decisions.md")
+    if not os.path.isfile(npath):
+        return 0
+    old, new = (os.path.relpath(x, feat.dir).replace(os.sep, "/") for x in (src, dst))
+    text = read(npath)
+    out, n = re.subn(r"\]\((?:\./)?%s(#[^)]*)?\)" % re.escape(old), lambda m: "](%s%s)" % (new, m.group(1) or ""), text)
+    if n:
+        write_text(npath, out)
+    return n
 
 
 def cmd_move(a):
@@ -1460,31 +2235,60 @@ def cmd_move(a):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tracked = git(os.path.dirname(src), "ls-files", "--error-unmatch", src, check=False).returncode == 0
     git(os.path.dirname(src), "mv", src, dst) if tracked else shutil.move(src, dst)
-    return emit({"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked})
+    out = {"ok": True, "id": a.id, "from": frm, "to": a.to, "path": dst, "git": tracked,
+           "relinked": relink_notes(feat, src, dst)}
+    prog = progress_path(feat, a.id)
+    if legal is BLOCK_MOVES and a.to == "done" and os.path.isfile(prog):  # a finished block's checkpoint is spent
+        if git(feat.dir, "ls-files", "--error-unmatch", prog, check=False).returncode == 0:
+            git(feat.dir, "rm", "-q", "-f", prog)
+        else:
+            os.remove(prog)
+        out["progress_removed"] = prog
+    return emit(out)
 
 
 def cmd_pack(a):
     feat = Feature(a.feature_dir)
     h = spec_hash(feat, a.id)  # refuses an id that is neither a block nor has rework/<id>-<n>.md
     root, out = os.path.dirname(feat.odir), []
+    extras = list(dict.fromkeys(os.path.abspath(x) for x in a.extra or []))
 
     def add(title, path, body):
         out.append("## %s\n\nsource: `%s`\n\n%s\n" % (title, os.path.relpath(path, root), body.strip()))
 
+    if a.id in feat.row:  # a fresh checkpoint first: the re-dispatched worker resumes from it
+        try:
+            repo = feat.repo()
+        except UsageError:
+            repo = None
+        rec, fresh = progress_of(feat, repo, a.id)
+        if rec and fresh:  # the dispatch's extras survive the checkpoint: packed below, each once
+            extras = list(dict.fromkeys([os.path.abspath(x) for x in a.extra or []] +
+                                        [x for x in rec.get("extras") or [] if isinstance(x, str)]))
+            add("Checkpoint — attempt %s (resume from it; never in spec_hash)" % rec.get("attempt"),
+                progress_path(feat, a.id), checkpoint_md(rec))
     brief = os.path.join(feat.dir, "product-brief.md")
     if os.path.isfile(brief):
         add("Goal — product brief", brief, read(brief))
     if a.id in feat.row:
-        pack_block(feat, a.id, add, out)
-    else:  # a pre-release group: its spec is its rework files
-        for p in sorted(glob.glob(os.path.join(feat.dir, "rework", a.id + "-*.md"))):
+        pack_deps(feat, [a.id], add, out, writer=a.id)
+    else:  # a pre-release group: its rework files, then its blocks' specs and dependencies, each once
+        rw, fm = group_spec(feat, a.id)
+        for p in rw:
             add("Rework %s" % os.path.basename(p)[:-3], p, read(p))
+        pack_deps(feat, fm["blocks"], add, out, writer=None)
+    ex = existing_code(feat, [a.id] if a.id in feat.row else group_spec(feat, a.id)[1]["blocks"])
+    if ex:
+        add("Existing code (paths; read before writing — never in spec_hash)", os.path.join(feat.odir, "architecture.md"), ex)
     pack_notes(feat, a.id, add)
-    found = open_findings(feat) if a.id in feat.row else []
-    if found:  # advisory: never in spec_hash, never a contract change
-        add("Open findings (advisory: deferred MED/LOW of the feature; they change no contract)",
-            os.path.join(feat.dir, "pre-release.md"), "\n".join("- line %d: %s" % (n, t) for n, t in found))
-    for x in a.extra or []:
+    if a.id in feat.row:  # advisory: never in spec_hash, never a contract change
+        mine, others = block_findings(feat, a.id)
+        if mine or others:
+            add("Open findings (advisory: deferred MED/LOW of this block and its boundary neighbours; they change "
+                "no contract)", os.path.join(feat.dir, "pre-release.md"), "\n".join(
+                    ["- line %d: %s" % (f["line"], f["text"]) for f in mine] +
+                    ["%d other open findings in the feature (not relevant to this block)" % others] * bool(others)))
+    for x in extras:
         if not os.path.isfile(x):
             raise UsageError("--extra %s not found" % x)
         add("Extra — %s" % os.path.basename(x), os.path.abspath(x), read(x))
@@ -1492,10 +2296,77 @@ def cmd_pack(a):
     return 0
 
 
-def pack_block(feat, bid, add, out):
-    bpath = feat.files()[bid][0][2]
-    add("Block %s" % bid, bpath, read(bpath))
-    touched, adrs = deps(feat, bid)
+def existing_code(feat, bids):
+    """The pack's `## Existing code` body: the blocks' `code_paths` (to change) and, read-only, the entry
+    files of the modules serving their (context, side) and their consumed owners' (a module serves the
+    contexts it lists in `contexts:`, else the one named like its id; no `side:` = every side), plus a
+    composition block's side root and its side's entry files. Paths only."""
+    mods = yaml_section(os.path.join(feat.odir, "architecture.md"), "modules")
+    mods = [m for m in mods if isinstance(m, dict)] if isinstance(mods, list) else []
+    serves = lambda m, ctx, side: ctx in [str(x) for x in m.get("contexts") or [m.get("id")]] and \
+        (m.get("side") is None or side is None or str(m.get("side")) == str(side))
+    change, read_, comp = [], [], []
+    for bid in bids:
+        row = feat.row.get(bid, {})
+        cp = row.get("code_paths")
+        change += [str(x) for x in cp if str(x) not in change] if isinstance(cp, list) else []
+        side = row.get("side")
+        pairs = {(str(row.get("context")), side)} | {
+            (str(o.get("context")), o.get("side", side)) for c in feat.consumes(bid)
+            for o in [feat.row.get(str((feat.bnd.get(c) or {}).get("owner")), {})]}
+        picked = [m for m in mods if any(serves(m, c, sd) for c, sd in pairs)]
+        if row.get("composition") is True and row.get("type") != "scaffold":
+            r = composition_root(feat, side)
+            comp += ["- composition root (%s): `%s`" % (side or "-", r)] if r else []
+            picked += [m for m in mods if m not in picked and (m.get("side") is None or str(m.get("side")) == str(side))]
+        for m in picked:
+            for e in m.get("entry_files") or []:
+                if str(e) not in read_ and str(e) not in change:
+                    read_.append(str(e))
+    if not (change or read_ or comp):
+        return "" if mods else "No module index in architecture.md: `MM codemap <output_dir> --ref <B>` shows the code."
+    return "\n".join(["To change (`code_paths`):"] + ["- `%s`" % x for x in change] * bool(change) +
+                     (["- none"] if not change else []) + ["", "To read, never write (entry files):"] +
+                     (["- `%s`" % x for x in read_] or ["- none"]) + ([""] + comp if comp else []))
+
+
+def checkpoint_md(rec):
+    """A progress record as the pack's `## Checkpoint` body."""
+    cp = rec["checkpoint"]
+    item = lambda x: x if isinstance(x, str) else json.dumps(x, ensure_ascii=False)
+    rows = ["- head: `%s` · attempt %s" % (rec.get("head"), rec.get("attempt"))]
+    for k, label in (("done", "done"), ("next", "next"), ("tests", "tests"), ("decisions", "pending DECISIONS"),
+                     ("deviations", "pending DEVIATIONS"), ("notes", "notes")):
+        v = cp.get(k)
+        if isinstance(v, list):
+            rows += ["- %s:%s" % (label, "" if v else " none")] + ["  - %s" % item(x) for x in v]
+        elif v is not None:
+            rows.append("- %s: %s" % (label, item(v)))
+    return "\n".join(rows)
+
+
+def block_findings(feat, bid):
+    """([finding], n_others) — the open pre-release.md lines relevant to block `bid`: its own, those of
+    a block sharing a boundary with it (owner or consumer of one it touches) or scoped to such a
+    boundary, and — for a composition block — those of every earlier composition block of its side (the
+    shared root's debt); the rest of the feature's open lines only counted."""
+    touched = feat.touched(bid)
+    near = {bid} | {str(bd.get("id")) for bd in touched} | {str(bd.get("owner")) for bd in touched} | \
+        {c for bd in touched for c in feat.consumers(bd)}
+    if feat.row[bid].get("composition") is True and feat.row[bid].get("type") != "scaffold":
+        near |= set(earlier_compositions(feat, feat.row[bid]))
+    open_ = [f for f in parse_findings(feat) if f["mark"] == "open"]
+    mine = [f for f in open_ if f.get("block") in near]
+    return mine, len(open_) - len(mine)
+
+
+def pack_deps(feat, bids, add, out, writer):
+    """The blocks' files, then the boundaries and ADRs they resolve (each once), then the lessons of
+    their types. `writer`: the packed block (it writes the checks whose `from` it is); None for a group."""
+    for bid in bids:
+        bpath = feat.files()[bid][0][2]
+        add("Block %s" % bid, bpath, read(bpath))
+    touched, adrs = deps_many(feat, bids)
     for bd in touched:
         add("Boundary %s" % bd.get("id"), feat.manifest_path,
             "```json\n%s\n```" % json.dumps(bd, indent=2, ensure_ascii=False))
@@ -1512,7 +2383,7 @@ def pack_block(feat, bid, add, out):
             if "legacy" in c:
                 checks.append("- LEGACY `%s` — not a versioned check: never executed; report it (migrate with "
                               "write-adr)" % c["legacy"])
-            elif c["from"] == bid:
+            elif writer and c["from"] == writer:
                 checks.append("- `%s` — applicable: THIS block writes it (violating + conforming fixture) and "
                               "registers it in the gate" % c["check"])
             elif not c["from"] or from_status(feat, c["from"]) == "integrated":
@@ -1525,8 +2396,8 @@ def pack_block(feat, bid, add, out):
         if checks:
             body += "\n\n**Checks (`enforced_by`)** — each must run in the gate, recognizably:\n" + "\n".join(checks)
         add("ADR %s" % title, path, body)
-    lpath, btype = os.path.join(feat.odir, "architetture", "lessons-by-block-type.md"), str(feat.row[bid].get("type"))
-    if os.path.isfile(lpath):
+    lpath = os.path.join(feat.odir, "architetture", "lessons-by-block-type.md")
+    for btype in sorted({str(feat.row[b].get("type")) for b in bids}) if os.path.isfile(lpath) else []:
         keep, struck, lines = False, False, []
         for line in read(lpath).splitlines():
             if line.startswith("## "):
@@ -1551,10 +2422,15 @@ def pack_notes(feat, bid, add):
     """Active decision notes scoped to the feature, the block, the owners of the boundaries it
     consumes and the boundaries it touches: ID + Decision + Revisit + link. Never in spec_hash."""
     path = os.path.join(feat.dir, "decisions.md")
-    scopes = {"feature"}
-    if bid in feat.row:
-        scopes |= {"block:" + bid} | {"boundary:%s" % b.get("id") for b in feat.touched(bid)}
-        scopes |= {"block:%s" % (feat.bnd.get(c) or {}).get("owner") for c in feat.consumes(bid)}
+    scopes, bids = {"feature"}, [bid]
+    if bid not in feat.row:  # a pre-release group: its release and its blocks
+        fm = group_spec(feat, bid)[1]
+        m = re.match(r"^pre-(.+)-\d+$", bid)
+        scopes |= {"release:%s" % (fm.get("release") or (m.group(1) if m else ""))}
+        bids = fm["blocks"]
+    for b in bids:
+        scopes |= {"block:" + b} | {"boundary:%s" % x.get("id") for x in feat.touched(b)}
+        scopes |= {"block:%s" % (feat.bnd.get(c) or {}).get("owner") for c in feat.consumes(b)}
     rows = ["- [%s](decisions.md#%s) (%s) — %s · Revisit: %s" % (
         e["id"], note_anchor(e), e["scope"], e["fields"].get("Decision", ""), e["fields"].get("Revisit", ""))
         for e in active_notes(path) if e["scope"] in scopes]
@@ -1571,6 +2447,13 @@ def cmd_diff_range(a):
     return emit({"base_sha": b, "head_sha": h, "merge_base": mb, "range": "%s..%s" % (mb, h), "files": files})
 
 
+def record_review_proof(feat, bid, s, cur):
+    """F/review-proof/<bid>.json = the reviewed sha + the spec hash (the caller checked it is current)."""
+    path = os.path.join(feat.dir, "review-proof", bid + ".json")
+    write_json(path, {"id": bid, "sha": s, "spec_hash": cur})
+    return path
+
+
 def cmd_proof(a):
     feat = Feature(a.feature_dir)
     repo = feat.repo()
@@ -1578,14 +2461,12 @@ def cmd_proof(a):
         if not a.sha or a.gate is not None or a.gate_files or (a.op == "record") != bool(a.spec_hash):
             raise UsageError("proof record review takes --sha and --spec-hash (the pack's); check takes --sha")
         s = need_sha(repo, a.sha)
-        path = os.path.join(feat.dir, "review-proof", a.id + ".json")
         if a.op == "record":
             cur = spec_hash(feat, a.id)
             if cur != a.spec_hash:  # the reviewers judged another spec than the current one
                 return emit({"refused": "the spec changed since the reviewed pack: re-pack, review again",
                              "reviewed": a.spec_hash, "current": cur}, 1)
-            write_json(path, {"id": a.id, "sha": s, "spec_hash": cur})
-            return emit({"recorded": path, "sha": s})
+            return emit({"recorded": record_review_proof(feat, a.id, s, cur), "sha": s})
         why = review_stale(feat, a.id, s)
         return emit({"fresh": not why, "stale_because": why}, 1 if why else 0)
     if a.gate is None or not a.gate_files or a.sha or a.spec_hash:
@@ -1689,13 +2570,774 @@ def cmd_compose(a):
     return emit({"promoted": True, "integration_sha": sha(repo, line)})
 
 
+# ---- release: list · group · close · waive · confirm (serial: one writer, the composer) ------------
+RELEASE_OPTS = {"list": {"integration"}, "group": {"id", "lines"}, "close": {"entries"}, "waive": {"entries"},
+                "confirm": {"integration", "sha", "tag", "merge_to", "base_sha", "by", "consent"}}
+
+
+def now_utc():
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def write_text(path, text):
+    """Atomic (tmp + rename), like write_json."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(path + ".tmp", path)
+
+
+def load_entries(raw):
+    """--entries: a JSON file, or the JSON array inline."""
+    text = raw if raw.lstrip().startswith("[") else read(raw) if os.path.isfile(raw) else \
+        _raise(UsageError("--entries %s: neither a JSON array nor a file" % raw))
+    try:
+        entries = json.loads(text)
+    except ValueError as e:
+        raise UsageError("--entries does not parse: %s" % e)
+    if not isinstance(entries, list) or not entries:
+        raise UsageError("--entries is a non-empty JSON array of objects")
+    return entries
+
+
+def release_record(feat, rn, action, raw, replace=()):
+    """close | waive: validate the WHOLE batch, then append the records to
+    F/release-decisions/<rn>.md (its one ```json block; `action`/`at` set here) and flip the marks
+    (`[x]` close, `[~]` waive). `replace`: findings of the batch whose earlier records (valid or
+    not) are dropped — the repair path; an invalid record not replaced is refused. Any problem →
+    nothing written."""
+    entries, findings = load_entries(raw), parse_findings(feat)
+    by_line = {f["line"]: f for f in findings}
+    keys = RECORD_KEYS[action]
+    repo = feat.repo() if action == "close" else None
+    doc, _, errs = read_records(feat, rn)
+    path = decisions_path(feat, rn)
+    problems = ["release-decisions/%s.md: %s — fix it first" % (rn, e) for e in errs if not e.startswith("record ")]
+    replace = set(replace or ())
+    kept = [r for r in (doc or {}).get("records") or [] if not (isinstance(r, dict) and r.get("finding") in replace)]
+    for k, r in enumerate((doc or {}).get("records") or []):
+        bad = record_problem(r)
+        if bad and r in kept:
+            h = r.get("finding") if isinstance(r, dict) and isinstance(r.get("finding"), str) else None
+            problems.append("release-decisions/%s.md record %d is invalid (%s): %s" % (
+                rn, k, bad, "re-record finding %s with --replace %s" % (h, h) if h else
+                "it names no finding — remove it from the ```json block"))
+    batch = {e.get("finding") for e in entries if isinstance(e, dict)}
+    problems += ["--replace %s: not a finding of the batch" % h for h in sorted(replace - batch)]
+    seen, recs = set(), []
+    for k, e in enumerate(entries):
+        p = lambda msg: problems.append("entry %d: %s" % (k, msg))
+        if not isinstance(e, dict) or set(e) != set(keys):
+            p("keys must be exactly %s" % ", ".join(keys))
+            continue
+        if not isinstance(e["line"], int) or isinstance(e["line"], bool) or \
+                any(not isinstance(e[x], str) or not e[x].strip() for x in keys[1:]):
+            p("line is an integer, every other field a non-empty string")
+            continue
+        f = by_line.get(e["line"])
+        if not f or "error" in f:
+            p("line %d is not a well-formed finding of pre-release.md" % e["line"])
+        elif f["finding"] != e["finding"]:
+            p("line %d is finding %s, not %s: re-read `release list`" % (e["line"], f["finding"], e["finding"]))
+        elif f["release"] != rn:
+            p("line %d belongs to %s, not %s" % (e["line"], f["release"], rn))
+        elif f["finding"] in seen:
+            p("finding %s twice in the batch" % f["finding"])
+        elif action == "waive" and f["sev"] in UNWAIVABLE:
+            p("line %d is %s: a HIGH/FAIL is fixed, never waived" % (e["line"], f["sev"]))
+        elif action == "waive" and f["mark"] == "closed":
+            p("line %d is already closed" % e["line"])
+        else:
+            seen.add(f["finding"])
+            rec = dict({x: e[x].strip() if isinstance(e[x], str) else e[x] for x in keys}, action=action, at=now_utc())
+            if action == "close":
+                s = sha(repo, e["sha"])
+                ev = e["evidence"]
+                epath = os.path.join(feat.dir, ev.split("#", 1)[0])
+                if not s:
+                    p("sha %s is not a commit" % e["sha"])
+                elif not re.match(r"^release-evidence/%s\.md(#\S*)?$" % re.escape(rn), ev) or not os.path.isfile(epath):
+                    p("evidence %s is not an existing release-evidence/%s.md[#anchor]" % (ev, rn))
+                elif f["finding"] not in read(epath):
+                    p("release-evidence/%s.md does not name finding %s" % (rn, f["finding"]))
+                rec["sha"] = s
+            recs.append(rec)
+    if problems:
+        return {"ok": False, "refused": "nothing written", "problems": problems}, 1
+    old = read(path) if os.path.isfile(path) else ""
+    block = "```json\n%s\n```" % json.dumps({"records": kept + recs},
+                                            indent=2, ensure_ascii=False)
+    if doc is not None:  # replace the one block; any prose around it (a legacy file) is kept
+        text = re.sub(r"^```json[ \t]*\n.*?^```[ \t]*$", lambda _: block, old, count=1, flags=re.S | re.M)
+    elif old.strip():
+        text = old.rstrip("\n") + "\n\n" + block + "\n"
+    else:
+        text = "# Release decisions — %s\n\nWritten by `release close|waive` only.\n\n%s\n" % (rn, block)
+    write_text(path, text)
+    ppath = os.path.join(feat.dir, "pre-release.md")
+    lines = read(ppath).split("\n")
+    mark = "x" if action == "close" else "~"
+    for r in recs:
+        lines[r["line"] - 1] = PRE_LINE.sub(lambda m: m.group(1) + mark + m.group(3) + m.group(4), lines[r["line"] - 1])
+    write_text(ppath, "\n".join(lines))
+    return {"ok": True, "release": rn, "action": action, "lines": [r["line"] for r in recs],
+            "findings": [r["finding"] for r in recs], "replaced": sorted(replace), "file": path}, 0
+
+
+def release_group(feat, rn, gid, raw_lines):
+    """Write F/rework/<gid>-1.md: frontmatter release/blocks/findings + the selected open lines,
+    copied. One group per (context, side); a finding already in another group is refused."""
+    if not re.match(r"^pre-%s-\d+$" % re.escape(rn), gid) or gid in feat.row:
+        raise UsageError("--id is pre-%s-<k> and not a block id" % rn)
+    pairs = [re.match(r"^(\d+):([0-9a-f]{12})$", x or "") for x in raw_lines or []]
+    if not pairs or not all(pairs):
+        raise UsageError("--lines takes <line>:<finding> pairs (the line number and hash from `release list`)")
+    by_line, problems, picked = {f["line"]: f for f in parse_findings(feat)}, [], []
+    for n, h in ((int(m.group(1)), m.group(2)) for m in pairs):
+        f = by_line.get(n)
+        if not f or "error" in f:
+            problems.append("line %d is not a well-formed finding" % n)
+        elif f["finding"] != h:
+            problems.append("line %d is finding %s, not %s: re-read `release list`" % (n, f["finding"], h))
+        elif f["release"] != rn or f["mark"] != "open":
+            problems.append("line %d is not an open %s line" % (n, rn))
+        elif f["block"] not in feat.row:
+            problems.append("line %d names %s, not a block of the manifest" % (n, f["block"]))
+        elif f in picked:
+            problems.append("line %d given twice" % n)
+        else:
+            picked.append(f)
+    blocks = list(dict.fromkeys(f["block"] for f in picked))
+    for key in ("context", "side"):
+        vals = sorted({str(feat.row[b].get(key)) for b in blocks if feat.row[b].get(key) is not None})
+        if len(vals) > 1:
+            problems.append("the lines span %ss %s: one group per (context, side)" % (key, ", ".join(vals)))
+    for p in sorted(glob.glob(os.path.join(feat.dir, "rework", "pre-*-1.md"))):
+        other = os.path.basename(p)[:-5]
+        if other != gid:
+            fm = board.parse_frontmatter(read(p))[0]
+            problems += ["line %d (finding %s) is already in group %s" % (f["line"], f["finding"], other)
+                         for f in picked if f["finding"] in (fm.get("findings") or [])]
+    if problems:
+        return {"ok": False, "refused": "nothing written", "problems": problems}, 1
+    ctx = feat.row[blocks[0]].get("context")
+    text = "---\nrelease: %s\nblocks: [%s]\nfindings: [%s]\n---\n# %s — %s fixes (context %s)\n\n%s\n" % (
+        rn, ", ".join(blocks), ", ".join(f["finding"] for f in picked), gid, rn, ctx,
+        "\n".join("- [ ] %s" % f["text"] for f in picked))
+    path = os.path.join(feat.dir, "rework", gid + "-1.md")
+    if os.path.isfile(path) and read(path) != text:
+        return {"ok": False, "refused": "rework/%s-1.md exists with other content" % gid}, 1
+    unchanged = os.path.isfile(path)
+    if not unchanged:
+        write_text(path, text)
+    return {"ok": True, "id": gid, "file": path, "blocks": blocks, "findings": [f["finding"] for f in picked],
+            "context": ctx, "unchanged": unchanged}, 0
+
+
+def one_line(s):
+    return " ".join(str(s).split())
+
+
+def release_confirm(feat, rn, a):
+    """Preflight everything, then fast-forward BASE to S and put an annotated tag on S. An identical
+    repeat is a no-op; a half-done confirmation (one of the two present) is completed and reported;
+    anything else is refused with nothing written. Never a push, never a new merge commit."""
+    repo = feat.repo()
+    S, T = sha(repo, a.sha), sha(repo, a.base_sha)
+    b_tip, base_tip = need_sha(repo, a.integration), need_sha(repo, a.merge_to)
+    problems = [] if S else ["--sha %s is not a commit" % a.sha]
+    problems += [] if T else ["--base-sha %s is not a commit" % a.base_sha]
+    problems += ["--merge-to is the integration line itself"] if a.merge_to == a.integration else []
+    problems += ["--by and --consent are the deciding user and a reference to the consent"] \
+        if not (one_line(a.by) and one_line(a.consent)) else []
+    if S and b_tip != S:
+        problems.append("%s is at %s, not the consented %s" % (a.integration, b_tip[:12], S[:12]))
+    ev = release_eval(feat, rn, repo, b_tip)
+    if not ev["releasable"]:
+        problems.append("%s is not releasable: %s" % (rn, "; ".join(
+            ev["waiting"] + ["%d blocking lines" % len(ev["blocking"])] * bool(ev["blocking"]) + ev["errors"])))
+    problems += ["lint " + g for g in ev["gaps"]]
+    if git(repo, "check-ref-format", "refs/tags/" + a.tag, check=False).returncode:
+        problems.append("--tag %r is not a valid tag name" % a.tag)
+    head = git(repo, "symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
+    if head != a.integration:
+        problems.append("the checkout of F is on %s, not %s: the evaluated files must be the line's" % (
+            head or "a detached HEAD", a.integration))
+    elif dirty(repo):
+        problems.append("the checkout of F has uncommitted changes: commit the records on %s first" % a.integration)
+    base_wt = worktree_of(repo, a.merge_to)
+    if base_wt and dirty(base_wt):
+        problems.append("the checkout of %s (%s) has uncommitted changes" % (a.merge_to, base_wt))
+    key = release_key(feat, rn)
+    tagged = sha(repo, "refs/tags/" + a.tag) is not None
+    want = {"target": S, "release": key, "merge_to": a.merge_to, "from": T, "integration": a.integration,
+            "decided": one_line(a.by), "consent": one_line(a.consent)}
+    old = next((t for t in release_tags(repo) if t["tag"] == a.tag), None)
+    if tagged and (not old or any(old[k] != v for k, v in want.items())):  # same release, sha AND consent
+        problems.append("tag %s exists and is not this confirmation's tag (%s): collision" % (a.tag, ", ".join(
+            "%s %s" % (k.replace("_", "-"), old[k]) for k, v in want.items() if old[k] != v) if old else "not ours"))
+    merged = bool(S) and base_tip == S
+    if S and T and not merged:
+        if base_tip != T:
+            problems.append("%s is at %s, neither the consented base %s nor %s" % (a.merge_to, base_tip[:12], T[:12], S[:12]))
+        elif not is_ancestor(repo, T, S):
+            problems.append("%s@%s is not an ancestor of %s: diverged — stop (no new merge)" % (a.merge_to, T[:12], S[:12]))
+    elif merged and T and not is_ancestor(repo, T, S):
+        problems.append("--base-sha %s is not an ancestor of %s" % (T[:12], S[:12]))
+    if problems:
+        return {"ok": False, "refused": "nothing written", "problems": problems}, 1
+    out = {"ok": True, "confirmed": True, "release": rn, "sha": S, "tag": a.tag, "merge_to": a.merge_to,
+           "base_sha_before": base_tip, "partial": [], "unchanged": merged and tagged}
+    if merged and tagged:
+        return out, 0
+    if merged:
+        out["partial"].append("%s was already at %s: only the tag is created" % (a.merge_to, S[:12]))
+    elif base_wt:  # checked out: fast-forward that checkout (git refuses to overwrite local changes)
+        ff = git(base_wt, "merge", "--ff-only", S, check=False)
+        if ff.returncode:
+            return {"ok": False, "refused": "fast-forward failed: nothing written",
+                    "problems": [(ff.stderr or ff.stdout).strip()]}, 1
+    else:
+        git(repo, "update-ref", "refs/heads/" + a.merge_to, S, T)  # compare-and-swap
+    if tagged:
+        out["partial"].append("tag %s was already on %s: only the fast-forward is done" % (a.tag, S[:12]))
+        return out, 0
+    msg = "release %s\n\n%s: %s\nintegration: %s @ %s\nmerge-to: %s (from %s)\ndecided: %s\nconsent: %s\n" % (
+        key, TAG_KEY, key, a.integration, S, a.merge_to, T, one_line(a.by), one_line(a.consent))
+    t = git(repo, "tag", "-a", a.tag, S, "-m", msg, check=False)
+    if t.returncode:
+        return {"ok": False, "confirmed": False, "partial": ["%s fast-forwarded to %s; the tag was NOT created: %s — "
+                                                             "repeat the identical command" % (
+                                                                 a.merge_to, S[:12], (t.stderr or t.stdout).strip())]}, 1
+    return out, 0
+
+
+def cmd_release(a):
+    feat = Feature(a.feature_dir)
+    need = RELEASE_OPTS[a.op]
+    given = {k for k in ("integration", "entries", "id", "lines", "sha", "tag", "merge_to", "base_sha", "by", "consent")
+             if getattr(a, k) is not None}
+    if given != need:
+        flag = lambda ks: " ".join("--" + k.replace("_", "-") for k in sorted(ks))
+        raise UsageError("release %s takes %s" % (a.op, flag(need)) + "".join(
+            "; %s: %s" % (what, flag(ks)) for what, ks in (("not an option of " + a.op, given - need),
+                                                          ("missing", need - given)) if ks))
+    if a.replace and a.op not in ("close", "waive"):
+        raise UsageError("--replace is for release close|waive only")
+    rn = a.release
+    if a.op == "list":
+        repo = feat.repo()
+        return emit(release_eval(feat, rn, repo, need_sha(repo, a.integration)))
+    if a.op in ("close", "waive"):
+        r, code = release_record(feat, rn, a.op, a.entries, a.replace)
+    elif a.op == "group":
+        r, code = release_group(feat, rn, a.id, a.lines)
+    else:
+        r, code = release_confirm(feat, rn, a)
+    return emit(r, code)
+
+
+# ---- review ingest: the reviewers' reports → one action (the composer never reads the findings) ------
+REVIEW_VERDICTS = {"verifier": ("PASS", "FAIL", "SKIP"), "code-review": ("APPROVE", "CHANGES", "BLOCKED")}
+DEPTH_REVIEWERS = {"standard": ("verifier",), "deep": ("verifier", "code-review")}
+REPORT_KEYS = ("version", "id", "attempt", "reviewer", "sha", "spec_hash", "verdict", "failures", "findings")
+REPORT_OPTIONAL = ("checks", "notes", "objections")
+REVIEW_FINDING_KEYS = ("sev", "at", "issue", "fix", "evidence")
+REVIEW_SEVS, REVIEW_FIXES = ("HIGH", "MED", "LOW"), ("Patch", "Defer", "Decision")
+REWORK_CAP = 2  # rework cycles per block; a third failed review parks it
+REWORK_REASONS = ("candidate-red", "merge-conflict", "other")
+OBJECTION_CAP = 40  # words
+
+
+def is_int(x):
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
+def nonempty(x):
+    return isinstance(x, str) and bool(x.strip())
+
+
+def report_problems(r, where):
+    """Shape and type problems of one review report (the schema is CLI.md's): every field is
+    type-checked before it is used, so a malformed report is refused, never a crash."""
+    if not isinstance(r, dict):
+        return ["%s: not a JSON object" % where]
+    out = ["%s: missing %s" % (where, k) for k in REPORT_KEYS if k not in r]
+    out += ["%s: unknown key %s" % (where, k) for k in r if k not in REPORT_KEYS + REPORT_OPTIONAL]
+    if out:
+        return out
+    if not is_int(r["version"]) or r["version"] != 1:
+        out.append("%s: version %r, not 1" % (where, r["version"]))
+    if not is_int(r["attempt"]) or r["attempt"] < 1:
+        out.append("%s: attempt is a positive integer" % where)
+    for k in ("id", "sha", "spec_hash", "reviewer", "verdict"):
+        if not nonempty(r[k]):
+            out.append("%s: %s is a non-empty string" % (where, k))
+    if not isinstance(r["reviewer"], str) or r["reviewer"] not in REVIEW_VERDICTS:
+        return out + ["%s: reviewer %r is not %s" % (where, r["reviewer"], " | ".join(REVIEW_VERDICTS))]
+    if not isinstance(r["verdict"], str) or r["verdict"] not in REVIEW_VERDICTS[r["reviewer"]]:
+        out.append("%s: %s verdict %r is not %s" % (where, r["reviewer"], r["verdict"],
+                                                    " | ".join(REVIEW_VERDICTS[r["reviewer"]])))
+    if not isinstance(r["failures"], list) or not all(nonempty(x) for x in r["failures"]):
+        out.append("%s: failures is a list of non-empty strings" % where)
+    elif r["failures"] and r["verdict"] in ("PASS", "APPROVE"):
+        out.append("%s: verdict %s with %d failures" % (where, r["verdict"], len(r["failures"])))
+    if not isinstance(r["findings"], list):
+        out.append("%s: findings is a list" % where)
+    else:
+        for k, f in enumerate(r["findings"]):
+            at = "%s finding %d" % (where, k)
+            if not isinstance(f, dict) or set(f) != set(REVIEW_FINDING_KEYS):
+                out.append("%s: keys must be exactly %s" % (at, ", ".join(REVIEW_FINDING_KEYS)))
+            elif not isinstance(f["evidence"], str) or not all(nonempty(f[x]) for x in ("sev", "at", "issue", "fix")):
+                out.append("%s: every field is a string; sev, at, issue, fix non-empty" % at)
+            elif f["sev"] not in REVIEW_SEVS:
+                out.append("%s: sev %r is not %s" % (at, f["sev"], " | ".join(REVIEW_SEVS)))
+            elif f["fix"] not in REVIEW_FIXES:
+                out.append("%s: fix %r is not %s" % (at, f["fix"], " | ".join(REVIEW_FIXES)))
+            elif not LOCATOR.match(clean_field(f["at"])):
+                out.append("%s: at %r is not ONE location: `file:line[-line]`, `path#symbol` or `path` (a list is one "
+                           "finding per location)" % (at, f["at"]))
+    obj = r.get("objections", [])
+    if not isinstance(obj, list):
+        out.append("%s: objections is a list" % where)
+    else:
+        for k, o in enumerate(obj):
+            if not isinstance(o, dict) or set(o) != {"about", "text"} or not nonempty(o["about"]) \
+                    or not nonempty(o["text"]):
+                out.append("%s objection %d: exactly about and text, non-empty strings" % (where, k))
+    return out
+
+
+def clean_field(s):
+    """One line, no field separator: safe inside a seven-field pre-release.md line."""
+    return one_line(s).replace("·", "-")
+
+
+def rework_cycles(feat, bid):
+    """([(n, path)] of the rework cycles written, the next n). A pre-release group's rework/<id>-1.md
+    is its spec (`release group`), not a cycle: its cycles are n ≥ 2."""
+    got = []
+    for p in glob.glob(os.path.join(feat.dir, "rework", bid + "-*.md")):
+        m = re.match(r"^%s-(\d+)\.md$" % re.escape(bid), os.path.basename(p))
+        if m:
+            got.append((int(m.group(1)), p))
+    got.sort()
+    cycles = [(n, p) for n, p in got if bid in feat.row or n >= 2]
+    return cycles, (got[-1][0] if got else 0) + 1
+
+
+def rework_next(feat, bid, lines, summary):
+    """Write the next rework/<bid>-<n>.md (the ONE numbering and cap of ingest and `rework write`):
+    ({action: rework, rework, reason} | {action: park, rework: None, reason: "rework cap…"})."""
+    cycles, n = rework_cycles(feat, bid)
+    if len(cycles) >= REWORK_CAP:
+        return {"action": "park", "rework": None, "reason": "rework cap: %d cycles used (%s); %s" % (
+            len(cycles), ", ".join(os.path.relpath(p, feat.dir) for _, p in cycles), summary)}
+    path = os.path.join(feat.dir, "rework", "%s-%d.md" % (bid, n))
+    write_text(path, "\n".join(["# Rework %s — cycle %d" % (bid, n), ""] + lines).rstrip("\n") + "\n")
+    return {"action": "rework", "rework": path, "reason": "%s: cycle %d of %d" % (summary, len(cycles) + 1, REWORK_CAP)}
+
+
+def drop_review_proof(feat, bid):
+    """A non-promote outcome invalidates the block's review proof: `proof check`/`compose start` refuse."""
+    p = os.path.join(feat.dir, "review-proof", bid + ".json")
+    if os.path.isfile(p):
+        os.remove(p)
+        return True
+    return False
+
+
+def review_release(feat, bid):
+    """The release a finding of `bid` is filed under: the block's row, or a group's frontmatter."""
+    if bid in feat.row:
+        rel = feat.row[bid].get("release")
+    else:
+        first = os.path.join(feat.dir, "rework", bid + "-1.md")
+        rel = board.parse_frontmatter(read(first))[0].get("release") if os.path.isfile(first) else None
+    return str(rel) if rel not in (None, "") else None
+
+
+def finding_block(feat, bid, at):
+    """The block a finding of `bid` is filed under. A group's finding names one of its `blocks:` —
+    the one whose grouped lines cite the finding's file, when exactly one does, else the first —
+    so `release group` accepts it later. A legacy group (no blocks) keeps its own id."""
+    if bid in feat.row:
+        return bid
+    first = os.path.join(feat.dir, "rework", bid + "-1.md")
+    if not os.path.isfile(first):
+        return bid
+    fm, body = board.parse_frontmatter(read(first))
+    blocks = [str(b) for b in fm.get("blocks") or []] if isinstance(fm.get("blocks"), list) else []
+    if not blocks:
+        return bid
+    path, cited = locator_path(clean_field(at)), set()
+    for l in body.splitlines():
+        m = PRE_LINE.match(l)
+        parts = [p.strip() for p in m.group(4).split("·")] if m else []
+        if len(parts) >= 4 and parts[1] in blocks and locator_path(parts[3]) == path:
+            cited.add(parts[1])
+    return cited.pop() if len(cited) == 1 else blocks[0]
+
+
+def ingest_marker(feat, bid, attempt):
+    return os.path.join(feat.dir, "review-ingest", "%s-%d.json" % (bid, attempt))
+
+
+def review_ingest(feat, a):
+    """Validate the whole set of reports first (nothing written on any problem), then: file the
+    MED/LOW deferrals in pre-release.md (idempotent, every attempt), and decide ONE action —
+    decide (a Decision finding, a code-review BLOCKED) · blocked (a verifier SKIP) · rework (a FAIL,
+    a HIGH, a CHANGES: one rework/<id>-<n>.md; park once REWORK_CAP cycles exist) · promote (the
+    review proof recorded, as `proof record review`). Every non-promote outcome drops the review
+    proof. The result is recorded per (id, attempt, reports, answers): an identical retry returns it.
+    `--answered D-NNNN…` (notes of F/decisions.md): the Decision findings (and a code-review BLOCKED)
+    are answered — the only re-ingest of an attempt allowed is a `decide` one with answers."""
+    repo, bid, problems = feat.repo(), a.id, []
+    S = sha(repo, a.sha)
+    problems += [] if S else ["--sha %s is not a commit" % a.sha]
+    tip = sha(repo, PREFIX + bid)
+    if not tip:
+        problems.append("no branch %s%s" % (PREFIX, bid))
+    elif S and tip != S:
+        problems.append("--sha %s is not the tip of %s%s (%s): review the tip" % (a.sha, PREFIX, bid, tip[:12]))
+    raw = []
+    for path in a.file:
+        try:
+            raw.append((path, open(path, "rb").read()))
+        except OSError as e:
+            problems.append("%s: unreadable (%s)" % (path, e))
+    hashes = sorted(hashlib.sha256(b).hexdigest() for _, b in raw)
+    mpath, answered = ingest_marker(feat, bid, a.attempt), sorted(set(a.answered or []))
+    mark = load_json(mpath) if os.path.isfile(mpath) else None
+    if mark and not problems:  # checked BEFORE the spec: a group's own rework file changes its spec
+        same = mark.get("reports") == hashes and mark.get("sha") == S and mark.get("depth") == a.depth
+        if same and sorted(mark.get("answered") or []) == answered:
+            return dict(mark.get("result") or {}, repeat=True), 0
+        if not (same and answered and (mark.get("result") or {}).get("action") == "decide"):
+            return {"ok": False, "refused": "nothing written", "problems": [
+                "attempt %d of %s was already ingested with other reports (or sha, depth, answers): a new review "
+                "is a new attempt; only a `decide` result is ingested again, with --answered" % (a.attempt, bid)]}, 1
+    npath = os.path.join(feat.dir, "decisions.md")
+    have_notes = {e["id"] for e in parse_notes(npath)[0]} if answered and os.path.isfile(npath) else set()
+    problems += ["--answered %s: no such entry in F/decisions.md (record the answer first)" % d
+                 for d in answered if d not in have_notes]
+    try:
+        cur = spec_hash(feat, bid)
+    except UsageError as e:
+        cur = None
+        problems.append(str(e))
+    if cur and a.spec_hash != cur:
+        problems.append("--spec-hash is not the current spec hash (%s): the spec changed since the reviewed "
+                        "pack — re-pack, review again" % cur[:12])
+    reports, seen = [], {}
+    for path, b in raw:
+        where = os.path.basename(path)
+        try:
+            r = json.loads(b.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as e:
+            problems.append("%s: unreadable JSON (%s)" % (path, e))
+            continue
+        bad = report_problems(r, where)
+        if bad:
+            problems += bad
+            continue
+        problems += ["%s: id %s, not %s" % (where, r["id"], bid)] if r["id"] != bid else []
+        problems += ["%s: attempt %s, not %s" % (where, r["attempt"], a.attempt)] if r["attempt"] != a.attempt else []
+        if S and sha(repo, r["sha"]) != S:
+            problems.append("%s: sha %s is not --sha %s" % (where, r["sha"], S[:12]))
+        problems += ["%s: spec_hash is not --spec-hash" % where] if r["spec_hash"] != a.spec_hash else []
+        if r["reviewer"] in seen:
+            problems.append("%s: a second %s report (%s)" % (where, r["reviewer"], seen[r["reviewer"]]))
+        seen[r["reviewer"]] = where
+        reports.append((path, r))
+    need = DEPTH_REVIEWERS[a.depth]
+    problems += ["depth %s requires a %s report" % (a.depth, x) for x in need if x not in seen]
+    problems += ["depth %s takes no %s report" % (a.depth, x) for x in seen if x not in need]
+    rel = review_release(feat, bid)
+    deferred = [(r["reviewer"], f) for _, r in reports for f in r["findings"]
+                if f["sev"] in ("MED", "LOW") and f["fix"] != "Decision"]
+    if deferred and not rel:
+        problems.append("%s has no release: its MED/LOW findings cannot be filed in pre-release.md" % bid)
+    if answered and not any(f["fix"] == "Decision" for _, r in reports for f in r["findings"]) and \
+            not any(r["reviewer"] == "code-review" and r["verdict"] == "BLOCKED" for _, r in reports):
+        problems.append("--answered: no Decision finding or code-review BLOCKED to answer")
+    if problems:
+        return {"ok": False, "refused": "nothing written", "problems": problems}, 1
+
+    # -- deferrals: every attempt's, each finding once (release, block, sev, at, issue)
+    ppath = os.path.join(feat.dir, "pre-release.md")
+    have = {tuple(f[k] for k in ("release", "block", "sev", "locator", "issue"))
+            for f in parse_findings(feat) if "finding" in f}
+    today, new = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"), []
+    tag = "" if bid in feat.row else "[%s] " % bid  # a group's finding keeps the group id in its issue
+    for reviewer, f in deferred:
+        key = (rel, finding_block(feat, bid, f["at"]), f["sev"], clean_field(f["at"]), tag + clean_field(f["issue"]))
+        if key not in have:
+            have.add(key)
+            new.append("- [ ] %s" % " · ".join(key + (reviewer, today)))
+    if new:
+        old = read(ppath) if os.path.isfile(ppath) else "# Pre-release findings\n\n"
+        write_text(ppath, old + ("" if old.endswith("\n") else "\n") + "\n".join(new) + "\n")
+
+    allf = [(r["reviewer"], f) for _, r in reports for f in r["findings"]]
+    fails = [(r["reviewer"], x) for _, r in reports for x in r["failures"]]
+    counts = {s: sum(1 for _, f in allf if f["sev"] == s) for s in REVIEW_SEVS}
+    counts["failures"] = len(fails)
+    verdicts = {r["reviewer"]: r["verdict"] for _, r in reports}
+    vtext = " · ".join("%s %s" % kv for kv in sorted(verdicts.items()))
+    objections, warnings = [], []
+    for path, r in reports:  # an objection over the cap is truncated, never refused
+        for k, o in enumerate(r.get("objections") or []):
+            words = one_line(o["text"]).split()
+            if len(words) > OBJECTION_CAP:
+                warnings.append("%s objection %d: %d words, truncated to %d" % (
+                    os.path.basename(path), k, len(words), OBJECTION_CAP))
+            objections.append(dict(reviewer=r["reviewer"], about=one_line(o["about"]),
+                                   text=" ".join(words[:OBJECTION_CAP])))
+    out = {"ok": True, "action": None, "reason": None, "rework": None, "counts": counts, "appended": len(new),
+           "proof": False, "objections": objections}
+    if warnings:
+        out["warnings"] = warnings
+    if answered:
+        out["answered"] = answered
+    brief = lambda items: "; ".join(("%s %s" % (w, clean_field(t))).strip()[:160] for w, t in items[:3]) + \
+        (" (+%d more)" % (len(items) - 3) if len(items) > 3 else "")
+    decisions = [(f["at"], f["issue"]) for _, f in allf if f["fix"] == "Decision" and not answered]
+    high = [(rv, f) for rv, f in allf if f["sev"] == "HIGH" and not (answered and f["fix"] == "Decision")]
+    patch = [(rv, f) for rv, f in allf if f["sev"] != "HIGH" and f["fix"] == "Patch"]
+    if decisions or (verdicts.get("code-review") == "BLOCKED" and not answered):
+        out.update(action="decide", reason="a human/product choice: " + (
+            brief(decisions) or "code-review BLOCKED — see " + seen.get("code-review", "")))
+    elif verdicts.get("verifier") == "SKIP":
+        out.update(action="blocked", reason="verifier SKIP (a strategy problem outside the block): " +
+                   (brief([("", x) for rv, x in fails if rv == "verifier"]) or "see " + seen["verifier"]))
+    elif fails or high or verdicts.get("verifier") == "FAIL" or verdicts.get("code-review") == "CHANGES":
+        body = ["review: attempt %d · sha %s · spec %s" % (a.attempt, S, a.spec_hash), "verdicts: " + vtext,
+                "reports: " + " · ".join(p for p, _ in reports), ""]
+        if fails:
+            body += ["## Failures", ""] + ["- [%s] %s" % (rv, one_line(x)) for rv, x in fails] + [""]
+        if high:
+            body += ["## HIGH findings", ""] + ["- [%s] %s · %s — fix: %s. Evidence: %s" % (
+                rv, f["at"], one_line(f["issue"]), f["fix"], one_line(f["evidence"]) or "-") for rv, f in high] + [""]
+        if patch:
+            body += ["## MED/LOW to patch in this cycle (also filed in pre-release.md)", ""] + [
+                "- [%s] %s · %s · %s. Evidence: %s" % (rv, f["sev"], f["at"], one_line(f["issue"]),
+                                                      one_line(f["evidence"]) or "-") for rv, f in patch] + [""]
+        out.update(rework_next(feat, bid, body, "%d failures, %d HIGH (%s)" % (len(fails), len(high), vtext)))
+    else:
+        record_review_proof(feat, bid, S, cur)
+        out.update(action="promote", reason="every report passes (%s), no HIGH%s" % (
+            vtext, "; the Decision findings answered by " + ", ".join(answered) if answered else ""), proof=True)
+    if out["action"] != "promote":
+        out["proof_dropped"] = drop_review_proof(feat, bid)
+    write_json(mpath, {"id": bid, "attempt": a.attempt, "depth": a.depth, "sha": S, "reports": hashes,
+                       "answered": answered, "result": out})
+    return out, 0
+
+
+def review_template(feat, a):
+    """The ready-to-fill report skeleton: the identity filled, every other value a placeholder that
+    states its rule (an unfilled placeholder is refused by ingest). --out writes it (the report path)."""
+    if a.reviewer not in REVIEW_VERDICTS:
+        raise UsageError("review template takes --reviewer %s" % " | ".join(REVIEW_VERDICTS))
+    if not (a.attempt and a.attempt >= 1):
+        raise UsageError("--attempt is a positive integer")
+    cur = spec_hash(feat, a.id)
+    if a.spec_hash != cur:
+        return {"ok": False, "refused": "--spec-hash is not the current spec hash (%s): re-pack" % cur[:12]}, 1
+    t = {"version": 1, "id": a.id, "attempt": a.attempt, "reviewer": a.reviewer, "sha": a.sha, "spec_hash": cur,
+         "verdict": " | ".join(REVIEW_VERDICTS[a.reviewer]) + " (keep exactly one)",
+         "checks": ["<what you ran and its result>"],
+         "failures": ["<one failed AC or check per string; [] with %s>" % REVIEW_VERDICTS[a.reviewer][0]],
+         "findings": [{"sev": "HIGH | MED | LOW (keep one)",
+                       "at": "<ONE location: path:12 or path:12-30 or path#Symbol or path; never a list "
+                             "(path:12,40): one finding per location>",
+                       "issue": "<the problem, one line>", "fix": "Patch | Defer | Decision (keep one)",
+                       "evidence": "<why: the line, the failing input; may be empty>"}],
+         "objections": [{"about": "<D-NNNN or a topic>",
+                         "text": "<your objection to a decision, at most %d words>" % OBJECTION_CAP}],
+         "notes": "<optional; replace every <...> placeholder, [] for an empty list>"}
+    if not a.out:
+        print(json.dumps(t, indent=2, ensure_ascii=False))
+        return None, 0
+    write_text(os.path.abspath(a.out), json.dumps(t, indent=2, ensure_ascii=False) + "\n")
+    return {"ok": True, "file": os.path.abspath(a.out)}, 0
+
+
+def cmd_review(a):
+    feat = Feature(a.feature_dir)
+    if a.op == "template":
+        if a.file or a.depth or a.answered:
+            raise UsageError("review template takes no --file, --depth or --answered")
+        out, code = review_template(feat, a)
+        return code if out is None else emit(out, code)
+    if not a.file or not a.depth:
+        raise UsageError("review ingest takes --depth and --file")
+    if a.reviewer or a.out:
+        raise UsageError("review ingest takes no --reviewer or --out")
+    return emit(*review_ingest(feat, a))
+
+
+# ---- open questions: F/open-questions/<id>.md, closed by a recorded decision ------------------------
+def question_close(feat, a):
+    """Move F/open-questions/<id>.md to F/open-questions/closed/ (git mv if tracked) with a trailer
+    naming the decision that answers it; `status`/`ready` read only the top-level files."""
+    src = os.path.join(feat.dir, "open-questions", a.id + ".md")
+    if not os.path.isfile(src):
+        return {"ok": False, "refused": "no open question %s" % os.path.relpath(src, feat.dir)}, 1
+    npath = os.path.join(feat.dir, "decisions.md")
+    if a.decision not in {e["id"] for e in (parse_notes(npath)[0] if os.path.isfile(npath) else [])}:
+        return {"ok": False, "refused": "%s is not an entry of F/decisions.md: record the answer first "
+                "(`why append`)" % a.decision}, 1
+    cdir, n = os.path.join(feat.dir, "open-questions", "closed"), 1
+    dst = os.path.join(cdir, a.id + ".md")
+    while os.path.exists(dst):  # the same id parked and closed again
+        n += 1
+        dst = os.path.join(cdir, "%s-%d.md" % (a.id, n))
+    os.makedirs(cdir, exist_ok=True)
+    tracked = git(feat.dir, "ls-files", "--error-unmatch", src, check=False).returncode == 0
+    git(feat.dir, "mv", src, dst) if tracked else shutil.move(src, dst)
+    day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    text = read(dst)
+    write_text(dst, text + ("" if text.endswith("\n") else "\n") + "\nClosed by %s on %s\n" % (a.decision, day))
+    return {"ok": True, "id": a.id, "decision": a.decision, "path": dst, "git": tracked,
+            "relinked": relink_notes(feat, src, dst)}, 0
+
+
+def cmd_question(a):
+    return emit(*question_close(Feature(a.feature_dir), a))
+
+
+def rework_write(feat, a):
+    """A rework cycle that is not a review's (a red candidate, a merge conflict): the next
+    rework/<id>-<n>.md under the same numbering and cap as `review ingest`; drops the review proof."""
+    try:
+        spec_hash(feat, a.id)  # a block, or a group with its rework/<id>-1.md
+    except UsageError as e:
+        return {"ok": False, "refused": "nothing written", "problems": [str(e)]}, 1
+    try:
+        ev = sys.stdin.read() if a.evidence == "-" else read(a.evidence)
+    except OSError as e:
+        return {"ok": False, "refused": "nothing written", "problems": ["--evidence: %s" % e]}, 1
+    if not ev.strip():
+        return {"ok": False, "refused": "nothing written", "problems": ["--evidence is empty"]}, 1
+    out = rework_next(feat, a.id, ["reason: %s" % a.reason, "", "## Evidence", "", ev.strip(), ""], a.reason)
+    out = dict({"ok": True}, **out)
+    out["proof_dropped"] = drop_review_proof(feat, a.id)
+    return out, 0
+
+
+def cmd_rework(a):
+    return emit(*rework_write(Feature(a.feature_dir), a))
+
+
+# ---- state commit: the composer's bookkeeping, exactly <output_dir>, on the integration line --------
+def state_commit(feat, a):
+    repo = feat.repo()
+    rel = os.path.relpath(feat.odir, repo)
+    if rel == "." or rel.startswith(".."):
+        return {"ok": False, "refused": "the output_dir %s is not a directory strictly inside the repository %s"
+                % (feat.odir, repo)}, 1
+    head = git(repo, "symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
+    if head != a.integration:
+        return {"ok": False, "refused": "the checkout of F (%s) is on %s, not %s" % (
+            repo, head or "a detached HEAD", a.integration)}, 1
+    if open_candidates(repo):
+        return {"ok": False, "refused": "a candidate is open: commit before compose start or after compose "
+                "promote, never between", "open": open_candidates(repo)}, 1
+    def staged():  # every staged path (added, modified, deleted), unquoted
+        parts = git(repo, "diff", "--cached", "--name-only", "--no-renames", "-z").stdout.split("\0")
+        return [p for p in parts if p]
+    prefix = rel.replace(os.sep, "/").rstrip("/") + "/"
+    outside = [p for p in staged() if not p.startswith(prefix)]
+    if outside:
+        return {"ok": False, "refused": "changes outside %s are staged: unstage them (never committed with the "
+                "state)" % prefix, "outside": outside}, 1
+    git(repo, "add", "-A", "--", rel)
+    paths = staged()
+    if not paths:
+        return {"ok": True, "committed": False}, 0
+    c = git(repo, "commit", "-q", "-m", a.m, check=False)
+    if c.returncode:
+        return {"ok": False, "refused": "git commit failed: %s" % (c.stderr or c.stdout).strip(), "paths": paths}, 1
+    return {"ok": True, "committed": True, "sha": sha(repo, "HEAD"), "paths": paths}, 0
+
+
+def cmd_state(a):
+    return emit(*state_commit(Feature(a.feature_dir), a))
+
+
 # ---- CLI ----------------------------------------------------------------------------------------
+HELP = {  # `MM <command> --help`: what it reads, writes, refuses — the exact semantics are CLI.md's
+    "status": "Read-only. Lists anomalies (doing without worktree, leftover candidate, stale review proof, ...),\n"
+              "the outcome (done|work|idle|anomaly) and the resume blocks. Exit 1 if any anomaly.",
+    "lint": "Read-only. The exact structural checks of the manifest, block files, ADRs, decisions.md and\n"
+            "pre-release.md; each gap names its bounce_to. --adrs DIR: the ADRs alone. Exit 1 on a gap.",
+    "why": "check: validate a decision-notes file (read-only). append: add an entry file's D-NNNN entries only\n"
+           "if the whole file still passes (identical = no-op; only Debate/Result/ADR updates); else nothing written.\n"
+           "import <decisions.md> --handoff H: a worker handoff's entries; their ids are local — the next free ids\n"
+           "are assigned, references remapped; idempotent (an entry imported before adds nothing); prints the mapping.\n"
+           "check H --into <decisions.md>: validate that import without writing (the worker, before returning).\n"
+           "template [file]: print a valid entry skeleton with the file's next id.\n\nThe rules `check` enforces:\n"
+           "- an entry = `### D-NNNN · <title, ≤ %d words>`, then `- <Field>: <value>` lines: EVERY field is ONE\n"
+           "  physical line (never wrapped), given once, non-empty; any other line is an error.\n"
+           "- required: %s; optional: %s.\n"
+           "- word caps (links count their text, URLs excluded): %s; the whole entry ≤ %d.\n"
+           "- Meta = `YYYY-MM-DD; scope: feature|block:<id>|boundary:<id>|release:<Rn>; status: accepted|superseded\n"
+           "  [; sha: <hex>]`, nothing else; beside a manifest the scope names a row or release of it.\n"
+           "- Hypothesis, Check, Result: ALL THREE `n/a — decided by <reference>` (an id like REQ-3/ADR-0002 or a\n"
+           "  link), or none of them.\n"
+           "- Result: a link to its evidence, or `untested — <reason>` / `inconclusive — <reason>`.\n"
+           "- By = `decided: <who>; recorded: <who>`; Docs = 1-3 links; ADR = a link; Confidence = `low|medium|high\n"
+           "  — <why>`; every local link exists (relative to the file).\n"
+           "- ids ascending: a new entry takes the highest id + 1, appended at the end; Supersedes names one\n"
+           "  earlier id (which becomes superseded); an existing entry changes only Debate/Result/ADR." % (
+               TITLE_CAP, ", ".join(k for k in NOTE_FIELDS if k not in NOTE_OPTIONAL), ", ".join(NOTE_OPTIONAL),
+               ", ".join("%s %d" % (k, c) for k, c in NOTE_FIELDS.items() if c), NOTE_CAP),
+    "manifest": "render: write every block file from its building-blocks.yaml row (state folder kept, identical\n"
+                "files untouched); an incomplete row, a duplicate or a context change refuses, writing nothing.",
+    "ready": "Read-only. Blocks in todo/ whose dependencies are integrated, in build order (scaffold first),\n"
+             "plus finishable blocks, open spikes and resume blocks.",
+    "move": "Moves a block file todo->doing, doing->todo, doing->done (only if finishable), git mv if tracked;\n"
+            "done deletes its progress. Anything else: ok:false + refused, nothing moved (exit 1).",
+    "pack": "Read-only. Prints the block's context (Markdown) headed by spec_hash: block, row, boundaries, ADRs,\n"
+            "lessons, decision notes, open findings, a fresh checkpoint, --extra files.",
+    "progress": "record: write F/progress/<id>.json (a worker's checkpoint) atomically. Refused, nothing written:\n"
+                "not in doing/, head not block/<id>'s tip, dirty worktree, spec changed, no progress.",
+    "diff-range": "Read-only. The review range from the merge-base of --base and --head (run in the repo).",
+    "proof": "record review: write F/review-proof/<id>.json (refused if --spec-hash is not the current one).\n"
+             "record gate: F/gate-proof/<side>/proof.json. check: fresh or stale_because (exit 1 when stale).",
+    "compose": "start: candidate worktree = line tip + --branch (refused without a fresh review proof, or while a\n"
+               "candidate is open). promote: fast-forward the line, write integrated/<id>.json. abort: remove it.",
+    "release": "list: the release evaluation (read-only). group: write rework/pre-<Rn>-<k>-1.md. close|waive:\n"
+               "append records + flip marks, the whole batch validated first. confirm: ff the base + tag (consent).",
+    "question": "close: move F/open-questions/<id>.md to open-questions/closed/ with `Closed by D-NNNN on <date>`\n"
+                "(git mv if tracked); refused unless the question exists and --decision is an entry of F/decisions.md.",
+    "review": "template: print (or --out: write) a report skeleton for --reviewer, its placeholders stating each rule.\n"
+              "ingest: validate the reviewers' JSON reports (full set for --depth, same id/attempt/sha/spec_hash;\n"
+              "--sha the tip of block/<id>, --spec-hash current), else nothing written. Files MED/LOW in pre-release.md\n"
+              "(idempotent), then ONE action: promote (review proof written) | rework (rework/<id>-<n>.md) | park\n"
+              "(rework cap) | decide | blocked; a non-promote action drops the review proof. An identical retry\n"
+              "of an attempt returns its recorded result. --answered D-NNNN (repeatable, notes of F/decisions.md): the\n"
+              "Decision findings are answered — re-ingest a `decide` attempt with them to promote without code.",
+    "codemap": "Read-only. Markdown on stdout, at --ref: per side (profile `sides:`), per module (architecture.md\n"
+               "`modules:` [{id, side, root, entry_files}] in a YAML block; else per top directory), the files git tracks,\n"
+               "entry files marked with --files. Discovery only: a module's contract stays the project's dependency lint.",
+    "rework": "write: the next rework/<id>-<n>.md (same numbering and 2-cycle cap as review ingest; a group's -1\n"
+              "is its spec) from --evidence; at the cap: action park, nothing written. Drops the review proof.",
+    "state": "commit: on the checkout of F, on --integration only, no candidate open: stage every change under\n"
+             "<output_dir> and commit it; refused if anything outside it is staged. Nothing to commit: committed:false.",
+}
+
+
 def build_parser():
-    ap = argparse.ArgumentParser(prog="mismagent.py", description="mismAgent build tool — see CLI.md")
+    ap = argparse.ArgumentParser(prog="mismagent.py", description="mismAgent build tool — `<command> --help` for "
+                                 "each; exact semantics in CLI.md")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def cmd(name, fn, hlp, *pos):
-        p = sub.add_parser(name, help=hlp)
+        p = sub.add_parser(name, help=hlp, description=HELP[name], formatter_class=argparse.RawDescriptionHelpFormatter)
         for x in pos:
             p.add_argument(x) if isinstance(x, str) else p.add_argument(x[0], choices=x[1])
         p.set_defaults(fn=fn)
@@ -1704,12 +3346,27 @@ def build_parser():
     p = cmd("lint", cmd_lint, "exact structural checks (F, or --adrs DIR before any manifest)")
     p.add_argument("feature_dir", nargs="?")
     p.add_argument("--adrs")
-    cmd("why", cmd_why, "check | append decision notes", ("op", ("check", "append")), "file").add_argument("--entry")
+    p = cmd("why", cmd_why, "check | append | import | template decision notes",
+            ("op", ("check", "append", "import", "template")))
+    p.add_argument("file", nargs="?")
+    p.add_argument("--entry")
+    p.add_argument("--handoff")
+    p.add_argument("--into")
+    p = cmd("codemap", cmd_codemap, "where the existing code is (Markdown; discovery only)", "output_dir")
+    p.add_argument("--ref", required=True)
+    p.add_argument("--side")
+    p.add_argument("--module")
+    p.add_argument("--files", action="store_true")
     cmd("manifest", cmd_manifest, "render the block files from the manifest", ("op", ("render",)), "feature_dir")
     cmd("ready", cmd_ready, "ready blocks in order + finishable", "feature_dir")
     cmd("move", cmd_move, "legal state moves only", "feature_dir", "id").add_argument(
         "--to", required=True, choices=STATES)
-    cmd("pack", cmd_pack, "the worker's context (Markdown)", "feature_dir", "id").add_argument("--extra", nargs="+")
+    cmd("pack", cmd_pack, "the worker's context (Markdown)", "feature_dir", "id").add_argument(
+        "--extra", action="extend", nargs="+")
+    p = cmd("progress", cmd_progress, "record a worker's checkpoint", ("op", ("record",)), "feature_dir", "id")
+    for opt in ("--head", "--spec-hash", "--json"):
+        p.add_argument(opt, required=True)
+    p.add_argument("--extra", action="extend", nargs="+")
     p = cmd("diff-range", cmd_diff_range, "the review range from the merge-base")
     p.add_argument("--base", required=True)
     p.add_argument("--head", required=True)
@@ -1723,6 +3380,34 @@ def build_parser():
             "feature_dir", "id")
     p.add_argument("--integration")
     p.add_argument("--branch")
+    p = cmd("release", cmd_release, "release list | group | close | waive | confirm",
+            ("op", tuple(RELEASE_OPTS)), "feature_dir", "release")
+    for opt in ("--integration", "--entries", "--id", "--sha", "--tag", "--merge-to", "--base-sha", "--by", "--consent"):
+        p.add_argument(opt)
+    p.add_argument("--lines", nargs="*")
+    p.add_argument("--replace", nargs="+")
+    p = cmd("review", cmd_review, "a report template | ingest the reviewers' reports into one action",
+            ("op", ("ingest", "template")), "feature_dir", "id")
+    p.add_argument("--attempt", type=int, required=True, help="the review attempt the reports carry")
+    p.add_argument("--depth", choices=tuple(DEPTH_REVIEWERS),
+                   help="ingest: standard = a verifier report; deep = verifier + code-review")
+    p.add_argument("--file", action="extend", nargs="+", help="ingest: a reviewer's report (one per reviewer)")
+    p.add_argument("--answered", action="append", metavar="D-NNNN",
+                   help="ingest: a decision note answering the Decision findings (repeatable)")
+    p.add_argument("--reviewer", choices=tuple(REVIEW_VERDICTS), help="template: whose report")
+    p.add_argument("--out", help="template: write the skeleton here (the report path)")
+    p.add_argument("--sha", required=True, help="the reviewed head: the tip of block/<id>")
+    p.add_argument("--spec-hash", required=True, help="the reviewed pack's spec_hash")
+    cmd("question", cmd_question, "close an answered open question", ("op", ("close",)), "feature_dir",
+        "id").add_argument("--decision", required=True, metavar="D-NNNN")
+    p = cmd("rework", cmd_rework, "write the next rework file (a red candidate, a merge conflict)",
+            ("op", ("write",)), "feature_dir", "id")
+    p.add_argument("--reason", choices=REWORK_REASONS, required=True)
+    p.add_argument("--evidence", required=True, help="a file, or - for stdin")
+    p = cmd("state", cmd_state, "commit the state under <output_dir> on the integration line", ("op", ("commit",)),
+            "feature_dir")
+    p.add_argument("-m", required=True, metavar="MESSAGE")
+    p.add_argument("--integration", required=True)
     return ap
 
 

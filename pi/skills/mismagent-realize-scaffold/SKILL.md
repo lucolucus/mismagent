@@ -1,6 +1,6 @@
 ---
 name: mismagent-realize-scaffold
-description: "mismAgent worker block-type skill (type scaffold, greenfield wave 0): the minimal buildable skeleton \u2014 build entry, modules, plugins, the no-from ADR checks \u2014 whose acceptance is the gate green on the empty tree, proven discriminating red-green."
+description: "mismAgent worker skill for block type scaffold (greenfield wave 0): the minimal buildable skeleton \u2014 build entry, modules, plugins, no-from ADR checks \u2014 accepted when the gate runs green on the empty tree, proven discriminating red-green."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -8,65 +8,66 @@ description: "mismAgent worker block-type skill (type scaffold, greenfield wave 
 
 # realize-scaffold — the buildable skeleton the owners compile against
 
-You realize **ONE scaffold**: the minimal project skeleton for a **side**, so that the side's gate
-runs **green on an empty tree** and every later block (aggregate, port, …) has something to compile
-against. Greenfield only — if the project already builds, this block does not exist.
+You realize **ONE scaffold**: the minimal project skeleton for a **side**, so its gate runs
+**green on an empty tree** and every later block has something to compile against. Greenfield only: a project that already builds has no scaffold.
 
 ## What you create (stack-agnostic — the SHAPE; the stack ADR gives the concrete commands)
 - the **build entry**: the wrapper / build descriptor the **stack ADR** names;
-- the **module structure** the architecture chose (the bounded contexts → modules — read it from
-  **`<output_dir>/architecture.md`**, the project module map) — directories + empty source sets,
-  **no domain logic**;
+- the **module structure** of the module map in **`<output_dir>/architecture.md`** (bounded
+  contexts → modules) — directories + empty source sets;
 - the **plugins / dev-deps** the gate needs (test runner, the persistence/UI plugins named in the
   stack ADR / infra-notes), pinned to a working version;
-- the minimal config so the **gate's build + test phases execute** (an empty/placeholder test is fine
-  — the point is the toolchain runs, not that there is behavior);
-- if the side renders UI and the profile's **`ui_render_check`** is an **automated** check: the
-  UI-test dependency/config, wired so the gate can execute it (a placeholder smoke test is fine —
-  the render-proof toolchain must run from wave 0, or the `ui` blocks arrive with no harness);
+- the minimal config so the **gate's build + test phases execute** (a placeholder test is fine, no
+  behavior yet);
+- the build tool's **standard parallel execution and build cache**, on (the gate's forced re-run
+  switch still applies);
+- if the side renders UI and the profile's **`ui_render_check`** is **automated**: the
+  UI-test dependency/config, wired into the gate (a placeholder smoke test is fine — else `ui`
+  blocks arrive with no harness);
 - if the side renders UI: **honor the profile's `run` binding** — create exactly what it names (the
-  launch task/entry point, and its port only if it names one), so the command launches on the empty skeleton. It
-  is a **contract you satisfy**, not a value you choose — if the skeleton can't honor it, report
-  it. *(Proving it renders stays `run-app-smoke`'s job, at the first `ui` block.)*
+  launch task/entry point, and its port only if it names one), so the command launches on the empty
+  skeleton — a **contract you satisfy**, not a value you choose; if the skeleton can't honor it,
+  report it. A **manual** `ui_render_check`: run `run-app-smoke` once on the skeleton; no launch or no
+  capture → report it (the check must become automated).
 - if `architecture.md` defines **module boundaries** and `code-rules.md` names a **dependency
-  lint**: wire its config so the **gate
-  executes it from wave 0** — the lint config is the *executable projection of the module map*,
-  and it lives in this repo (the workers maintain it on rename, like any build file);
+  lint**: wire its config and the contract check (exported signatures against the Published
+  Language) so the **gate executes them from wave 0** — the lint config is the module map's
+  *executable projection* in this repo (workers maintain it on rename);
 - the **`enforced_by` checks without `from`** of the ADRs in your pack (they apply from the start):
   each at its path with its violating and conforming fixture, registered in the gate so it prints
-  its ADR and result.
+  its ADR and result;
+- a **custom check** reading sources enumerates the files git tracks or would track (tracked +
+  untracked-not-ignored), never walks the tree (worktrees and build output live under the
+  root); the compiler's own source discovery untouched.
 
 ## Boundaries — you write NO domain
-You create **only** the skeleton: no aggregate, no port, no invariant, no business rule, no shared
-domain type (VO, enum). Those are the reviewed owner blocks that come **after** you. Do not invent
-module names beyond the architecture's; do not add dependencies the stack ADR / infra-notes did not
-call for.
+**Only** the skeleton: no aggregate, port, invariant, business rule or shared domain type (VO,
+enum) — those are the reviewed owner blocks **after** you. No module names beyond the
+architecture's; no dependencies the stack ADR / infra-notes did not call for.
 
 ## Acceptance — the negative space (no ACs, no contract test)
-Your only acceptance is: **the side's `gate` (profile) runs GREEN on this empty skeleton** — the build
-compiles and the test phase executes (even with zero/placeholder tests) and the checks above pass.
-No ACs, no contract test. The worker-composer gates exactly this — the **gate alone** — before the
-owner waves; it does not send a scaffold through the verifier.
+Your only acceptance: **the side's `gate` (profile) runs GREEN on this empty skeleton** — the build
+compiles, the test phase executes and the checks above pass. The worker-composer checks exactly
+this with the **gate alone** (no verifier) before the owner waves.
 
-**…and you PROVE the gate discriminating, red-green:** before finishing,
-plant a trivially failing probe test in **each module the gate claims to guard** (at minimum the
+**…and you PROVE the gate discriminating, red-green:** before finishing, plant a trivially failing probe test in **each module the gate claims to guard** (at minimum the
 deepest domain module, not just the app module), run the gate → see it **RED**, remove/flip the
 probe → see it **GREEN**; record the proof as a **FILE** —
 `<output_dir>/features/<feature>/gate-proof/<side>/evidence.md`: modules probed, the red excerpt, the green rerun
-(handoffs are files) — then stamp it with
+— then stamp it with
 `MM proof record <feature-dir> gate <side> --gate "<the side's gate>" --gate-files <the profile's sides.<side>.gate_files>`
-(`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`). A gate that stays green
-over a failing test (e.g. a build task that compiles modules but never runs their tests) is a
-**finding to report against the profile's gate string**:
-without this proof every future review is vacuously green, and readiness refuses the gate.
+(`MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py"`). A gate green over a failing
+test (e.g. a build task that compiles modules but never runs their tests) is a **finding to
+report against the profile's gate string**: without this proof every future review is vacuously
+green, and readiness refuses the gate.
 
 ## TDD note
-No behavior to TDD here (no `craft` loop): run the **side's gate** → fix the toolchain/config →
-green, with the worker's frugality — the smallest skeleton that passes the gate, no added scope.
+No behavior to TDD (no `craft` loop): run the **side's gate** → fix the toolchain/config →
+green — the smallest passing skeleton, no added scope.
 
 ## Return (to the worker)
 `SCAFFOLD_READY`: gate green on the empty skeleton? **gate seen RED on the probe, then green
-(discriminating-power proof — which modules probed; `gate-proof/<side>/evidence.md` written)?** no-`from`
+(which modules probed; evidence written)?** no-`from`
 checks written and registered? module
 structure = the architecture's? `run`
 binding honored (UI side)? declared contract locations created (event-schema)? no domain

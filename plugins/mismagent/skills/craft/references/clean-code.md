@@ -7,7 +7,7 @@
 - A function has an understandable responsibility; extract when it clarifies a concept or separates responsibilities, never to meet a size.
 - One level of abstraction per function where it helps the reader follow the flow.
 - Make side effects and error handling visible: a query does not mutate; an error is neither swallowed nor returned as a magic value.
-- Comments carry reasons, constraints and trade-offs; fix false comments, delete redundant ones.
+- A comment says what and why (reasons, constraints, trade-offs); fix false comments, delete redundant ones. Review history (finding ids, rework cycles, dates) lives in git and the feature folder, not in the code.
 - Test readability → `tdd.md`.
 - Not adopted: universal line or parameter thresholds, "one line is better", a ban on comments, one assertion per test.
 

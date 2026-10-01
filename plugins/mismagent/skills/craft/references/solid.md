@@ -2,7 +2,7 @@
 
 **When:** responsibilities, substitutability, interfaces or dependencies obstruct the current change.
 
-- **SRP** — separate independent reasons to change. Being one block does not by itself prove SRP.
+- **SRP** — separate independent reasons to change. Being one file does not by itself prove SRP.
 - **OCP** — isolate the variations that are required or already demonstrated; no speculative extension points.
 - **LSP** — an implementation preserves the contract's preconditions, results, errors and invariants. Contract tests give evidence for the cases they cover, not a proof.
 - **ISP** — interfaces sized to their consumers' needs.

@@ -25,7 +25,8 @@ The feature's `product-brief.md`, the project's `context-map.md` (canonical name
 material the profile declares (`materials.ui`, `materials.sample`; `none` → start from the brief).
 
 ## Procedure
-1. Read what exists and what the user expects.
+1. Read what exists — the codemap's screens: reuse, extend or remodel them (methodology rule 9) — and
+   what the user expects.
 2. Propose 1–3 concepts (layout, flow, components).
 3. Converge with the user on one; a non-obvious choice → an entry of the feature's `decisions.md`
    (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`).

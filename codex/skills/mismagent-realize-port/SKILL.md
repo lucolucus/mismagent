@@ -27,6 +27,3 @@ a supplier (a Customer/Supplier relationship of the context map).
 - **Translate the user's `tests_nl`** on the boundary into contract test cases, the declared error
   cases included — never only the happy path.
 - **One source for shared types:** a type the port shares already exists → import it, never redeclare.
-
-## Return
-`PUBLIC_API`: the port's signature and the reusable contract test (abstract test + factory).

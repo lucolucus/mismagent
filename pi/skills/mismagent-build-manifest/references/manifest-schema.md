@@ -29,6 +29,8 @@ blocks:
     triggers: [<Command>…]              # ui
     model_hint: deep                    # OPTIONAL, any type; omit otherwise
     after: [<block-id>…]                # OPTIONAL: waits for these to be integrated
+    code_paths: [<repo-relative path>…]  # OPTIONAL: existing code it changes (new/revised rows only)
+    composition: true                   # OPTIONAL, non-scaffold: THE block wiring its release into the app
     release: R0 | R1 | …                # REQUIRED except scaffold
     notes: "<explicit cut / where a prescribed surface went>"   # OPTIONAL
 boundaries:                     # FIRST-CLASS section
@@ -65,6 +67,9 @@ is **not linted** — you guarantee it, and the composer's readiness and the rev
 - **read-model:** the `view_shape` fields are reflected in ≥ 1 criterion;
 - **ui:** the screen's states (empty / error / loading) are covered;
 - **scaffold:** no domain — no boundary, invariant or owned shared type (lint refuses them).
+- **composition** (linted): **one** per (`release`, `side`), its `after:` = every other
+  non-scaffold block of it; the root it extends in place is `composition_root: <path>` in
+  `architecture.md`, never a block id.
 
 The ADR set a block reads is **derived** (`related_adrs` ∪ those of the owners of the boundaries it consumes ∪ those whose check names it as `from` —
 `MM pack` resolves it), never a hand-compiled list. A gap found downstream bounces back to

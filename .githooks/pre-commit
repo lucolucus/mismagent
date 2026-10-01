@@ -1,11 +1,7 @@
 #!/bin/sh
 # Keep the derived packagings (codex/, pi/) aligned with their source (plugins/).
 # Enable once per clone: git config core.hooksPath .githooks
-set -e
-if git diff --cached --quiet -- plugins tools/generate-codex.py tools/generate-pi.py; then
-  exit 0
-fi
-echo "pre-commit: plugins/ (or a generator) changed -> regenerating codex/ and pi/"
-python3 tools/generate-codex.py >/dev/null
-python3 tools/generate-pi.py >/dev/null
-git add codex pi
+#
+# FROZEN during 0.5: codex/ and pi/ still hold the v0.26 flow; their generators read files now in
+# attic/v0.26/. They are regenerated (and this hook re-enabled) once 0.5 stabilizes.
+exit 0

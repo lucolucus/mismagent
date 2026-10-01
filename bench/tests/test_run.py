@@ -27,6 +27,8 @@ if n >= len(steps):
     print("scenario exhausted"); sys.exit(3)
 s = steps[n]
 feat = os.environ["SIM_FEAT"]
+for rel in s.get("remove", []):
+    os.remove(os.path.join(feat, rel))
 for rel, text in s.get("write", {}).items():
     p = os.path.join(feat, rel); os.makedirs(os.path.dirname(p), exist_ok=True); open(p, "w").write(text)
 if "status" in s:
@@ -47,10 +49,10 @@ out = s["out"]
 print(out if isinstance(out, str) else json.dumps(out))
 sys.exit(s.get("code", 0))
 '''
-# The fake tool: `status` prints the scripted status.
+# The fake tool: `status` and `release list` print the scripted status.
 SIM_TOOL = r'''#!/usr/bin/env python3
 import json, os, sys
-st = json.load(open(os.path.join(sys.argv[2], "sim-status.json")))
+st = json.load(open(os.path.join(sys.argv[3] if sys.argv[1] == "release" else sys.argv[2], "sim-status.json")))
 print(json.dumps(st)); sys.exit(1 if st.get("anomalies") else 0)
 '''
 
@@ -65,7 +67,9 @@ def st(outcome, **kw):
                  "outcome": outcome, "work": [], "waiting": []}, **kw)
 
 
-class RunnerTest(unittest.TestCase):
+class Sim(unittest.TestCase):
+    """A project repo, a simulated claude CLI, a simulated status tool (no tests of its own)."""
+
     def setUp(self):
         self.tmp = os.path.realpath(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
@@ -75,7 +79,7 @@ class RunnerTest(unittest.TestCase):
         open(os.path.join(self.feat, "building-blocks.yaml"), "w").write("blocks: []\n")
         open(os.path.join(self.feat, "blocks", "orders", "todo", "agg.md"), "w").write("# agg\n")
         for args in (["init", "-q", "-b", "main"], ["config", "user.email", "t@e.x"], ["config", "user.name", "t"],
-                     ["add", "."], ["commit", "-q", "-m", "seed"]):
+                     ["add", "."], ["commit", "-q", "-m", "seed"], ["branch", "integration/shop"]):
             subprocess.run(["git", "-C", self.repo] + args, check=True, capture_output=True)
         self.plugin = os.path.join(self.tmp, "plugin")
         os.makedirs(os.path.join(self.plugin, "tools"))
@@ -99,15 +103,18 @@ class RunnerTest(unittest.TestCase):
         p = os.path.join(self.tmp, "calls.log")
         return [json.loads(l) for l in open(p).read().splitlines()] if os.path.exists(p) else []
 
-    def run_it(self, total=10, per=4, extra=()):
+    def run_it(self, total=10, per=4, extra=(), resume=True):   # most scenarios script cumulative totals
         args = ["--project", self.repo, "--feature", "shop", "--plugin-dir", self.plugin, "--total-usd", str(total),
                 "--per-firing-usd", str(per), "--claude-bin", self.claude] + list(extra)
+        args += ["--resume-sessions"] if resume else []
         return run.run(run.parse(args))
 
     def progress(self, i):
         return {"blocks/orders/todo/b%d.md" % i: "# b\n"}
 
-    # ---------------------------------------------------------------------------------------------
+
+
+class RunnerTest(Sim):
     def test_resume_cumulative_costs_and_the_residual_cap(self):
         self.scenario([{"out": res(3.0), "write": self.progress(1)},
                        {"out": res(4.5), "write": self.progress(2)},
@@ -125,6 +132,49 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(argv[0][-1], "/mismagent:worker-composer shop")
         self.assertEqual({c["bg"] for c in self.calls()}, {"1"})
         self.assertEqual({c["cwd"] for c in self.calls()}, {self.repo})
+
+    def test_fresh_session_per_firing_by_default(self):
+        self.scenario([{"out": res(3.0, sid="s-1"), "write": self.progress(1)},
+                       {"out": res(1.5, sid="s-2"), "write": self.progress(2)},
+                       {"out": res(0.5, sid="s-3"), "status": st("done")}])
+        out = self.run_it(total=5, per=4, resume=False)
+        self.assertEqual((out["outcome"], out["firings"], out["total_cost_usd"]), ("done", 3, 5.0))
+        self.assertEqual([f["cost_usd"] for f in out["log"]], [3.0, 1.5, 0.5])        # each session's own total
+        argv = [c["argv"] for c in self.calls()]
+        self.assertTrue(all("--resume" not in a for a in argv))
+        self.assertEqual([a[a.index("--max-budget-usd") + 1] for a in argv], ["4.0000", "2.0000", "0.5000"])
+        self.assertEqual(out["session_id"], "s-3")
+
+    def test_per_firing_cap_defaults_to_the_total(self):
+        self.scenario([{"out": res(1.0), "status": st("done")}])
+        args = ["--project", self.repo, "--feature", "shop", "--plugin-dir", self.plugin, "--total-usd", "7",
+                "--claude-bin", self.claude, "--resume-sessions"]
+        self.assertEqual(run.run(run.parse(args))["outcome"], "done")
+        argv = self.calls()[0]["argv"]
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "7.0000")
+
+    def test_until_release_stops_once_the_release_is_confirmed(self):
+        conf = {"tag": "shop-R0", "sha": "abc", "merge_to": "main"}
+        self.scenario([{"out": res(1.0, sid="s-1"), "write": self.progress(1)},
+                       {"out": res(1.0, sid="s-2"), "status": st("work", confirmed=conf)}])
+        out = self.run_it(total=10, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 2))
+        self.assertIn("shop-R0", out["reason"])
+        self.set_status(st("work", confirmed=conf))                                    # already confirmed: no firing
+        out = self.run_it(total=10, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 0))
+
+    def test_until_release_fires_through_an_idle_that_only_awaits_confirmation(self):
+        await_conf = st("idle", waiting=["release R0: releasable, awaiting the user's confirmation (`release confirm`)"])
+        self.set_status(await_conf)
+        self.scenario([{"out": res(1.0), "status": st("idle", confirmed={"tag": "shop-R0"})}])
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("released", 1))
+        self.set_status(await_conf)                                                    # without the flag: stops
+        self.assertEqual(self.run_it(total=5, per=4, resume=False)["outcome"], "idle")
+        self.set_status(st("idle", waiting=["open question: open-questions/x.md"]))   # a real wait still stops
+        out = self.run_it(total=5, per=4, resume=False, extra=["--until-release", "R0"])
+        self.assertEqual((out["outcome"], out["firings"]), ("idle", 0))
 
     def test_total_budget_stops(self):
         self.scenario([{"out": res(4.0), "write": self.progress(1)}, {"out": res(8.0), "write": self.progress(2)}])
@@ -193,6 +243,13 @@ class RunnerTest(unittest.TestCase):
             self.assertEqual((out["outcome"], out["firings"]), (outcome, 0))
         self.assertEqual(self.calls(), [])
 
+    def test_fresh_build_without_integration_line_fires_first(self):
+        subprocess.run(["git", "-C", self.repo, "branch", "-D", "integration/shop"], check=True, capture_output=True)
+        self.set_status(st("done"))   # would stop before any firing if status were read
+        self.scenario([{"out": res(1.0), "status": st("done")}])
+        out = self.run_it()
+        self.assertEqual((out["outcome"], out["firings"]), ("done", 1))
+
     def test_anomaly_after_a_firing_stops(self):
         self.scenario([{"out": res(1.0), "status": st("anomaly")}])
         self.assertEqual(self.run_it()["outcome"], "anomaly")
@@ -247,6 +304,69 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         out = json.loads(p.stdout)
         self.assertEqual((out["outcome"], out["firings"], out["total_cost_usd"]), ("done", 1, 1.0))
+
+
+REAL_PLUGIN = os.path.join(os.path.dirname(os.path.dirname(HERE)), "attic", "v0.26", "plugin")  # run.py drives the v0.26 flow
+REAL_MANIFEST = """\
+blocks:
+  - id: scaffold-app
+    type: scaffold
+    context: shell
+    wave: 0
+  - id: agg
+    type: aggregate
+    context: orders
+    wave: 1
+    release: R0
+releases:
+  R0: { goal: "sell" }
+%s"""
+
+
+class RealToolTest(Sim):
+    """The runner reading the REAL mismagent.py status: after a firing that finishes every block, a
+    release with no blocks and a release awaiting the user's confirmation are `idle` — the runner
+    stops, no further firing (a second one would exhaust the scenario: cli-error)."""
+
+    def feature(self, extra_release):
+        shutil.rmtree(self.feat)
+        for rel, text in (("building-blocks.yaml", REAL_MANIFEST % extra_release),
+                          ("blocks/shell/todo/scaffold-app.md", "---\nid: scaffold-app\ntype: scaffold\ncontext: shell\nwave: 0\n---\n# s\n"),
+                          ("blocks/orders/todo/agg.md", "---\nid: agg\ntype: aggregate\ncontext: orders\nwave: 1\n---\n# a\n")):
+            os.makedirs(os.path.dirname(os.path.join(self.feat, rel)), exist_ok=True)
+            open(os.path.join(self.feat, rel), "w").write(text)
+        for args in (["add", "-A"], ["commit", "-q", "-m", "feature"]):
+            subprocess.run(["git", "-C", self.repo] + args, check=True, capture_output=True)
+        return subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+
+    def finish_all(self, s0, **write):
+        rec = json.dumps({"sha": s0})
+        return {"out": res(1.0), "remove": ["blocks/shell/todo/scaffold-app.md", "blocks/orders/todo/agg.md"],
+                "write": dict({"blocks/shell/done/scaffold-app.md": "---\nid: scaffold-app\ntype: scaffold\ncontext: shell\nwave: 0\n---\n# s\n",
+                               "blocks/orders/done/agg.md": "---\nid: agg\ntype: aggregate\ncontext: orders\nwave: 1\n---\n# a\n",
+                               "integrated/scaffold-app.json": rec, "integrated/agg.json": rec}, **write)}
+
+    def run_real(self):
+        return run.run(run.parse([
+            "--project", self.repo, "--feature", "shop", "--plugin-dir", REAL_PLUGIN, "--total-usd", "10",
+            "--per-firing-usd", "4", "--claude-bin", self.claude, "--integration", "main"]))
+
+    def test_awaiting_confirmation_is_idle(self):
+        s0 = self.feature("")
+        self.scenario([self.finish_all(s0)])
+        out = self.run_real()
+        self.assertEqual((out["outcome"], out["firings"]), ("idle", 1), out)
+        self.assertIn("release R0: releasable, awaiting the user's confirmation", out["reason"])
+
+    def test_a_release_without_blocks_is_idle(self):
+        s0 = self.feature('  R1: { goal: "report" }\n')
+        subprocess.run(["git", "-C", self.repo, "-c", "tag.gpgSign=false", "tag", "-a", "shop-R0", s0, "-m",
+                        "release shop/R0\n\nmismagent-release: shop/R0\nmerge-to: main (from %s)\n" % s0], check=True)
+        self.scenario([self.finish_all(s0, **{"pre-release.md": "- [ ] R1 · agg · MED · a.py:1 · later · v · d\n"})])
+        out = self.run_real()
+        self.assertEqual((out["outcome"], out["firings"]), ("idle", 1), out)
+        self.assertIn("release R1: no blocks (1 blocking lines wait)", out["reason"])
+        self.assertNotIn("R0", out["reason"])                                # confirmed by its tag
 
 
 if __name__ == "__main__":

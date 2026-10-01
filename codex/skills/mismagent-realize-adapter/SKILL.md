@@ -25,7 +25,7 @@ Plus the `enforced_by` checks of your block's ADRs (e.g. soft-delete, write-once
 
 ### READ adapter (towards another context)
 - Implements a read port by **delegating to the supplier root's predicate** (the port exposes it).
-- Knows **only the supplier's public API** (the signature), never its source or internal state.
+- Knows **only the supplier's contract** (the signature), never its source or internal state.
 - Makes the port's **consumer-driven contract test** (from `realize-port`) pass — the same test
   as on the fake, real-on-real when the composer runs it in the candidate (D2).
 

@@ -1,6 +1,6 @@
 ---
 name: mismagent-write-infra-notes
-description: "mismAgent explore/model: writes the project-level <output_dir>/infra-notes.md (amended, never redrafted) in the form the project's needs dictate; each need maps to a task, an enforced_by ADR or a gate. Drafted by explore, amended by the architect."
+description: "mismAgent explore/model: writes the project-level <output_dir>/infra-notes.md (amended, never redrafted) in the form the project's needs dictate; each need maps to a task, enforced_by ADR or gate. Explore drafts it, the architect amends it."
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
@@ -9,25 +9,23 @@ description: "mismAgent explore/model: writes the project-level <output_dir>/inf
 # MismAgent — Write Infra Notes (writer, explore/model)
 
 Write/update `<output_dir>/infra-notes.md` — the **project's** infra notes, not the feature's:
-the infrastructure considerations
-that neither the PRD nor the contract cover, but that generate real work in the `infra` side's path
-(from the profile). Orientation: `methodology/mismagent.md`.
+infrastructure considerations the PRD and the contract don't cover but that generate real work in
+the profile's `infra` side path. Orientation: `methodology/mismagent.md`.
 
 ## Why it exists (downstream consumers = survival test)
-- → **infra blocks/tasks** (`build-manifest` / `write-task` generate them from the needs
-  listed here).
+- → **infra blocks/tasks** (`build-manifest` / `write-task` generate them from these needs).
 - → **`enforced_by` ADRs** (`write-adr`): a mechanical infra constraint (e.g. workload identity,
-  no embedded secrets; or: forward-only migrations) becomes a versioned check the gate runs.
+  no embedded secrets) becomes a versioned check the gate runs.
 - → **CI gates**: the pipeline runs the sides' gates, **contract tests as a blocking job**
   and the anti-state guards (no `status:` / state files committed).
-If an infra need generates neither a task nor an ADR nor a gate, **do not write it** (it is noise).
+An infra need generating no task, ADR or gate is noise: **do not write it**.
 
 ## The architect's INFRA_QUESTIONS (asked, never defaulted)
 Distribution and updates · workstations and connectivity · destiny of the data · retention ·
 lifecycle and maintenance.
 
 ## Choose the FORM from the project's needs (the INFRA_QUESTIONS' answers)
-The cloud template on a desktop app produces only zombies (and vice versa). Sections that do not
+The cloud template on a desktop app (or vice versa) produces only zombies. Sections that don't
 apply **are not written**.
 
 ## Template A — hosted / cloud
@@ -78,15 +76,14 @@ apply **are not written**.
 
 ## Rules
 - **Project scope — amend, never redraft.** One infra-notes per project, in the `<output_dir>` root.
-  The templates above are the shape of the **first draft**; on any later feature you **read the
-  existing file first** and emit a **delta** — add what this feature's infra needs, leave everything
-  another feature established untouched. Only the **architect** amends it (explore drafts it once,
-  when it does not exist). Rewriting it per feature silently drops the packaging, backup, retention
-  and update decisions the architect consolidated earlier.
-- Every item in the final section **must** map to a task/ADR/gate, otherwise it is a zombie.
-- **Mechanical** constraints (path, identity, naming) → flag them as `enforced_by` candidates
-  to be formalized with `write-adr`.
+  The templates shape the **first draft**; on any later feature **read the existing file first**
+  and emit a **delta** — add this feature's infra needs, leave what other features established
+  untouched. Only the **architect** amends it (explore drafts it once, when missing). Rewriting it
+  per feature silently drops the architect's earlier packaging, backup, retention and update decisions.
+- Every item in the final section **must** map to a task/ADR/gate, else it is a zombie.
+- **Mechanical** constraints (path, identity, naming) → flag as `enforced_by` candidates for
+  `write-adr`.
 
 ## Outcome
-Path of the file, infra needs listed, and for each the consumer (task side:infra / enforced_by
-ADR / CI gate) that keeps it alive.
+File path, infra needs listed, and for each the consumer (task side:infra / enforced_by ADR / CI
+gate) that keeps it alive.

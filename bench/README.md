@@ -46,17 +46,25 @@ python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated cla
 ```
 
 - **Firings, serial.** `claude -p --plugin-dir <plugin> --output-format json --max-budget-usd
-  <min(per-firing, remaining)> "/mismagent:worker-composer <feature>"` in `--project`, the later ones
-  with `--resume <session_id>`, always with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`.
+  <min(per-firing, remaining)> "/mismagent:worker-composer <feature>"` in `--project`, each in a
+  **fresh session** (the composer re-reads its state from disk; a resumed session's context grows and
+  is re-read every turn — in run 6 the resumed composer was 72% of all tokens), always with
+  `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`. `--resume-sessions` keeps the old single resumed session.
   `--prompt-file` text is appended to the command (e.g. simulated-user rules).
-- **Cost** = the deltas of `total_cost_usd` (cumulative on resume). Missing, invalid or decreasing →
+- **Phase boundary** (`--until-release RN`): also stops, outcome `released`, once release RN is
+  confirmed (`release list` → `confirmed`) — so a scenario can inject a change between releases.
+- **Per-firing cap** (`--per-firing-usd`, default: the total): it must fit a whole dispatch wave —
+  in run 6 a $6 cap cut 4–5 parallel workers mid-wave and the next firing re-dispatched them ($19.5
+  for one integration).
+- **Cost** = each fresh session's `total_cost_usd`; with `--resume-sessions`, the deltas of the cumulative one. Missing, invalid or decreasing →
   stop `cost-invalid`, never a silent zero. The cap follows the CLI's accounting, not the invoice.
 - **Minimum Claude Code: 2.1.277** — earlier versions report each invocation's own cost, not the
   cumulative one, so the deltas would be wrong. `claude --version` is read at start; older or
   unreadable → stop `cli-version` before any firing.
 - **When to stop** — after each firing it reads `mismagent.py status F --integration B` (`outcome`),
-  never the report text (also once before the first firing): `done` · `idle` (only work waiting on a
-  decision or an external condition) · `anomaly` · `no-progress` (two consecutive firings changed no
+  never the report text (also once before the first firing, unless the integration line does not exist yet: a fresh build's first firing cuts it): `done` · `idle` (only work waiting on a
+  decision or an external condition — a release awaiting the user's confirmation, a release with no
+  blocks yet) · `anomaly` · `no-progress` (two consecutive firings changed no
   structural state: state folders, block files and manifest, `integrated/`, review proofs, `rework/`,
   open questions, `pre-release.md`, spike evidence (content), the trees of the `block/*`/`spike/*` branch tips,
   the uncommitted changes (`git status --porcelain` + content) of their worktrees — timestamps,
@@ -69,3 +77,54 @@ python3 -m unittest discover -s bench/tests -v     # self-tests: a simulated cla
 
 Headless firings cannot answer permission prompts: pass `--permission-mode` (e.g. `bypassPermissions`,
 only on an isolated project you are willing to let the agent modify freely).
+
+# cost.py — token cost of a build run, from transcripts
+
+`cost.py` reads one Claude Code project transcript directory and reports where a run's tokens went,
+so runs of the same deliverable can be compared (e.g. with and without the fresh-context
+`CHECKPOINT` loop). Zero cost and deterministic: stdlib only, read-only.
+
+```sh
+python3 bench/cost.py ~/.claude/projects/<escaped-project-path> [--session <id>]... \
+  [--manifest <F>/building-blocks.yaml]... [--feature-dir <F>]... [--prices prices.json] [--md]
+python3 -m unittest discover -s bench/tests -v     # self-tests on synthetic transcripts
+```
+
+- **Read**: `<dir>/<session>.jsonl` (the orchestrating session, kind `main`) and
+  `<dir>/<session>/subagents/agent-<id>.jsonl` + `.meta.json` (one per dispatch). Each API call is
+  counted **once** by `message.id`, with its **final** usage (a streamed message repeats with growing
+  counts), attributed to the file it originated in (forks replay their parent's history). Token
+  classes: `input`, `cache_write`, `cache_read`, `output`.
+- **Per agent kind** (`agentType`; `code-review` when the dispatch prompt invokes that skill):
+  dispatches, calls, tokens by class.
+- **Worker sessions** split into quartiles by turns (assistant calls): median turns, median final
+  context (input + cache write + cache read of the last call), tokens and tokens per call, and the
+  **share of worker tokens in the longest quartile** — the number the fresh-context loop should lower.
+- **Per block** (with `--manifest`; blocks keyed by feature + id, an id shared by two features is
+  never collapsed). A dispatch goes to its explicit target: the one block id in its description, else
+  a `block <id>` / `BLOCK: <id>` target in the prompt's first lines, else the one pack path
+  `packs/<feature>/<id>.md`, else the only block id its prompt mentions; anything ambiguous is
+  `(unattributed)`. Per block: dispatches by kind, worker sessions, **checkpoints** (sessions whose
+  result says `RESULT: CHECKPOINT`, counted once), **resumed** sessions (a `## Checkpoint` section in
+  the prompt), tokens; a per-wave rollup.
+- **Summary**: `tokens per dispatched block` = attributed total ÷ blocks with ≥1 dispatch. With
+  `--feature-dir` (one per manifest feature) also `tokens per completed block` = attributed total ÷
+  blocks with completion evidence (`<F>/integrated/<id>.json`) — all block work, finished or not,
+  charged to what was completed.
+- **Output**: JSON by default, Markdown tables with `--md`.
+
+**Prices are never invented.** Without `--prices` the report carries tokens only. `--prices` is a
+JSON map `{"<model family or id>": {"input": …, "cache_write": …, "cache_read": …, "output": …}}` in
+USD per million tokens, matched as a substring of the model id (longest key wins); a file with a
+missing or non-numeric rate is rejected. Take the numbers from the provider's **current** price list
+and keep the file with the comparison; an aggregate with tokens from an unpriced model reports
+`{"n/a": …}`, never a partial sum or a silent zero.
+
+Limits: attribution is text matching on the dispatch's own words; completion evidence is only what
+the feature folder given holds (a folder whose `integrated/` was not kept reports fewer completions).
+
+# scenarios/ — structured validation runs
+
+A scenario fixes its hypotheses, phases, budgets, stop rules, simulated-user policy and external
+acceptance **before** the run. `scenarios/cassa-structured/` (three releases, a change request, a
+second feature): read `scenario.md`, then `run-scenario.sh <run-dir> [--from <phase>]`.

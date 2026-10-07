@@ -1,72 +1,70 @@
 ---
 name: mismagent-explore
-description: "mismAgent explore movement. In dialogue with the user, turns a raw idea into an understood problem: bootstraps the profile, runs challenger and analyst, writes the product brief and amends the context-map. Use at the start of a feature."
+description: "mismAgent intent: explores a new idea before anything is specified \u2014 a dialogue on the problem, the brief, the challenger's attack, then an event storm of the domain with its hotspots. Usage: /skill:mismagent-explore <idea in one sentence>"
 ---
 
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-# mismAgent — Explore
+# /skill:mismagent-explore — understand the idea before building it
 
-From raw idea to **understood problem** and **domain model**. No contract, no tasks, no code here.
-Orientation: `methodology/mismagent.md`.
+For a new product or a large new part of one. You talk with the human; you are curious and
+skeptical, never a stenographer. Idea: <the argument this skill was invoked with>
 
-You dialogue with the user in session (high presence) and use two subagents as tools:
-**`mismagent-challenger`** (fresh context, tries to demolish the idea) and **`mismagent-analyst`**
-(models the strategic domain). Write only what a downstream step reads.
+**Evidence, never invention.** Every fact you state — a number (a limit, a size, a price, a
+volume, a timing), what a language, library, model or platform can or cannot do, a defect, how
+existing code behaves — carries its source: a file and line you read, the output of a command you
+ran now, a page you fetched (its URL), or the human's words. No source → it is not a fact: write it
+as an **assumption** with how to check it (a question, a hotspot, a probe you can run), or leave it
+out. A guess presented as a fact is a defect.
 
-**A feature is a unit of delivery** (one manifest, one build), not a unit of analysis. Depth lives in
-the tactical model, `research/`, the ADRs and the block files — when the user asks for "one feature
-per context", probe which depth they want before cutting. Variability across instances (tenants,
-seasons…) is modeled as language here; a generic engine with no second concrete instance is for the
-challenger to attack.
+The work lives on disk and survives a new session: read `.mismagent/brief.md` and
+`.mismagent/event-storm.md` first, and resume where they stop.
 
-## Output (each with its reader)
-1. `features/<feature>/product-brief.md` — problem, user, value, scope, outcome → the gate to model.
-2. `<output_dir>/context-map.md` — the **project** map (contexts, relationships, ubiquitous language,
-   open spikes), written by the analyst via `write-context-map`; amended on later features, never
-   re-forked.
-3. `features/<feature>/tactical-model.md` — the "Seeds for the tactical" (the analyst, via
-   `write-tactical-model`) → the tactical-modeler and build-manifest.
-4. Spikes for the unknowns, listed in the context-map (materialized as nodes in model).
-5. `<output_dir>/infra-notes.md` first draft, only if it does not exist (`write-infra-notes`).
-6. `research/<topic>.md` when a decision needs investigation (`mismagent-researcher`).
+## 1. The problem
+Ask, a few questions at a time, each with your guess so the human can just confirm:
+who has the problem, when and where it bites; how they cope today (and what that costs them); what
+"better" looks like in their words; who else is touched; what must not change; the materials that
+exist (requirements, forms, screenshots, an old system). Then write `.mismagent/brief.md`, one page:
+problem · users and their context · value · in scope · out of scope · open questions.
 
-## Procedure
-0. **Profile — bootstrap only if missing.** On any later feature the profile and the whole trunk
-   exist: read them, never re-bootstrap. If `<output_dir>/profile.md` is missing, create it from
-   `@@MISMAGENT_SKILLS@@/mismagent-explore/references/PROFILE.md` with the bootstrap fields only: `output_dir` (default `.mismagent`),
-   `ubiquitous_language.lang`, sides, **`validation_mode`**, **`materials`**,
-   **`capacity`**. The last three must come from the user: if the dialogue does not surface them,
-   **ask explicitly** (the profile's comments say why each matters).
-   Never invent `gate` or `dev_architecture`: the architect finalizes them.
-1. **Diverge** with the user: goals, users, constraints, alternatives. A side with code: `MM codemap
-   <output_dir> --ref <base>` feeds every dispatch below (methodology rule 9); the brief cites what
-   exists and what this feature adds.
-2. **Attack before modeling:** dispatch `mismagent-challenger`. `KILL` → stop and report; `RESHAPE`
-   → redesign with the user; `PROCEED` → close its `MUST_ANSWER_BEFORE_MODELING` items first.
-   Record the challenger's debate and the user's non-obvious choice (a `KILL` too) in
-   `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`, scope `feature`;
-   a choice a requirement or the scope decides takes the short form); `python3 "@@MISMAGENT_SKILLS@@/mismagent-worker-composer/scripts/mismagent.py" why check <file>`.
-3. **Model:** dispatch `mismagent-analyst` on what survived, passing the existing context-map as
-   authoritative when there is one (it amends: adds this feature's contexts and terms, reuses the
-   rest verbatim). `NEEDS-INPUT` → bring the `AMBIGUITIES` to the user and re-dispatch. A needed
-   rename goes to the user and becomes an ADR. A spike the user answers: you close it (`write-task`).
-4. **Converge** on `product-brief.md`.
-5. **Infra draft** only if `infra-notes.md` does not exist; afterwards only the architect amends it.
-6. **Research on demand** via `mismagent-researcher`.
+## 2. The challenger
+Dispatch **mismagent-challenger** with the path of the brief. Show the human its verdict and its
+attacks, with your own view of each. **The human decides**: stop (KILL), change the brief (RESHAPE,
+then challenge again if the change is large), or go on (PROCEED). Record the decision and why at
+the end of the brief.
 
-## Read-only harness (e.g. plan mode)
-The dialogue continues and the challenger dispatches (it is read-only). Do **not** dispatch the
-researcher or the analyst: their handoffs are files, and a return message would evaporate. List the
-pending writes (decision notes included) in the plan as files to materialize; when writes reopen, materializing them is the
-**first** action (profile → brief), then the analyst.
+## 3. The event storm (Brandolini, in text)
+Rebuild the domain as a **timeline of events**, in the past tense, in the human's words ("Sale
+opened", "Item added", "Payment received", "Day closed"). Propose a first timeline from the
+brief, then walk it with the human, event by event:
+- the **command** that causes it and the **actor** who issues it;
+- the **policy** that reacts to it ("whenever a day is closed, the report is printed");
+- the **read model** someone looks at to decide (a screen, a report, a receipt);
+- an **external system** involved, if any;
+- **can it be undone? by whom? what remains of it?** — a correction is a new event, never an
+  erasure: this question alone finds refunds, voids, audit and end-of-day rules a story skips.
 
-## Gate to model
-`model` starts only when the feature's `product-brief.md` (problem, user, value) **and** the
-project's `context-map.md` (at least the contexts this feature touches, with their language) exist
-as files. Otherwise stay in explore.
+Every doubt, conflict, gap or "it depends" becomes a **hotspot**. Where the same word means two
+things, or two words mean one, note it: it is where a boundary between contexts runs.
 
-## Outcome
-Bounded contexts and key terms, the brief's problem/user/value, the challenger's verdict, open
-spikes, research produced, and whether the gate to model holds.
+Write `.mismagent/event-storm.md`:
+```
+## Timeline
+| # | event | command | actor | policy | read model | undo |
+## Hotspots
+- H1: <the question> — <who can answer>
+## Language
+- <term>: <meaning> (context)
+```
+Keep it at the level of the whole process: no screens in detail, no data model, no code. The detail
+comes one release at a time, in `/skill:mismagent-specify`.
+
+## 4. Close
+Ask the human for a first release cut: which part of the timeline, end to end, is the smallest thing
+worth using. Write it under `## First release` in the brief. Commit (`explore`) and end your last
+message with `EXPLORED`. Next: `/skill:mismagent-specify R0`, which turns that part of the timeline into
+examples and slices, and the hotspots into its first questions.
+
+## Never
+Choose the stack, write examples, slices or code, or decide a hotspot the human has not answered.

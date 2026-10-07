@@ -3,67 +3,57 @@
 > **GENERATED — do not edit.** Derived from `plugins/` by `tools/generate-pi.py`; the
 > Claude Code plugin is the source of truth. Edit the source, then regenerate.
 
-> **pi mapping (this packaging).** `[skill]`/`[command]` steps are pi **skills** — invoke with `/skill:mismagent-<name>` (pi also loads them on demand; names carry the `mismagent-` prefix because pi's skill space is flat). `[agent]` steps are **prompt templates** (`/mismagent-<name>`) that dispatch the matching subagent definition in `.pi/agents/` through the `subagent` tool (`agentScope: "both"`; every spawn is a fresh isolated context — the guarantee the review relies on). The board script lives at `@@MISMAGENT_SKILLS@@/mismagent-board/scripts/board.py`. The worker-composer's parallel waves map onto the subagent tool's parallel mode (max 8 tasks per call, 4 concurrent — see its skill's pi execution notes); `mismagent-reviewer` is generated glue hosting the `mismagent-code-review` skill in fresh context. pi has no per-agent reasoning knob — to think harder on the adversarial roles (challenger/verifier/architect), pin a stronger `model:` in their `.pi/agents/*.md`.
+> **pi mapping (this packaging).** `/mismagent-build` is a **prompt template**; the other commands
+> are pi **skills**: `/skill:mismagent-explore`, `/skill:mismagent-specify`,
+> `/skill:mismagent-conventions`. The agents are definitions in `.pi/agents/` for the `subagent`
+> tool, which `/mismagent-build` and the explore skill call with `agentScope: "both"`. The
+> project's own conventions skill lives in `.agents/skills/conventions/`, and the project's
+> settings (`## mismagent`: test, lint, smoke, thresholds) in this `AGENTS.md`. The Claude Code
+> hooks are not shipped: the prompts and `mm check` hold their rules. pi has no per-agent reasoning
+> knob: to make the challenger, the reviewer and the architect think harder, pin a stronger
+> `model:` in their `.pi/agents/*.md`.
 
-**Setup (once).** From the mismagent repo: `pi/install.sh <your-project-root>` It copies the skills into `<project>/.agents/skills/`, the prompt templates into `<project>/.pi/prompts/`, the subagent definitions into `<project>/.pi/agents/`, and this file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it). `[agent]` steps additionally need pi's official `subagent` example extension (pi repo, `packages/coding-agent/examples/extensions/subagent/` — symlink `index.ts` + `agents.ts` into `~/.pi/agent/extensions/subagent/`), always called with `agentScope: "both"`. The installer anchors every tool path to the absolute installed skills directory (re-run it after moving the project). Verify: `/skill:mismagent-explore` autocompletes. Alternative global install (skills+prompts only): `pi/install.sh --package <dir>` writes an anchored pi package into `<dir>`, then `pi install <dir>`.
+**Setup (once).** From the mismagent repo: `pi/install.sh <your-project-root>`. It copies the
+skills into `<project>/.agents/skills/`, the prompt template into `<project>/.pi/prompts/`, the
+agent definitions into `<project>/.pi/agents/`, and this file as the project's `AGENTS.md` (or
+`AGENTS.mismagent.md` if one already exists: merge it), and anchors every tool path to the
+absolute installed skills directory (re-run it after moving the project). The agents need pi's
+official `subagent` example extension (pi repo,
+`packages/coding-agent/examples/extensions/subagent/`: symlink `index.ts` and `agents.ts` into
+`~/.pi/agent/extensions/subagent/`). Requires Python 3 (standard library only) for `mm`. Verify:
+`/mismagent-build` autocompletes. Alternative global install (skills and prompts only):
+`pi/install.sh --package <dir>`, then `pi install <dir>`.
 
-A flow to invoke, not a methodology to read: the agents' and skills' instructions are the process.
-This file says who owns what and in which order. The core names no project; each project's
-**profile** (`<output_dir>/profile.md`, default `.mismagent/profile.md`; template `@@MISMAGENT_SKILLS@@/mismagent-explore/references/PROFILE.md`,
-example `@@MISMAGENT_SKILLS@@/mismagent-explore/references/profile-example.md`) binds sides, paths, gates and branching.
 
-## Where things live — trunk and features
+Guides agents to write software that **stays maintainable** over long projects. The code carries
+the theory of the program (Naur); XP keeps it clean; the human agrees concrete examples; the
+harness keeps both honest. Design: [`v0.5-vision.md`](https://github.com/lucolucus/mismagent/blob/master/docs/rationale/v0.5-vision.md).
+
+## Use
 ```
-<output_dir>/
-  profile.md · context-map.md · architecture.md · code-rules.md · infra-notes.md
-  decisions/ · architetture/        # the PROJECT trunk — decided once, amended explicitly
-  features/<feature>/               # born with the feature; archived, never deleted
-    product-brief.md · tactical-model.md · building-blocks.yaml · decisions.md · UI/ · research/
-    blocks/<ctx>/{todo,doing,done}/ · tasks/ · open-questions/ · proofs
+/skill:mismagent-explore <idea>        # a new product: the problem, the brief, the challenger, the event storm
+/skill:mismagent-specify <request>     # investigative interview → examples + slices for the next release
+/mismagent-build                 # one action: build, review, land, design pass, or stop for you
+/mismagent-build --confirm R0    # your confirmation of a release → the tag
+/skill:mismagent-conventions           # decide the agents' convention proposals → the project's conventions skill
 ```
-- **Only the architect writes the trunk**, except `context-map.md`, which the analyst amends (one map,
-  never re-forked). Everyone else writes inside `features/<feature>/`.
-- A signal is read at the **scope of the artifact it guards**: an empty feature folder says nothing
-  about the project. Stack, style, code rules, gate and `run` are deliberated once per project;
-  changing one is a superseding ADR the user asked for.
 
-## The three movements
-| movement | you | owners (in order) | handoff files |
-|---|---|---|---|
-| **explore** | in dialogue | `explore` skill → `mismagent-challenger` → `mismagent-researcher` (if needed) → `mismagent-analyst` | `product-brief.md`, `context-map.md`, the tactical seeds |
-| **model** | confirm the boundaries | `/skill:mismagent-model` conducts: `mismagent-tactical-modeler` → `ux-designer` (if UI) → `mismagent-architect` (two passes) → `build-manifest` | `tactical-model.md`, ADRs, `architecture.md`, `code-rules.md`, `building-blocks.yaml`, block files |
-| **build** | confirm each release | `/skill:mismagent-worker-composer` → `mismagent-worker` ×N → `mismagent-verifier` (+ `code-review`) | code on the integration line, proofs |
+## Contents
+| piece | role |
+|---|---|
+| `mismagent-explore` skill + `mismagent-challenger` agent | a new idea: dialogue on the problem → `brief.md`; a fresh adversary tries to kill it; an event storm of the domain with its hotspots → `event-storm.md` |
+| `mismagent-specify` skill | intake, stack, the investigation rule by rule, examples, vertical slices — one release at a time |
+| `mismagent-build` skill | the conductor: asks `mm next`, does exactly one action, settles doubts, stops for the human |
+| `mismagent-architect` agent | `skeleton` (structure at birth: `ARCHITECTURE.md`, error policy, sensors, the model slice) · `design-pass` (from the code: refactoring slices) · `escalate` |
+| `mismagent-builder` agent | one slice: acceptance tests first at the use-case seam, TDD, refactoring, a commit at every green |
+| `mismagent-reviewer` agent | a fresh reviewer on the review table: a slice's diff, or the whole release |
+| `mismagent-craft` skill | the XP inner loop and its references, incl. `review-table.md` |
+| `mismagent-conventions` skill | with the human: the agents' proposals → `.agents/skills/conventions/` (how code is written in the project) |
+| `mismagent-build/scripts/mm.py` | computes and moves: `status`, `next`, `start`, `land`, `gate`, `tag`, `check` |
 
-User entry points: the movement commands above, each agent's thin command (`/mismagent-<name>`),
-`readiness-gate`, `board`, `run-app-smoke`, `harvest-dev-architecture`. The other skills
-(`realize-*`, `write-*`, `code-review`) are invoked by the agents mid-flow.
-
-## Human checkpoints
-The challenger's verdict · `NEEDS-INPUT` ambiguities · the architect's stack/style/infra/code-rules
-choice · the `tests_nl` elicitation and the R0 cut · a `BOUNCED` block or a spike's evidence · every
-release. Nothing else stops for you.
-
-## The rules the flow enforces
-1. **Handoff = file.** Every handoff that crosses a movement is a file, never only a message. A non-obvious choice, its debate and who decided it →
-   `features/<feature>/decisions.md` (format: `@@MISMAGENT_SKILLS@@/mismagent-worker-composer/references/CLI.md`); a subagent that may not write it
-   returns `DECISIONS`, which its conductor appends.
-2. **State = folder.** A block's state is its folder (`todo/doing/done`); only the worker-composer
-   moves it and merges.
-3. **Re-entrance.** Every command re-reads the files and resumes at the first missing artifact; an
-   artifact that exists is stated and reopened only on request, never re-deliberated.
-4. **Reconciliation.** Two artifacts that disagree in silence are two sources of truth: the writer
-   who notices amends the loser in the same pass, or asks.
-5. **What crosses a seam is pinned** in the manifest (types, keys, view sources, owners of shared
-   artifacts) and the owner's ADRs (delivery guarantees), never invented by parallel workers.
-6. **No artifact without a reader**, except a view regenerated from its source (the block files, the
-   board).
-7. **A gate that cannot go red is not a gate.** It executes the tests it guards; its red-green proof
-   is recorded and renewed when its configuration changes.
-8. **Release = a tag and a merge onto the base branch**, both only with the user's explicit
-   consent naming commit and destination; never a push unasked.
-9. **Existing code is an input.** Once a side has code, design and build read it first (`MM
-   codemap`, scoped): reuse what fits in meaning and placement, else remodel; a remodel or duplicate
-   is a recorded decision planned as blocks (`code_paths`); touched code is rationalized where it can
-   be, behavior proven preserved.
-10. **In doubt, stop and ask.** A slow or hanging step is a strategy to replace (back to the
-   architect), never something to wait out.
+## In a project
+`ARCHITECTURE.md` and `AGENTS.md` (section `## mismagent`: test, lint, smoke, thresholds) at the root;
+`.agents/skills/conventions/` (the project's conventions, yours);
+`tests/acceptance/` (one test per example, marker `EX-<n>`); `.mismagent/`: `brief.md`, `event-storm.md`,
+`examples.md`, `slices/{todo,doing,done}/`, `reviews/`, `progress.md`, `design-notes.md`,
+`decisions/`, `conventions-proposals.md`.

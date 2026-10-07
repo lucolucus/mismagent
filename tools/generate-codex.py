@@ -2,30 +2,27 @@
 """
 generate-codex.py — derive the Codex/OpenAI packaging of mismAgent from the Claude Code plugin.
 
-The Claude plugin (plugins/mismagent) is the ONLY source of
-truth; codex/ is a GENERATED view (the methodology's derived-view rule: a derived view regenerated from a source,
-never hand-maintained). Do not edit codex/ by hand — edit the plugin, then re-run this script.
+codex/ is a GENERATED view of plugins/mismagent: never edit it by hand — edit the plugin, then
+re-run this script. The runtime-neutral part lives in derived.py.
 
-Mapping (verified against developers.openai.com/codex, 2026-07):
-  plugin skill  SKILL.md (+ references/) -> codex/skills/mismagent-<name>/        (.agents/skills)
-  plugin agent  agents/<n>.md       -> codex/agents/<n>.toml                    (.codex/agents)
-  command       worker-composer.md  -> skill mismagent-worker-composer
-  command       board.md + board.py -> skill mismagent-board (script in scripts/)
-  methodology   mismagent.md        -> codex/AGENTS.md
-  thin agent-wrapper commands       -> dropped (Codex spawns subagents on explicit ask)
+Mapping (Codex: skills in .agents/skills, subagents as TOML in .codex/agents, AGENTS.md):
+  plugin skill   skills/<n>/ (+ references/)  -> codex/skills/mismagent-<n>/   ($mismagent-<n>)
+  command        commands/build.md + mm.py     -> codex/skills/mismagent-build/ (mm.py in scripts/)
+  plugin agent   agents/<n>.md                 -> codex/agents/<n>.toml         (spawned by name)
+  plugin README                                -> codex/AGENTS.md
+  hooks                                        -> not shipped (Claude Code only)
 
 Usage: python3 tools/generate-codex.py   [--out DIR]   (from the repo root; --out: tests)
-Paths into the shipped skills are written as "@@MISMAGENT_SKILLS@@/..." (quoted); install.sh
-rewrites them to the absolute installed skills directory, so they work from any cwd.
 """
 import json
 import os
 import re
-import shutil
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KERNEL = os.path.join(ROOT, "plugins", "mismagent")
+from derived import (KERNEL, ROOT, adapt_common, agents_md_body, check_tree, emit_skill, fresh,
+                     parse_frontmatter, plugin_agents, read, ship_mm, ship_skills, without_loop,
+                     write)
+
 OUT = os.path.join(ROOT, "codex")
 
 GENERATED_NOTE = (
@@ -33,338 +30,98 @@ GENERATED_NOTE = (
     "> Claude Code plugin is the source of truth. Edit the source, then regenerate.\n"
 )
 
-
-# Every path into the shipped skills is written against this placeholder; install.sh replaces it
-# with the ABSOLUTE skills directory of the installation (quoted in commands), so a command works
-# from any cwd — a worker's worktree included — and never depends on a shell variable.
-SKILLS = "@@MISMAGENT_SKILLS@@"
-COMPOSER_DIR = SKILLS + "/mismagent-worker-composer"
-PLUGIN_ROOTS = ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT", "<plugin root>")  # braces first
-TOOL_PATHS = (("/tools/board.py", SKILLS + "/mismagent-board/scripts/board.py"),
-              ("/tools/mismagent.py", COMPOSER_DIR + "/scripts/mismagent.py"),
-              ("/tools/CLI.md", COMPOSER_DIR + "/references/CLI.md"),
-              ("/tools/LOOP.md", COMPOSER_DIR + "/references/LOOP.md"))
+# the adversary and the two guarantors of quality think harder; the builder works at medium
+REASONING_EFFORT = {"mismagent-challenger": "high", "mismagent-reviewer": "high",
+                    "mismagent-architect": "high"}
 
 
-# ---- text adaptation (deterministic, reviewable rules) -----------------------
 def adapt(text):
-    """Claude-Code idioms -> Codex idioms."""
-    # Codex has no thin agent commands: an agent is a subagent spawned by name
-    text = text.replace("each agent's thin command (`/mismagent:<name>`)",
-                        "each agent as a subagent (*\"spawn `mismagent-<name>`\"*)")
-    agents = sorted(fn[len("mismagent-"):-3] for fn in os.listdir(os.path.join(KERNEL, "agents"))
-                    if fn.startswith("mismagent-") and fn.endswith(".md"))
-    text = re.sub(r"`?/mismagent:(%s)(?![a-z0-9-])`?" % "|".join(agents), r"the `mismagent-\1` subagent", text)
+    """Claude Code idioms -> Codex idioms."""
+    text = adapt_common(text)
     text = re.sub(r"/mismagent:([a-z0-9-]+)", r"$mismagent-\1", text)
-    for root in PLUGIN_ROOTS:  # the plugin's tools -> their installed place (quotes kept as written)
-        for src, dst in TOOL_PATHS:
-            text = text.replace(root + src, dst)
-    for src, dst in TOOL_PATHS:  # relative from methodology/ in the plugin
-        text = text.replace("`.." + src + "`", "`" + dst + "`")
-    text = text.replace("(Agent tool)", "(spawn it as a Codex subagent)")
     text = text.replace("$ARGUMENTS", "<the argument this skill was invoked with>")
-    # the profile templates ship inside the explore skill's references/
-    text = text.replace("`../PROFILE.md`", "`PROFILE.md`")  # relative from profiles/ in the plugin
-    text = text.replace("`PROFILE.md`", "`" + SKILLS + "/mismagent-explore/references/PROFILE.md`")
-    text = text.replace("`profiles/example.md`",
-                        "`" + SKILLS + "/mismagent-explore/references/profile-example.md`")
     return text
 
 
-def parse_frontmatter(text):
-    """Return (dict, body). Minimal: single-line `key: value` fields only."""
-    if not text.startswith("---"):
-        return {}, text
-    end = text.find("\n---", 3)
-    if end == -1:
-        return {}, text
-    fm = {}
-    for line in text[3:end].splitlines():
-        m = re.match(r"^([A-Za-z_-]+):\s*(.*)$", line)
-        if m:
-            val = m.group(2).strip()
-            if val.startswith("'") and val.endswith("'") and len(val) > 1:
-                val = val[1:-1].replace("''", "'")
-            elif val.startswith('"') and val.endswith('"') and len(val) > 1:
-                val = json.loads(val)
-            fm[m.group(1)] = val
-    return fm, text[end + 4:].lstrip("\n")
+BUILD_NOTES = """
+## Codex execution notes (generated)
+- **Dispatch = spawn the named subagent** from `.codex/agents/` (`mismagent-architect`,
+  `mismagent-builder`, `mismagent-reviewer`) with the inputs the table names. Each spawn is a fresh,
+  independent session: the fresh-context guarantee the reviewer relies on. You run in the main
+  thread and wait for its last message (the agent's `RESULT`/`VERDICT`) before reporting.
+- **No always-on mode here:** call `$mismagent-build` again for the next action.
+- **No hooks here:** on Claude Code two hooks stop an agent from merging, tagging or moving state
+  and from editing the human's files. On Codex the prompts say it and `mm check` verifies it.
+"""
 
 
-def write(path, content):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
-    print("  wrote %s" % os.path.relpath(path, ROOT))
+def convert_build():
+    fm, body = parse_frontmatter(read(os.path.join(KERNEL, "commands", "build.md")))
+    body = without_loop(body, "commands/build.md").rstrip() + "\n" + BUILD_NOTES
+    emit_skill(OUT, adapt, GENERATED_NOTE, "build", fm.get("description", ""), body)
+    ship_mm(OUT, adapt)
 
 
-# ---- skills ------------------------------------------------------------------
-def emit_skill(name, description, body):
-    front = "---\nname: mismagent-%s\ndescription: %s\n---\n" % (
-        name, json.dumps(adapt(description)))
-    content = front + "\n" + GENERATED_NOTE + "\n" + adapt(body)
-    write(os.path.join(OUT, "skills", "mismagent-%s" % name, "SKILL.md"), content)
-
-
-def convert_skills(plugin_dir):
-    skills_dir = os.path.join(plugin_dir, "skills")
-    if not os.path.isdir(skills_dir):
-        return
-    for name in sorted(os.listdir(skills_dir)):
-        src = os.path.join(skills_dir, name, "SKILL.md")
-        if not os.path.isfile(src):
-            continue
-        with open(src, encoding="utf-8") as f:
-            fm, body = parse_frontmatter(f.read())
-        emit_skill(name, fm.get("description", ""), body)
-        copy_references(os.path.join(skills_dir, name), "mismagent-%s" % name)
-
-
-def copy_references(src_skill_dir, out_name):
-    """A skill's references/ ship beside its SKILL.md (Markdown adapted, anything else copied)."""
-    src = os.path.join(src_skill_dir, "references")
-    if not os.path.isdir(src):
-        return
-    for fn in sorted(os.listdir(src)):
-        path = os.path.join(src, fn)
-        if not os.path.isfile(path):
-            continue
-        dest = os.path.join(OUT, "skills", out_name, "references", fn)
-        if fn.endswith(".md"):
-            with open(path, encoding="utf-8") as f:
-                write(dest, adapt(f.read()))
-        else:
-            shutil.copy(path, _ensured(dest))
-            print("  wrote %s" % os.path.relpath(dest, ROOT))
-
-
-# ---- agents -> TOML ----------------------------------------------------------
 def toml_multiline(text):
     if "'''" in text:
         sys.exit("cannot TOML-encode (contains ''' literal): refusing to guess an escape")
     return "'''\n%s\n'''" % text
 
 
-# adversarial / guarantor roles think harder; the rest inherit a medium effort
-REASONING_EFFORT = {
-    "mismagent-challenger": "high",   # must find the kill-shot, not a courtesy PROCEED
-    "mismagent-verifier": "high",     # the deterministic gate before the merge
-    "mismagent-architect": "high",    # foundational decisions + boundary guarantees
-}
-
-
-# Bash for running checks, never for writing: the verifier stays read-only.
-READ_ONLY = ("mismagent-verifier",)
-
-
 def convert_agents():
-    for fn in sorted(os.listdir(os.path.join(KERNEL, "agents"))):
-        if not fn.endswith(".md"):
-            continue
-        with open(os.path.join(KERNEL, "agents", fn), encoding="utf-8") as f:
-            fm, body = parse_frontmatter(f.read())
-        name = fm["name"]
-        tools = fm.get("tools", "")
-        writes = any(t in tools for t in ("Bash", "Write", "Edit"))
-        sandbox = "workspace-write" if writes and name not in READ_ONLY else "read-only"
+    for name in plugin_agents():
+        fm, body = parse_frontmatter(read(os.path.join(KERNEL, "agents", name + ".md")))
+        writes = any(t in fm.get("tools", "") for t in ("Bash", "Write", "Edit"))
         toml = (
-            "# GENERATED from plugins/mismagent/agents/%s by tools/generate-codex.py — do not edit.\n"
+            "# GENERATED from plugins/mismagent/agents/%s.md by tools/generate-codex.py — do not edit.\n"
             "name = %s\n"
             "description = %s\n"
             "sandbox_mode = %s\n"
             "model_reasoning_effort = %s\n"
             "developer_instructions = %s\n"
-        ) % (fn, json.dumps(name), json.dumps(adapt(fm.get("description", ""))),
-             json.dumps(sandbox), json.dumps(REASONING_EFFORT.get(name, "medium")),
-             toml_multiline(adapt(body)))
-        write(os.path.join(OUT, "agents", "%s.toml" % name), toml)
+        ) % (name, json.dumps(name), json.dumps(adapt(fm.get("description", ""))),
+             json.dumps("workspace-write" if writes else "read-only"),
+             json.dumps(REASONING_EFFORT.get(name, "medium")), toml_multiline(adapt(body)))
+        write(OUT, "agents/%s.toml" % name, toml)
 
 
-# ---- commands that survive as skills ----------------------------------------
-COMPOSER_CODEX_NOTES = """
-## Codex execution notes (generated — how to run the waves on this harness)
-- **Workers and the verifier are Codex subagents** (`.codex/agents/`): spawn them explicitly; each
-  spawn is a fresh, independent session — exactly the fresh-context guarantee the review relies on.
-  **`code-review` is a skill**: run it by spawning a plain subagent instructed to apply
-  `mismagent-code-review` on the block's diff (same fresh-context effect, no TOML needed).
-- **Parallel consumers in a wave — use `spawn_agents_on_csv`** (one worker per ready block):
-  1. write a CSV with one row per ready block: `block_id,block_type,context,skills,spec_path`
-     (`skills` = the block-type skill names, e.g. `mismagent-realize-aggregate`;
-     `spec_path` = the block's rich `<id>.md` file);
-  2. call `spawn_agents_on_csv` with `id_column: block_id`, `instruction` templated on those
-     columns ("You are mismagent-worker. Realize block {block_id} ({block_type}, {context}): load
-     the skills {skills}, follow the spec at {spec_path}, …"), an `output_schema` mirroring the
-     worker's RESULT handoff (`status: READY-FOR-REVIEW|BOUNCED|BLOCKED`, `file_list`, `notes`),
-     and `max_concurrency` = the wave's cap;
-  3. each row's `result_json` is the worker handoff → route it to step 4 as usual.
-- **Concurrency/config:** the global `[agents]` settings gate this (`max_threads` default 6,
-  `max_depth` 1 — you run in the main thread, so depth is never exceeded). Keep the profile's
-  `build.max_parallel_workers` ≤ `max_threads`.
-- **Model routing on Codex:** the tiers bind to reasoning effort by default — `light → low`,
-  `standard → medium`, `deep → high` (the profile's `build.model_routing.tiers` may name a model
-  instead). A CSV wave mixes tiers, so **split it: one `spawn_agents_on_csv` call per tier**, each
-  passing that tier's model/effort if the spawn accepts one. When a spawn takes no per-call
-  model/effort, the agent's TOML `model_reasoning_effort` applies: write `model=default` in the
-  ledger line, never the tier's binding you could not apply.
+LEGEND = """
+> **Codex mapping (this packaging).** The commands are Codex **skills**: `$mismagent-explore`,
+> `$mismagent-specify`, `$mismagent-build`, `$mismagent-conventions` (or `/skills`). The agents are
+> Codex **subagents** in `.codex/agents/`, spawned by `$mismagent-build` and `$mismagent-explore`.
+> The project's own conventions skill lives in `.agents/skills/conventions/`, and the project's
+> settings (`## mismagent`: test, lint, smoke, thresholds) in this `AGENTS.md`. The Claude Code
+> hooks are not shipped: the prompts and `mm check` hold their rules.
+
+**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>`. It copies the
+skills into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this
+file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists: merge it), and
+anchors every tool path to the absolute installed skills directory (re-run it after moving the
+project). Requires Python 3 (standard library only) for `mm`. Verify: `/skills` lists
+`mismagent-build`.
 """
 
 
-def convert_commands():
-    for cmd, skill in (("worker-composer", "worker-composer"), ("board", "board"),
-                       ("model", "model")):
-        with open(os.path.join(KERNEL, "commands", "%s.md" % cmd), encoding="utf-8") as f:
-            fm, body = parse_frontmatter(f.read())
-        if cmd == "worker-composer":
-            body = body.rstrip() + "\n" + COMPOSER_CODEX_NOTES
-        emit_skill(skill, fm.get("description", ""), body)
-    shutil.copy(os.path.join(KERNEL, "tools", "board.py"),
-                _ensured(os.path.join(OUT, "skills", "mismagent-board", "scripts", "board.py")))
-    print("  wrote codex/skills/mismagent-board/scripts/board.py")
-    # the build's deterministic tool + its interface, beside the skill that calls it
-    for src, sub in (("mismagent.py", "scripts"), ("board.py", "scripts"), ("CLI.md", "references"),
-                     ("LOOP.md", "references")):
-        path = os.path.join(KERNEL, "tools", src)
-        if not os.path.exists(path):
-            print("  WARNING: %s missing — not shipped" % path)
-            continue
-        dest = _ensured(os.path.join(OUT, "skills", "mismagent-worker-composer", sub, src))
-        if src.endswith(".md"):  # the interface doc names the plugin path: rewrite it
-            with open(path, encoding="utf-8") as f, open(dest, "w", encoding="utf-8") as g:
-                g.write(adapt(f.read()))
-        else:
-            shutil.copy(path, dest)
-        print("  wrote codex/skills/mismagent-worker-composer/%s/%s" % (sub, src))
+def write_agents_md():
+    write(OUT, "AGENTS.md", "# mismAgent — Codex packaging\n\n" + GENERATED_NOTE + LEGEND + "\n"
+          + agents_md_body(adapt))
 
 
-def _ensured(path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    return path
-
-
-# ---- profile templates (inside the explore skill's references/) --------------
-def copy_profile_templates():
-    ref = os.path.join(OUT, "skills", "mismagent-explore", "references")
-    for src, dst in ((os.path.join(KERNEL, "PROFILE.md"), "PROFILE.md"),
-                     (os.path.join(KERNEL, "profiles", "example.md"), "profile-example.md")):
-        with open(src, encoding="utf-8") as f:
-            write(os.path.join(ref, dst), adapt(f.read()))
-
-
-# ---- AGENTS.md from the methodology ------------------------------------------
-CODEX_SETUP = (
-    "**Setup (once).** From the mismagent repo: `codex/install.sh <your-project-root>` "
-    "It copies the skills "
-    "into `<project>/.agents/skills/`, the subagents into `<project>/.codex/agents/`, and this "
-    "file as the project's `AGENTS.md` (or `AGENTS.mismagent.md` if one already exists — merge it), "
-    "and anchors every tool path to the absolute installed skills directory (re-run it after moving "
-    "the project). Verify: `/skills` lists `mismagent-explore`."
-)
-
-CODEX_LEGEND = (
-    "\n> **Codex mapping (this packaging).** `[skill]`/`[command]` steps are Codex **skills** — "
-    "invoke with `$mismagent-<name>` (or `/skills`). `[agent]` steps are Codex **subagents** in "
-    "`.codex/agents/` — ask Codex to *\"spawn `mismagent-<name>` on <input>\"* (Codex spawns them "
-    "only on explicit request). Skill names carry the `mismagent-` "
-    "prefix because Codex has no namespaces. The board script lives at "
-    "`" + SKILLS + "/mismagent-board/scripts/board.py`. Subagents ship with a tuned "
-    "`model_reasoning_effort` (challenger/verifier/architect: high) and a `sandbox_mode` matching "
-    "their role (challenger, verifier: read-only). The worker-composer's parallel waves map onto "
-    "`spawn_agents_on_csv` (see its skill's Codex execution notes); the `[agents]` config "
-    "(`max_threads`, default 6) is the concurrency cap.\n"
-    "\n> **Recording duty (the caller's).** Whoever spawns a subagent is the **recorder**: the "
-    "challenger's debate and the user's `KILL`/`RESHAPE`/`PROCEED` choice, the user's answer to the "
-    "architect's `STACK_PROPOSAL`/`ARCH_PROPOSAL`/`INFRA_QUESTIONS` or to the tactical-modeler's "
-    "`NEEDS-INPUT`, a worker's `DECISIONS`, a reviewer's objection to a `D-NNNN` (into its `Debate`) — "
-    "each non-obvious choice as an entry of `features/<feature>/decisions.md` (format: "
-    "`" + SKILLS + "/mismagent-worker-composer/references/CLI.md`; validate with its `why check`). "
-    "Subagents never write that file: they cite `D-NNNN` in their notes.\n"
-)
-
-
-def convert_methodology():
-    """The methodology ships WHOLE (no paragraph surgery): its H1 is replaced by the Codex header,
-    setup and legend; the rest is adapted like any other file."""
-    path = os.path.join(KERNEL, "methodology", "mismagent.md")
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
-    if not text.startswith("# "):
-        sys.exit("%s must start with its '# ' title line — generate-codex.py replaces it" % path)
-    body = adapt(text.split("\n", 1)[1] if "\n" in text else "")
-    header = ("# mismAgent — Codex packaging\n\n" + GENERATED_NOTE + CODEX_LEGEND + "\n" + CODEX_SETUP + "\n")
-    write(os.path.join(OUT, "AGENTS.md"), header + body)
-
-
-# ---- the generated tree must be self-contained ---------------------------------
-CLAUDE_ONLY = ("CLAUDE_PLUGIN_ROOT", "<plugin root>", "redesign/composer-spec", "/plugin marketplace", "/mismagent:",
-               "/mismagent-cross-deploy:")
-
-
-def check_tree():
-    """Fail loudly on a Claude-only idiom left in the output, a relative Markdown link, a
-    `.agents/skills/...` path or a skill's `references/<file>` that does not resolve in codex/."""
-    bad = []
-    for d, _, fns in os.walk(OUT):
-        for fn in fns:
-            if not fn.endswith((".md", ".toml")):
-                continue
-            path = os.path.join(d, fn)
-            with open(path, encoding="utf-8") as f:
-                text = f.read()
-            rel = os.path.relpath(path, ROOT)
-            bad += ["%s: Claude-only idiom %r" % (rel, t) for t in CLAUDE_ONLY if t in text]
-            bad += ["%s: $mismagent-%s is no shipped skill" % (rel, n) for n in re.findall(r"\$mismagent-([a-z0-9-]+)", text)
-                    if not os.path.isdir(os.path.join(OUT, "skills", "mismagent-" + n))]
-            for link in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", text):
-                if not re.match(r"^[a-z]+:", link) and not os.path.exists(os.path.join(d, link)):
-                    bad.append("%s: link %s does not resolve" % (rel, link))
-            for m in re.finditer(re.escape(SKILLS) + r"/([A-Za-z0-9_./-]+)", text):
-                p = m.group(1).rstrip(".")
-                if text[m.start() - 1:m.start()] not in ('"', "`"):
-                    bad.append("%s: %s/%s is not quoted (a path may hold spaces)" % (rel, SKILLS, p))
-                if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
-                    bad.append("%s: path %s/%s not shipped" % (rel, SKILLS, p))
-            for p in re.findall(r"\.agents/skills/([A-Za-z0-9_./-]+)", text):
-                p = p.rstrip(".")
-                if "<" not in p and not os.path.exists(os.path.join(OUT, "skills", p)):
-                    bad.append("%s: path .agents/skills/%s not shipped" % (rel, p))
-            skill = re.match(r"skills/([^/]+)/", os.path.relpath(path, OUT))
-            for p in re.findall(r"`references/([A-Za-z0-9_.-]+)`", text) if skill else []:
-                if not os.path.exists(os.path.join(OUT, "skills", skill.group(1), "references", p)):
-                    bad.append("%s: references/%s not shipped" % (rel, p))
-    if bad:
-        sys.exit("generated codex/ is not self-contained:\n  " + "\n  ".join(bad))
-
-
-# ---- install.sh ---------------------------------------------------------------
 INSTALL_SH = """#!/bin/sh
 # GENERATED by tools/generate-codex.py — installs the mismAgent Codex packaging into a project.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
-[ -n "${1:-}" ] || { echo "usage: install.sh <project-root>" >&2; exit 2; }
-case "${2:-}" in
-  "") ;;
-  --with-cross-deploy)
-    echo "install.sh: --with-cross-deploy was removed in v0.18.0 (cross-deploy is no longer a module;" \
-      "keep such contracts as project files). Run: install.sh <project-root>" >&2
-    exit 2 ;;
-  *) echo "usage: install.sh <project-root>" >&2; exit 2 ;;
-esac
+[ -n "${1:-}" ] && [ -z "${2:-}" ] || { echo "usage: install.sh <project-root>" >&2; exit 2; }
 mkdir -p "$1"
 TARGET=$(cd "$1" && pwd)
 SKILLS="$TARGET/.agents/skills"
 # the path is written quoted into commands and inside the agents' TOML '''...''' strings
 case "$SKILLS" in *'"'*|*'`'*|*'$'*|*'\\'*|*"'''"*) echo "install.sh: the path must not contain a double quote, backtick, dollar, backslash or '''" >&2; exit 2 ;; esac
 
-mkdir -p "$TARGET/.agents/skills" "$TARGET/.codex/agents"
-# skills retired in v0.18.0: remove them from an upgraded installation
-for old in create-contract seam-cross-deploy seam-in-process; do
-  rm -rf "$TARGET/.agents/skills/mismagent-$old"
-done
-for d in "$HERE"/skills/*/; do
-  name=$(basename "$d")
-  rm -rf "$TARGET/.agents/skills/$name"
-  cp -R "$d" "$TARGET/.agents/skills/$name"
-done
+mkdir -p "$SKILLS" "$TARGET/.codex/agents"
+# the mismagent- names are this packaging's: replace them whole, so a retired piece goes too
+rm -rf "$SKILLS"/mismagent-* "$TARGET"/.codex/agents/mismagent-*.toml
+cp -R "$HERE"/skills/mismagent-* "$SKILLS/"
 cp "$HERE"/agents/*.toml "$TARGET/.codex/agents/"
 
 if [ -f "$TARGET/AGENTS.md" ]; then
@@ -375,32 +132,27 @@ else
 fi
 # anchor every path into the skills to this installation: absolute, so it works from any cwd
 ESC=$(printf '%s' "$SKILLS" | sed 's/[|&\\]/\\&/g')
-for f in "$SKILLS"/mismagent-*/SKILL.md "$SKILLS"/mismagent-*/references/*.md "$TARGET"/.codex/agents/mismagent-*.toml \
+for f in "$SKILLS"/mismagent-*/SKILL.md "$SKILLS"/mismagent-*/references/*.md \\
+         "$SKILLS"/mismagent-*/scripts/*.py "$TARGET"/.codex/agents/mismagent-*.toml \\
          "$TARGET/AGENTS.md" "$TARGET/AGENTS.mismagent.md"; do
   [ -f "$f" ] || continue
   sed "s|@@MISMAGENT_SKILLS@@|$ESC|g" "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 done
-echo "mismAgent (Codex) installed into $TARGET — verify with /skills (expect mismagent-explore)."
+chmod +x "$SKILLS/mismagent-build/scripts/mm.py"
+echo "mismAgent (Codex) installed into $TARGET — verify with /skills (expect mismagent-build)."
 """
 
 
 def main():
     global OUT
-    if sys.argv[1:2] == ["--out"] and len(sys.argv) == 3:  # tests: generate elsewhere
-        OUT = os.path.abspath(sys.argv[2])
-    elif sys.argv[1:]:
-        sys.exit("usage: generate-codex.py [--out DIR]")
-    if os.path.isdir(OUT):
-        shutil.rmtree(OUT)
+    OUT = fresh(OUT, sys.argv, "generate-codex.py")
     print("generating codex/ from plugins/ ...")
-    convert_skills(KERNEL)
+    ship_skills(OUT, adapt, GENERATED_NOTE)
+    convert_build()
     convert_agents()
-    convert_commands()
-    copy_profile_templates()
-    convert_methodology()
-    write(os.path.join(OUT, "install.sh"), INSTALL_SH)
-    os.chmod(os.path.join(OUT, "install.sh"), 0o755)
-    check_tree()
+    write_agents_md()
+    write(OUT, "install.sh", INSTALL_SH, 0o755)
+    check_tree(OUT, r"\$mismagent-([a-z0-9-]+)")
     print("done.")
 
 

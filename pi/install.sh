@@ -18,7 +18,6 @@ anchor() {  # every path into the skills -> this installation's absolute skills 
 }
 case "${1:-}" in
   "") usage ;;
-  --with-cross-deploy) usage ;;
   --package)
     [ -n "${2:-}" ] && [ -z "${3:-}" ] || usage
     mkdir -p "$2"
@@ -27,32 +26,21 @@ case "${1:-}" in
     rm -rf "$PKG/skills" "$PKG/prompts"
     cp -R "$HERE/skills" "$HERE/prompts" "$HERE/package.json" "$PKG/"
     anchor "$PKG/skills" "$PKG"/skills/mismagent-*/SKILL.md "$PKG"/skills/mismagent-*/references/*.md \
-      "$PKG"/prompts/mismagent-*.md
+      "$PKG"/skills/mismagent-*/scripts/*.py "$PKG"/prompts/mismagent-*.md
+    chmod +x "$PKG/skills/mismagent-build/scripts/mm.py"
     echo "mismAgent pi package written to $PKG — install it with: pi install \"$PKG\""
     exit 0 ;;
 esac
-case "${2:-}" in
-  "") ;;
-  --with-cross-deploy)
-    echo "install.sh: --with-cross-deploy was removed in v0.18.0 (cross-deploy is no longer a module;" \
-      "keep such contracts as project files). Run: install.sh <project-root>" >&2
-    exit 2 ;;
-  *) usage ;;
-esac
+[ -z "${2:-}" ] || usage
 mkdir -p "$1"
 TARGET=$(cd "$1" && pwd)
 check_path "$TARGET"
+SKILLS="$TARGET/.agents/skills"
 
-mkdir -p "$TARGET/.agents/skills" "$TARGET/.pi/prompts" "$TARGET/.pi/agents"
-# skills retired in v0.18.0: remove them from an upgraded installation
-for old in create-contract seam-cross-deploy seam-in-process; do
-  rm -rf "$TARGET/.agents/skills/mismagent-$old"
-done
-for d in "$HERE"/skills/*/; do
-  name=$(basename "$d")
-  rm -rf "$TARGET/.agents/skills/$name"
-  cp -R "$d" "$TARGET/.agents/skills/$name"
-done
+mkdir -p "$SKILLS" "$TARGET/.pi/prompts" "$TARGET/.pi/agents"
+# the mismagent- names are this packaging's: replace them whole, so a retired piece goes too
+rm -rf "$SKILLS"/mismagent-* "$TARGET"/.pi/prompts/mismagent-*.md "$TARGET"/.pi/agents/mismagent-*.md
+cp -R "$HERE"/skills/mismagent-* "$SKILLS/"
 cp "$HERE"/prompts/*.md "$TARGET/.pi/prompts/"
 cp "$HERE"/agents/*.md "$TARGET/.pi/agents/"
 
@@ -62,8 +50,9 @@ if [ -f "$TARGET/AGENTS.md" ]; then
 else
   cp "$HERE/AGENTS.md" "$TARGET/AGENTS.md"
 fi
-anchor "$TARGET/.agents/skills" "$TARGET"/.agents/skills/mismagent-*/SKILL.md \
-  "$TARGET"/.agents/skills/mismagent-*/references/*.md "$TARGET"/.pi/prompts/mismagent-*.md \
+anchor "$SKILLS" "$SKILLS"/mismagent-*/SKILL.md "$SKILLS"/mismagent-*/references/*.md \
+  "$SKILLS"/mismagent-*/scripts/*.py "$TARGET"/.pi/prompts/mismagent-*.md \
   "$TARGET"/.pi/agents/mismagent-*.md "$TARGET/AGENTS.md" "$TARGET/AGENTS.mismagent.md"
-echo "mismAgent (pi) installed into $TARGET — verify with /skill:mismagent-explore."
-echo "[agent] steps need pi's subagent example extension (AGENTS.md, Setup) with agentScope 'both'."
+chmod +x "$SKILLS/mismagent-build/scripts/mm.py"
+echo "mismAgent (pi) installed into $TARGET — verify that /mismagent-build autocompletes."
+echo "The agents need pi's subagent example extension (AGENTS.md, Setup), called with agentScope 'both'."

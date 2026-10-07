@@ -1,7 +1,7 @@
 {
   "name": "mismagent-pi",
-  "version": "0.26.2",
-  "description": "mismAgent method \u2014 pi packaging (GENERATED from the Claude Code plugin by tools/generate-pi.py; do not edit)",
+  "version": "0.5.0",
+  "description": "mismAgent \u2014 pi packaging (GENERATED from the Claude Code plugin by tools/generate-pi.py; do not edit)",
   "keywords": [
     "pi-package"
   ],

@@ -12,7 +12,11 @@ case "$cmd" in
 esac
 case "$cmd" in *"[skip-readme]"*) exit 0 ;; esac
 
-repo="${CLAUDE_PROJECT_DIR:-.}"
+# The repo the commit runs in: a leading `cd <dir>` or `git -C <dir>` (a worktree), else the project.
+repo=$(printf '%s' "$cmd" | sed -nE 's/^[[:space:]]*cd[[:space:]]+([^;&|[:space:]]+).*/\1/p; s/.*git -C ([^;&|[:space:]]+).*/\1/p' | head -1)
+case "$repo" in "~"*) repo="$HOME${repo#\~}" ;; esac
+[ -n "$repo" ] && [ -d "$repo" ] || repo="${CLAUDE_PROJECT_DIR:-.}"
+
 git -C "$repo" diff --cached --name-only -- README.md | grep -q . && exit 0
 if git -C "$repo" diff --name-only -- README.md | grep -q . &&
    printf '%s' "$cmd" | grep -Eq 'git (-C [^ ]+ )?add ([^&;|]* )?(-A|--all|\.|README\.md)( |$|&|;)'; then

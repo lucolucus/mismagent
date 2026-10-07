@@ -2,7 +2,7 @@
 
 **A Claude Code plugin that guides coding agents to write software that stays maintainable.**
 
-![mismAgent 0.5 on one page: the commands you type, the flow from an idea to a release and how it holds quality](docs/one-page.svg)
+![mismAgent 0.7 on one page: the commands you type, the flow from an idea to a release and how it holds quality](docs/one-page.svg)
 
 ## Start here
 
@@ -73,6 +73,9 @@ important doubt (`NEEDS-HUMAN`) and each release.
 | [`v0.5-hypotheses.md`](docs/rationale/v0.5-hypotheses.md) | every mechanism as a hypothesis, with the experiment that confirms or refutes it |
 | [`v0.5-core.md`](docs/rationale/v0.5-core.md) | the minimal core, what this plugin ships |
 | [`v0.5-derivation.md`](docs/rationale/v0.5-derivation.md) | non-normative: how we got here |
+
+The design keeps the name 0.5; the plugin ships as **0.7.0**, because builds numbered 0.5.0 and
+0.6.0 of the earlier flow still sit in Claude Code's plugin cache, which is keyed by version.
 
 The v0.26 flow (explore → model → worker-composer, parallel building blocks) is retired to
 [`attic/v0.26/`](attic/v0.26/).

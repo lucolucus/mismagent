@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mm — the deterministic tool of mismAgent 0.5 (Python 3 stdlib only).
+"""mm — the deterministic tool of mismAgent 0.7 (Python 3 stdlib only).
 
 Owns ALL the git and all the counting of the slice lifecycle; no prompt carries it. Works on the
 git repository containing the cwd. No branches: one slice at a time on the current branch; `start`
@@ -555,7 +555,7 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
     ("check", "files well formed, acceptance markers, sensors, guarded files", None))
 
 def parser():
-    p = argparse.ArgumentParser(prog="mm", description="mismAgent 0.5: slice lifecycle, git, counting.")
+    p = argparse.ArgumentParser(prog="mm", description="mismAgent 0.7: slice lifecycle, git, counting.")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="command")
     for name, help_, arg in SUBCOMMANDS:
         s = sub.add_parser(name, help=help_, description=help_)

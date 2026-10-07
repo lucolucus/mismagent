@@ -1,4 +1,4 @@
-# mismAgent plugin — 0.5
+# mismAgent plugin — 0.7
 
 Guides agents to write software that **stays maintainable** over long projects. The code carries
 the theory of the program (Naur); XP keeps it clean; the human agrees concrete examples; the

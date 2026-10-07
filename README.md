@@ -13,16 +13,18 @@ repo root is the marketplace; register it with an **absolute path**:
 /plugin install mismagent@mismagent-method
 /reload-plugins
 ```
-Then `/mismagent:explore <idea>` for a new product, or `/mismagent:specify <request>` for a change,
-and `/mismagent:build` until it stops for you.
+Then, for a new product: `/mismagent:explore <idea>`, `/mismagent:specify R0`, and
+`/mismagent:build` until it stops for you. For a change: `/mismagent:specify <request>`, then
+`/mismagent:build`.
 
 ## Why
 
 A single agent, given a small well-described problem, already delivers the features: in our
 baseline, plain Claude Code built a cash register, a change request and a second feature in fifteen
-minutes for $4.95, passing 40/40 of an external acceptance. What it loses is what the text did not
+minutes, passing 40/40 of an external acceptance. What it loses is what the text did not
 ask for: refactoring, design, exploration, coherence across sessions — and on long projects that
-loss compounds. mismAgent is for that, light by default.
+loss compounds. mismAgent is for that: maintainable code, exploration, existing code, coherence
+from the architecture to the code, light by default.
 
 The thesis: **the code carries the theory of the program** (Naur); **XP** keeps it clean (simple
 design, test first, refactoring always); **the human agrees concrete examples**; the harness keeps
@@ -53,8 +55,12 @@ important doubt (`NEEDS-HUMAN`) and each release.
 - **Every slice:** acceptance tests at the use-case seam first, test-first to green, a refactoring
   pass, a commit at every green; a fresh reviewer blocks a quality defect in the diff exactly like a
   functional one.
-- **Every release:** a fresh reviewer scores the whole code on seven dimensions; below 4, the
-  architect reads the code and queues refactoring slices before the next request.
+- **Every release:** a fresh reviewer scores the whole code from 1 to 5 on the seven
+  dimensions of the [review table](plugins/mismagent/skills/craft/references/review-table.md)
+  (simple design, naming, modularity, duplication, concision, error handling, test quality); if any
+  is below 4, the architect reads the code and queues refactoring slices before the next request. If
+  one is still below 4 after two design passes, you decide whether to confirm the release, with
+  the reason.
 - **Tools compute, agents judge:** `mm` owns the state, the git moves and every count.
 
 ## The design, in three layers

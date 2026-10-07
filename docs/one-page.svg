@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 590" width="1200" height="590" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" width="960" height="660" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title>mismAgent 0.5 on one page</title>
   <style>
     .bg { fill: #ffffff; }
     .ink { fill: #1f2328; }
     .soft { fill: #59636e; }
-    .line { stroke: #8c959f; fill: none; stroke-width: 1.5; }
+    .line { stroke: #8c959f; fill: none; stroke-width: 1.8; }
     .rule { stroke: #d1d9e0; stroke-width: 1; }
-    .box { fill: #f6f8fa; stroke: #d1d9e0; stroke-width: 1.2; }
-    .doc { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1.2; }
-    .ring { stroke: #0969da; fill: none; stroke-width: 2; }
-    .node { fill: #ffffff; stroke: #0969da; stroke-width: 1.5; }
+    .box { fill: #f6f8fa; stroke: #d1d9e0; stroke-width: 1.4; }
+    .doc { fill: #ddf4ff; stroke: #54aeff; stroke-width: 1.4; }
+    .ring { stroke: #0969da; fill: none; stroke-width: 2.4; }
+    .node { fill: #ffffff; stroke: #0969da; stroke-width: 1.8; }
     .you { fill: #1a7f37; }
-    .youbox { fill: #dafbe1; stroke: #2da44e; stroke-width: 1.2; }
+    .youbox { fill: #dafbe1; stroke: #2da44e; stroke-width: 1.4; }
     .arrowhead { fill: #8c959f; }
     .ringhead { fill: #0969da; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -40,109 +40,80 @@
     </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="1200" height="590"/>
+  <rect class="bg" x="0" y="0" width="960" height="660"/>
 
   <!-- Title: why this page exists -->
-  <text class="ink" x="40" y="68" font-size="40" font-weight="700">mismAgent</text>
-  <text class="soft" x="40" y="100" font-size="17">A harness that guides coding agents to write software that stays maintainable.</text>
-  <text class="ink" x="1160" y="66" font-size="14" font-weight="600" text-anchor="end">Claude Code plugin · v0.5</text>
-  <text class="soft" x="1160" y="90" font-size="13" text-anchor="end">2026-10-07</text>
-  <line class="rule" x1="40" y1="124" x2="1160" y2="124"/>
+  <text class="ink" x="32" y="56" font-size="28" font-weight="700">Coding agents that write software that stays maintainable</text>
+  <text class="soft" x="32" y="88" font-size="16">mismAgent, a Claude Code plugin · v0.5 · 2026-10-07</text>
+  <line class="rule" x1="32" y1="110" x2="928" y2="110"/>
 
-  <!-- Left: what you type -->
-  <text class="ink" x="40" y="166" font-size="15" font-weight="700">You type</text>
-  <g font-size="12">
-    <text class="ink mono" x="40" y="196" font-weight="600">/mismagent:explore &lt;idea&gt;</text>
-    <text class="soft" x="40" y="214">brief · challenger · event storm</text>
-    <text class="ink mono" x="40" y="252" font-weight="600">/mismagent:specify &lt;request&gt;</text>
-    <text class="soft" x="40" y="270">examples + slices for one release</text>
-    <text class="ink mono" x="40" y="308" font-weight="600">/mismagent:build</text>
-    <text class="soft" x="40" y="326">one action per call; again, or /loop</text>
-    <text class="ink mono" x="40" y="364" font-weight="600">/mismagent:conventions</text>
-    <text class="soft" x="40" y="382">decide the agents' proposals</text>
-    <text class="ink mono" x="40" y="420" font-weight="600">/mismagent:build --confirm R0</text>
-    <text class="soft" x="40" y="438">your yes: the release tag</text>
-  </g>
-  <circle class="you" cx="46" cy="486" r="5"/>
-  <text class="soft" x="58" y="490" font-size="12">you decide here</text>
+  <!-- From an idea to examples -->
+  <text class="soft" x="145" y="148" font-size="15" text-anchor="middle">a new idea</text>
+  <line class="line" x1="145" y1="154" x2="145" y2="166" marker-end="url(#a)"/>
+  <rect class="box" x="40" y="168" width="210" height="76" rx="9"/>
+  <text class="ink" x="145" y="194" font-size="17" font-weight="600" text-anchor="middle">explore</text>
+  <text class="soft" x="145" y="214" font-size="14" text-anchor="middle">a challenger tries</text>
+  <text class="soft" x="145" y="232" font-size="14" text-anchor="middle">to kill the idea</text>
+  <circle class="you" cx="250" cy="168" r="6"/>
 
-  <!-- Centre: the flow -->
-  <text class="soft" x="375" y="168" font-size="12" text-anchor="middle">a new idea</text>
-  <line class="line" x1="375" y1="174" x2="375" y2="190" marker-end="url(#a)"/>
-  <rect class="box" x="310" y="192" width="130" height="56" rx="8"/>
-  <text class="ink" x="375" y="216" font-size="13" font-weight="600" text-anchor="middle">explore</text>
-  <text class="soft" x="375" y="234" font-size="11" text-anchor="middle">brief · challenger</text>
-  <circle class="you" cx="440" cy="192" r="5"/>
+  <line class="line" x1="145" y1="244" x2="145" y2="284" marker-end="url(#a)"/>
+  <text class="soft" x="155" y="270" font-size="13">or start with a request</text>
 
-  <line class="line" x1="375" y1="248" x2="375" y2="320" marker-end="url(#a)"/>
-  <text class="soft" x="384" y="290" font-size="11">or start here</text>
-  <text class="soft" x="384" y="304" font-size="11">with a request</text>
+  <rect class="box" x="40" y="286" width="210" height="76" rx="9"/>
+  <text class="ink" x="145" y="312" font-size="17" font-weight="600" text-anchor="middle">specify</text>
+  <text class="soft" x="145" y="332" font-size="14" text-anchor="middle">real cases, real values;</text>
+  <text class="soft" x="145" y="350" font-size="14" text-anchor="middle">you confirm each rule</text>
+  <circle class="you" cx="250" cy="286" r="6"/>
 
-  <rect class="box" x="310" y="322" width="130" height="56" rx="8"/>
-  <text class="ink" x="375" y="346" font-size="13" font-weight="600" text-anchor="middle">specify</text>
-  <text class="soft" x="375" y="364" font-size="11" text-anchor="middle">an interview</text>
-  <circle class="you" cx="440" cy="322" r="5"/>
+  <line class="line" x1="145" y1="362" x2="145" y2="384" marker-end="url(#a)"/>
+  <rect class="doc" x="40" y="386" width="210" height="56" rx="5"/>
+  <text class="ink" x="145" y="410" font-size="16" font-weight="600" text-anchor="middle">examples + slices</text>
+  <text class="soft" x="145" y="430" font-size="14" text-anchor="middle">for one release</text>
+  <path class="line" d="M250,414 C295,414 315,390 344,372" marker-end="url(#a)"/>
 
-  <line class="line" x1="375" y1="378" x2="375" y2="430" marker-end="url(#a)"/>
-  <rect class="doc" x="310" y="432" width="130" height="50" rx="4"/>
-  <text class="ink" x="375" y="453" font-size="12" font-weight="600" text-anchor="middle">examples + slices</text>
-  <text class="soft" x="375" y="470" font-size="11" text-anchor="middle">one release</text>
-  <path class="line" d="M440,457 C480,457 495,380 516,352" marker-end="url(#a)"/>
+  <!-- The build ring -->
+  <circle class="ring" cx="480" cy="360" r="130" stroke-opacity="0.15" stroke-width="24"/>
+  <path class="ring" d="M548.9,249.8 A130,130 0 0 1 609.8,366.8" marker-end="url(#r)"/>
+  <path class="ring" d="M550.8,469.0 A130,130 0 0 1 409.2,469.0" marker-end="url(#r)"/>
+  <path class="ring" d="M350.2,366.8 A130,130 0 0 1 411.1,249.8" marker-end="url(#r)"/>
+  <text class="soft" x="480" y="190" font-size="14" text-anchor="middle">acceptance tests first · TDD · refactor</text>
+  <rect class="node" x="420" y="210" width="120" height="40" rx="20"/>
+  <text class="ink" x="480" y="236" font-size="17" font-weight="600" text-anchor="middle">builder</text>
+  <rect class="node" x="533" y="405" width="120" height="40" rx="20"/>
+  <text class="ink" x="593" y="431" font-size="17" font-weight="600" text-anchor="middle">reviewer</text>
+  <rect class="node" x="307" y="405" width="120" height="40" rx="20"/>
+  <text class="ink" x="367" y="431" font-size="17" font-weight="600" text-anchor="middle">land</text>
+  <text class="ink mono" x="480" y="338" font-size="16" font-weight="600" text-anchor="middle">/mismagent:build</text>
+  <text class="soft" x="480" y="362" font-size="14" text-anchor="middle">one slice at a time,</text>
+  <text class="soft" x="480" y="380" font-size="14" text-anchor="middle">one action per call</text>
+  <text class="soft" x="662" y="420" font-size="14">a quality defect blocks</text>
+  <text class="soft" x="662" y="438" font-size="14">like a functional one</text>
 
-  <!-- the build ring -->
-  <circle class="ring" cx="640" cy="340" r="120" stroke-opacity="0.15" stroke-width="22"/>
-  <path class="ring" d="M690.7,231.2 A120,120 0 0 1 759.5,350.5" marker-end="url(#r)"/>
-  <path class="ring" d="M708.8,438.3 A120,120 0 0 1 571.2,438.3" marker-end="url(#r)"/>
-  <path class="ring" d="M520.5,350.5 A120,120 0 0 1 589.3,231.2" marker-end="url(#r)"/>
-  <rect class="node" x="592" y="203" width="96" height="34" rx="17"/>
-  <text class="ink" x="640" y="225" font-size="13" font-weight="600" text-anchor="middle">builder</text>
-  <rect class="node" x="696" y="383" width="96" height="34" rx="17"/>
-  <text class="ink" x="744" y="405" font-size="13" font-weight="600" text-anchor="middle">reviewer</text>
-  <rect class="node" x="488" y="383" width="96" height="34" rx="17"/>
-  <text class="ink" x="536" y="405" font-size="13" font-weight="600" text-anchor="middle">land</text>
-  <text class="ink mono" x="640" y="318" font-size="13" font-weight="600" text-anchor="middle">/mismagent:build</text>
-  <text class="soft" x="640" y="338" font-size="12" text-anchor="middle">one slice at a time</text>
-  <text class="soft" x="640" y="355" font-size="12" text-anchor="middle">tests first · TDD · refactor</text>
-  <text class="soft" x="640" y="372" font-size="12" text-anchor="middle">mm decides the next action</text>
+  <!-- Architect -->
+  <path class="line" d="M593,295 C640,262 680,244 716,240" marker-end="url(#a)" marker-start="url(#a)"/>
+  <rect class="box" x="718" y="196" width="202" height="76" rx="9"/>
+  <text class="ink" x="819" y="222" font-size="17" font-weight="600" text-anchor="middle">architect</text>
+  <text class="soft" x="819" y="242" font-size="14" text-anchor="middle">structure at birth,</text>
+  <text class="soft" x="819" y="260" font-size="14" text-anchor="middle">design passes on signal</text>
 
-  <path class="line" d="M725,255 C750,232 765,212 788,206" marker-end="url(#a)" marker-start="url(#a)"/>
-  <rect class="box" x="790" y="180" width="112" height="52" rx="8"/>
-  <text class="ink" x="846" y="203" font-size="13" font-weight="600" text-anchor="middle">architect</text>
-  <text class="soft" x="846" y="220" font-size="11" text-anchor="middle">design pass</text>
-  <text class="soft" x="790" y="252" font-size="11">design signals →</text>
-  <text class="soft" x="790" y="266" font-size="11">refactoring slices</text>
+  <!-- Conventions -->
+  <path class="line" d="M630,447 C660,490 690,512 716,516" marker-end="url(#a)" marker-start="url(#a)"/>
+  <rect class="youbox" x="718" y="478" width="202" height="76" rx="9"/>
+  <text class="ink" x="819" y="504" font-size="17" font-weight="600" text-anchor="middle">conventions</text>
+  <text class="soft" x="819" y="524" font-size="14" text-anchor="middle">agents propose,</text>
+  <text class="soft" x="819" y="542" font-size="14" text-anchor="middle">you decide each one</text>
+  <circle class="you" cx="920" cy="478" r="6"/>
 
-  <path class="line" d="M725,425 C750,450 765,468 788,474" marker-end="url(#a)" marker-start="url(#a)"/>
-  <rect class="youbox" x="790" y="450" width="112" height="52" rx="8"/>
-  <text class="ink" x="846" y="473" font-size="13" font-weight="600" text-anchor="middle">conventions</text>
-  <text class="soft" x="846" y="490" font-size="11" text-anchor="middle">a project skill</text>
-  <circle class="you" cx="902" cy="450" r="5"/>
-  <text class="soft" x="790" y="430" font-size="11">proposals</text>
+  <!-- Release -->
+  <line class="line" x1="480" y1="492" x2="480" y2="510" marker-end="url(#a)"/>
+  <rect class="youbox" x="380" y="512" width="200" height="42" rx="21"/>
+  <text class="ink" x="480" y="539" font-size="17" font-weight="600" text-anchor="middle">release R0 · R1 · …</text>
+  <circle class="you" cx="580" cy="512" r="6"/>
+  <text class="soft" x="480" y="580" font-size="14" text-anchor="middle">a fresh reviewer scores seven dimensions 1–5; any below 4, a design pass;</text>
+  <text class="soft" x="480" y="598" font-size="14" text-anchor="middle">still below after two, you decide</text>
 
-  <line class="line" x1="640" y1="462" x2="640" y2="490" marker-end="url(#a)"/>
-  <rect class="youbox" x="560" y="492" width="160" height="36" rx="18"/>
-  <text class="ink" x="640" y="515" font-size="13" font-weight="600" text-anchor="middle">release R0 · R1 · …</text>
-  <circle class="you" cx="720" cy="492" r="5"/>
-  <text class="soft" x="640" y="552" font-size="11" text-anchor="middle">a doubt it cannot settle stops the flow: NEEDS-HUMAN</text>
-
-  <!-- Right: how it holds quality -->
-  <text class="ink" x="935" y="166" font-size="15" font-weight="700">How it holds quality</text>
-  <g font-size="12">
-    <text class="ink" x="935" y="196" font-weight="600">Structure at birth</text>
-    <text class="soft" x="935" y="214">ARCHITECTURE.md, error policy,</text>
-    <text class="soft" x="935" y="230">formatter and linter in the gate</text>
-    <text class="ink" x="935" y="264" font-weight="600">Conventions with you</text>
-    <text class="soft" x="935" y="282">a project skill that grows with</text>
-    <text class="soft" x="935" y="298">the code, never compacted</text>
-    <text class="ink" x="935" y="332" font-weight="600">Every slice</text>
-    <text class="soft" x="935" y="350">a quality defect in the diff blocks</text>
-    <text class="soft" x="935" y="366">like a functional one</text>
-    <text class="ink" x="935" y="400" font-weight="600">Every release</text>
-    <text class="soft" x="935" y="418">a fresh reviewer scores 7 dimensions;</text>
-    <text class="soft" x="935" y="434">below 4, a design pass</text>
-    <text class="ink" x="935" y="468" font-weight="600">Tools compute, agents judge</text>
-    <text class="soft" x="935" y="486">mm owns the state, the git moves</text>
-    <text class="soft" x="935" y="502">and every count</text>
-  </g>
-
+  <!-- Legend -->
+  <line class="rule" x1="32" y1="620" x2="928" y2="620"/>
+  <circle class="you" cx="46" cy="641" r="6"/>
+  <text class="soft" x="60" y="646" font-size="14">you decide here · a doubt the agents cannot settle stops the flow (NEEDS-HUMAN)</text>
 </svg>

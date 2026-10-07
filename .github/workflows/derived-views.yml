@@ -3,6 +3,9 @@ name: derived-views
 # codex/ and pi/ are GENERATED views of plugins/ (the single source of truth).
 # PRs: fail if they are stale. Pushes to master: self-heal — regenerate and
 # commit the difference (this also reverts hand edits to the derived trees).
+#
+# FROZEN during 0.5, like .githooks/pre-commit: codex/ and pi/ still hold the v0.26 flow and their
+# generators read files now in attic/v0.26/. Remove the `if: false` below once 0.5 stabilizes.
 on:
   push:
     branches: [master]
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   regen:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

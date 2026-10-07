@@ -1,52 +1,34 @@
 # mismAgent
 
-**A harness that guides coding agents to write software that stays maintainable — packaged as a
-Claude Code plugin.** Version **0.5**: a restart from theory.
+**A Claude Code plugin that guides coding agents to write software that stays maintainable.**
 
-A single agent, given a small well-described problem, already delivers the features: in our
-baseline, plain Claude Code built a cash register, a change request and a second feature in fifteen
-minutes for $4, passing 40/40 of an external acceptance. What it loses is what the text did not ask
-for: refactoring, design, exploration, coherence across sessions — and on long projects that loss
-compounds. mismAgent is for that: **maintainable code, exploration, existing code, coherence from the
-architecture to the code**, light by default.
-
-The thesis: **the code carries the theory of the program** (Naur); **XP** keeps it clean (simple
-design, test first, refactoring always); **the human agrees concrete examples**; the harness keeps
-both honest. Heir of **BMad** and **Agentheim**. The full vision:
-[`docs/rationale/v0.5-vision.md`](docs/rationale/v0.5-vision.md).
-
-```mermaid
-flowchart LR
-    idea([a new idea]) --> EXP["/mismagent:explore<br/>brief · challenger · event storm"]
-    EXP --> SP
-    req([a request]) --> SP["/mismagent:specify<br/>investigative interview"]
-    SP --> ex[("examples + slices<br/>for one release")]
-    ex --> BU["/mismagent:build<br/>one action per call"]
-    BU -->|builder → reviewer → land| BU
-    BU -->|design signals| AR["architect<br/>design pass"]
-    AR --> BU
-    BU -->|NEEDS-HUMAN| you([you: answer · confirm the release])
-    BU -->|convention proposals| CO["/mismagent:conventions<br/>with you"]
-    CO --> BU
-
-    classDef step fill:#f6f8fa,stroke:#d0d7de,color:#24292f
-    classDef file fill:#ddf4ff,stroke:#54aeff,color:#24292f
-    classDef term fill:#dafbe1,stroke:#2da44e,color:#24292f
-    class EXP,SP,BU,AR,CO step
-    class ex file
-    class idea,req,you term
-```
+![mismAgent 0.5 on one page: the commands you type, the flow from an idea to a release and how it holds quality](docs/one-page.svg)
 
 ## Start here
 
-Requires Claude Code and **Python 3** (standard library only) for the tool `mm` and the hooks.
-
-The repo root is the marketplace. Register it with an **absolute path**:
+Requires Claude Code and **Python 3** (standard library only) for the tool `mm` and the hooks. The
+repo root is the marketplace; register it with an **absolute path**:
 ```
 /plugin marketplace add /absolute/path/to/this/repo
 /plugin install mismagent@mismagent-method
 /reload-plugins
 ```
+Then `/mismagent:explore <idea>` for a new product, or `/mismagent:specify <request>` for a change,
+and `/mismagent:build` until it stops for you.
+
+## Why
+
+A single agent, given a small well-described problem, already delivers the features: in our
+baseline, plain Claude Code built a cash register, a change request and a second feature in fifteen
+minutes for $4.95, passing 40/40 of an external acceptance. What it loses is what the text did not
+ask for: refactoring, design, exploration, coherence across sessions — and on long projects that
+loss compounds. mismAgent is for that, light by default.
+
+The thesis: **the code carries the theory of the program** (Naur); **XP** keeps it clean (simple
+design, test first, refactoring always); **the human agrees concrete examples**; the harness keeps
+both honest. Heir of **BMad** and **Agentheim**.
+
+## The commands
 
 | You type | What happens |
 |---|---|
@@ -57,7 +39,8 @@ The repo root is the marketplace. Register it with an **absolute path**:
 | `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): you and the agent go through the agents' proposals one by one — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |
 | `/loop /mismagent:build` (in a session of its own) | The always-on conductor: every action as soon as it is ready — build, review, land, design pass; when it needs you it waits and checks back every ten minutes, and resumes by itself once you have answered. |
 
-You step in for the challenger's verdict, the examples, the stack, the project's conventions, an important doubt (`NEEDS-HUMAN`) and each release.
+You step in for the challenger's verdict, the examples, the stack, the project's conventions, an
+important doubt (`NEEDS-HUMAN`) and each release.
 
 ## How it holds quality
 - **Structure at birth:** the architect writes `ARCHITECTURE.md` before the first slice — layering,
@@ -93,5 +76,7 @@ it and are frozen until 0.5 stabilizes.
   simulated user in turns), `scenarios/baseline/` (plain Claude Code, the design-pass experiment),
   `scenarios/long-horizon/` (four change requests: does the code stay maintainable?), `score.py`,
   `cost.py`, `run.py`.
+- [`docs/one-page.svg`](docs/one-page.svg) is the page at the top: update it, and its date, whenever
+  a command or the flow changes.
 - `.claude/settings.json` refuses an agent's `git commit` without a `README.md` update —
   `[skip-readme]` in the message opts out when nothing a reader sees has changed.

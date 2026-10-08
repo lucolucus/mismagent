@@ -6,14 +6,17 @@ git repository containing the cwd. No branches: one slice at a time on the curre
 records Base, the reviewer reviews Base..HEAD, a REWORK adds commits, nothing reaches done/ without
 a PASS at HEAD and a green gate. Exit: 0 ok · 1 check/gate failure or refused precondition (one
 line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespace and **bold**):
-  CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0)
+  CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
+    acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere)
   .mismagent/examples.md: | id | given | when | then | rule | req | release |, ids EX-<n>; a `then`
     containing `(superseded by EX-<n>)` retires the row (no acceptance marker required)
   .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After:,
     ## Question/Answer — After: lists slices (NN or stem) that must be done before it starts
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — "at HEAD" = SHA (>= 7 hex)
     is a prefix of HEAD
-  .mismagent/design-notes.md: one note per `- ` line · tests/acceptance/**: markers EX-<n> (not E501)
+  .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
+  .mismagent/oversize.md: `- <path>: <lines>` — a file already above max_file_lines when the project
+    was adopted, frozen at that length: an error only if it grows (the limit stays the standard one)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
     (`idle`): the stack is in question until specify's review and its handoff are finished
@@ -56,7 +59,8 @@ STATES = ("todo", "doing", "done")
 M = ".mismagent"
 EXAMPLES, NOTES, REVIEWS, PROGRESS = (M + "/examples.md", M + "/design-notes.md", M + "/reviews",
                                       M + "/progress.md")
-ACCEPTANCE = "tests/acceptance"
+OVERSIZE = M + "/oversize.md"
+TOPIC_WORDS = 300
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
 CITED = re.compile(r"`([\w.\-/]+)`")
@@ -246,13 +250,27 @@ def walk(top):
         for name in names:
             yield os.path.relpath(os.path.join(dirpath, name), ROOT)
 
+def acceptance():
+    """The acceptance folders: CLAUDE.md `acceptance:` (comma-separated), else tests/acceptance."""
+    return [d.strip().strip("/") for d in config().get("acceptance", "").split(",") if d.strip()] \
+        or ["tests/acceptance"]
+
 def markers():
-    """-> {EX-id: [files]} from tests/acceptance/**."""
+    """-> {EX-id: [files]} from the acceptance folders."""
     found = {}
-    for rel in walk(ACCEPTANCE):
+    for rel in (r for d in acceptance() for r in walk(d)):
         for ex in set(EX_MARK.findall(read(rel))):
             found.setdefault(ex, []).append(rel)
     return found
+
+def unmarked(s, marks, retired):
+    """The slice's examples with no acceptance marker (a superseded one needs none)."""
+    return [ex for ex in s["examples"] if ex not in marks and ex not in retired]
+
+def frozen():
+    """-> {path: lines} from .mismagent/oversize.md."""
+    return {m.group(1): int(m.group(2)) for m in (re.match(r"^[-*]\s*`?([^`:]+?)`?\s*:\s*(\d+)\s*$", line.strip())
+                                                  for line in read(OVERSIZE).splitlines()) if m}
 
 def count_items(rel):
     return sum(1 for line in read(rel).splitlines() if line.lstrip().startswith("- "))
@@ -434,22 +452,27 @@ def run_check(base=None):
         errors += ["%s: Examples: %r is not EX-<n>" % (where, t) for t in s["bad_examples"]]
         errors += ["%s: After: %r names no single slice" % (where, r) for r in s["after"]
                    if not dep(r, sls) or dep(r, sls)["stem"] == s["stem"]]
-        for ex in s["examples"]:
-            if ex not in known:
-                errors.append("%s: example %s is not in examples.md" % (where, ex))
-            elif s["state"] == "done" and ex not in marks and ex not in retired:
-                errors.append("%s: done, but %s has no acceptance marker under %s/"
-                              % (where, ex, ACCEPTANCE))
+        errors += ["%s: example %s is not in examples.md" % (where, ex) for ex in s["examples"] if ex not in known]
+        if s["state"] == "done" or (base and s["state"] == "doing"):  # in review, the tests exist
+            errors += ["%s: %s, but %s has no acceptance marker under %s/" % (where, s["state"], ex, ", ".join(acceptance()))
+                       for ex in unmarked(s, marks, retired) if ex in known]
         if s["state"] != "todo" and not s["base"]:
             errors.append("%s: in %s without Base:" % (where, s["state"]))
     cfg = config()
     limit, allowed = cfg_int(cfg, "max_file_lines", 400), cfg_int(cfg, "suppressions", 0)
-    count = 0
+    count, frozen_at, held = 0, frozen(), 0
     for rel in sources():
         lines = read(rel).splitlines()
         count, n = count + sum(1 for line in lines if SUPPRESS.search(line)), len(lines)
         if n > limit and not rel.startswith("tests/"):
-            errors.append("%s: %d lines > max_file_lines %d" % (rel, n, limit))
+            if n <= frozen_at.get(rel, 0):
+                held += 1
+            else:
+                errors.append("%s: %d lines > max_file_lines %d%s" % (rel, n, limit, " (frozen at %d in %s)"
+                              % (frozen_at[rel], OVERSIZE) if rel in frozen_at else ""))
+    if held:
+        warnings.append("%d file(s) above max_file_lines %d, frozen in %s: split one when a slice touches it"
+                        % (held, limit, OVERSIZE))
     if count > allowed:
         errors.append("suppression markers: %d > suppressions %d" % (count, allowed))
     if base:
@@ -457,7 +480,7 @@ def run_check(base=None):
         doing = [s for s in sls if s["state"] == "doing"][:1]
         if doing and doing[0]["kind"] == "feature":
             allowed_ex = set(doing[0]["examples"]) | retired
-            changed = git("diff", "--name-status", "-M", "--diff-filter=MR", base, "--", ACCEPTANCE)
+            changed = git("diff", "--name-status", "-M", "--diff-filter=MR", base, "--", *acceptance())
             for line in changed.splitlines():
                 st, *paths = line.split("\t")
                 if st != "R100" and not set(EX_MARK.findall(read(paths[-1]))) & allowed_ex:
@@ -467,6 +490,10 @@ def run_check(base=None):
         errors += ["%s: changed since %s (the human's file: specify or conventions changes it)" % (rel, base)
                    for rel in git("diff", "--name-only", base).splitlines() if guarded(rel)]
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
+        words = len(read(rel).split())
+        if "/references/" in "/" + rel and words > TOPIC_WORDS:
+            warnings.append("%s: %d words > %d: rewrite the topic as one rule, or split it"
+                            % (rel, words, TOPIC_WORDS))
         for cited in set(CITED.findall(read(rel))):
             if ("/" in cited or os.path.splitext(cited)[1] in SOURCE_EXT) and not any(
                     os.path.exists(os.path.join(ROOT, d, cited)) for d in ("", SKILL)):
@@ -581,6 +608,10 @@ def cmd_land(a):
     need(r and r["verdict"] == "PASS", "no PASS review of %s at HEAD%s"
          % (s["stem"], " (%s)" % r["why"] if r and r["why"] else ""))
     need(not dirty(), "the tree is dirty: the PASS does not cover uncommitted changes")
+    exs, _ = examples()
+    missing = unmarked(s, markers(), {e["id"] for e in exs if e["superseded"]})
+    need(not missing, "%s has no acceptance marker under %s/: a done slice proves its examples"
+         % (", ".join(missing), ", ".join(acceptance())))
     gate()
     move(s, "done")
     extra = [p for p in (REVIEWS, NOTES) if os.path.exists(os.path.join(ROOT, p))]

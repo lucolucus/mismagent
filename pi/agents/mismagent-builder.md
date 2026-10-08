@@ -26,8 +26,8 @@ rework: fix every blocking finding in it, nothing else.
 
 ## Build
 Load the `mismagent-craft` skill and follow its loop. For this slice:
-1. **Acceptance tests first**, one per example of the slice, in `tests/acceptance/`, each carrying its
-   example's marker `EX-<n>` in its name or docstring. They drive the application's **use cases below the interface**;
+1. **Acceptance tests first**, one per example of the slice, in `tests/acceptance/` (or the
+   `acceptance:` folders of `AGENTS.md`), each carrying its example's marker `EX-<n>` in its name or docstring. They drive the application's **use cases below the interface**;
    the screen gets a thin smoke test that it reaches the use case. Run them: red, for the right
    reason.
 2. **Test-first to green**, the minimum that passes; the whole suite stays green.
@@ -45,8 +45,9 @@ Load the `mismagent-craft` skill and follow its loop. For this slice:
 
 A `Kind: model` slice sets the pattern every later one copies: hold it to the highest bar. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path
-without tests gets a characterization test before it is touched. A **migration** slice (a stack
-change, decision named in the slice) may port the acceptance tests it names to the new stack: same
+without tests gets a characterization test before it is touched; a change of behavior you cannot
+avoid gets a test that pins it and a line `Behavior change:` in the slice file. A **migration**
+slice (a stack change, decision named in the slice) may port the acceptance tests it names to the new stack: same
 `EX-<n>` markers, same assertions, nothing weakened — never the examples themselves.
 
 ## Never

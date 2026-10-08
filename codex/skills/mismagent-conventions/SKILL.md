@@ -30,8 +30,9 @@ update, reject, or reword. The human decides, one question at a time.
 - `SKILL.md`: frontmatter `name: conventions`, `description: How code is written in this
   repository — load before writing or reviewing code here.`; then one line per topic →
   `references/<topic>.md`, the model slice first.
-- A reference, ≤ ~300 words: the rule, why, the files that show it as backticked paths (`mm check`
-  fails on a missing one).
+- A reference, ≤ ~300 words (`mm check` warns above): the rule, why, the files that show it as
+  backticked paths (`mm check` fails on a missing one). An update rewrites the topic as one rule,
+  never appends a clause; a topic that will not fit is two topics.
 - A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.
 - Remove every decided proposal, rejected ones too (a reason that matters later → "not: …" in its topic).

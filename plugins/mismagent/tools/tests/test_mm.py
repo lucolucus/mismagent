@@ -418,6 +418,15 @@ class StartLand(Repo):
         self.assertEqual(self.mm("start", "01-cart")[0], 1)  # not in todo
         self.assertEqual(self.mm("start", "99-none")[0], 1)
 
+    def test_land_refuses_an_example_without_marker(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "PASS")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("EX-1 has no acceptance marker under tests/acceptance/", err)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/01-cart.md")))
+
     def test_land_preconditions_and_commit(self):
         self.started()
         self.acceptance("test_cart.py", "def test_ex1():  # EX-1\n    pass\n")
@@ -702,6 +711,49 @@ class Check(Repo):
         self.acceptance("test_cart.py", "x = 1  # noqa: E501 EX-10\n")
         self.assertError("EX-1 has no acceptance marker")
 
+    def test_doing_slice_under_review_needs_its_markers(self):
+        self.started()
+        base = self.git("rev-parse", "HEAD")
+        self.work()
+        self.assertEqual(self.check()[0], 0)  # while building: no marker required yet
+        self.assertError("01-cart.md: doing, but EX-1 has no acceptance marker", "--base", base)
+        self.acceptance("test_cart.py", "# EX-1\n")
+        self.commit("acc")
+        self.assertEqual(self.check("--base", base)[0], 0)
+
+    def test_acceptance_folders_from_claude_md(self):
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400",
+                                               "- max_file_lines: 400\n- acceptance: app/src/acc, web/acc/"))
+        self.write(".mismagent/slices/done/01-cart.md",
+                   slice_text(examples="EX-1, EX-2").replace("Examples", "Base: abc1234\nExamples"))
+        self.write("app/src/acc/CartTest.kt", "// EX-1\n")
+        self.write("tests/acceptance/test_cart.py", "# EX-2\n")  # not a configured folder
+        self.commit()
+        self.assertError("EX-2 has no acceptance marker under app/src/acc, web/acc/")
+        self.write("web/acc/cart.test.js", "// EX-2\n")
+        self.commit()
+        self.assertEqual(self.check()[0], 0)
+
+    def test_oversize_files_are_frozen(self):
+        self.write("CLAUDE.md", CLAUDE.replace("400", "3"))
+        self.write("src/old.py", "a = 1\n" * 5)
+        self.write(".mismagent/oversize.md", "# Oversize\n\n- `src/old.py`: 5\n")
+        self.commit()
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 file(s) above max_file_lines 3, frozen in .mismagent/oversize.md", out)
+        self.write("src/old.py", "a = 1\n" * 6)
+        self.commit()
+        self.assertError("src/old.py: 6 lines > max_file_lines 3 (frozen at 5 in .mismagent/oversize.md)")
+
+    def test_long_convention_topic_warns(self):
+        self.write(".claude/skills/conventions/references/tests.md", "word " * 301)
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn("references/tests.md: 301 words > 300", out)
+        self.write(".claude/skills/conventions/references/tests.md", "word " * 300)
+        self.assertNotIn("words >", self.check()[1])
+
     def test_max_file_lines(self):
         self.write("CLAUDE.md", CLAUDE.replace("400", "3"))
         self.write("src/big.py", "a = 1\n" * 4)
@@ -747,6 +799,7 @@ class Check(Repo):
         base = self.commit("acc")
         self.started(name="02-more", examples="EX-2")
         self.git("mv", "tests/acceptance/test_other.py", "tests/acceptance/test_moved.py")
+        self.acceptance("test_new.py", "# EX-2\n")
         self.commit("move")
         self.assertEqual(self.check("--base", base)[0], 0)
 

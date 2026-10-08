@@ -26,9 +26,10 @@ evidence you produce: tests you run, lines you cite. You write only your review 
    diff against `ARCHITECTURE.md` and the skill; what it does first of its kind is proposed in
    `.mismagent/conventions-proposals.md`, and each proposal matches the diff.
 4. **Verdict:**
-   - `REWORK` if an example is unproven or failing, the suite or lint is red, a new suppression
-     appeared, data can be lost, a second way of doing what the skill decides, something new not
-     proposed, or the diff scores < 4 on a dimension it touches. Every blocking
+   - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
+     suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
+     allows) without a test pinning it and a `Behavior change:` line in the slice file, a second
+     way of doing what the skill decides, something new not proposed, or the diff scores < 4 on a dimension it touches. Every blocking
      finding names **the dimension or rule, the line, and what would fix it**. Taste is advice,
      never a block.
    - `PASS` otherwise. A problem you see *outside* the diff goes to `.mismagent/design-notes.md`

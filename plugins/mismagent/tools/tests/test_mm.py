@@ -500,6 +500,38 @@ class StartLand(Repo):
         self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
         self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha, "--scores", "simple=3")[0], 0)
 
+    def test_land_never_commits_a_draft(self):
+        self.started()
+        self.acceptance("test_cart.py", "# EX-1\n")
+        sha = self.work()
+        self.review("01-cart-1", "PASS", sha=sha)
+        self.write(".mismagent/reviews/01-cart.draft.md", "left by a refused attempt\n")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart.draft.md")))
+        self.assertNotIn("draft", self.git("show", "--name-only", "--format=", "HEAD"))
+
+    def test_review_refuses_a_draft_older_than_head(self):
+        self.started()
+        sha = self.work()
+        draft = self.body()
+        old = int(self.git("log", "-1", "--format=%ct")) - 60
+        os.utime(draft, (old, old))
+        code, _, err = self.mm("review", "01-cart", "DIRECT", "--sha", sha)
+        self.assertEqual(code, 1)
+        self.assertIn("01-cart.draft.md was written before HEAD", err)
+
+    def test_headers_never_overwrite_prose(self):
+        self.write(".mismagent/slices/todo/01-cart.md", "# Slice\n\nKind: feature\nRelease: R0\nExamples: EX-1\n"
+                   "Built on the cart model.\nAfter a tap the cart shows one item.\n\n## Goal\nDo it.\n")
+        self.commit("plan")
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.work()
+        text = self.read(".mismagent/slices/doing/01-cart.md")
+        self.assertIn("Built on the cart model.\nAfter a tap the cart shows one item.", text)
+        self.assertIn("Examples: EX-1\nBase: ", text)
+        self.assertIn("\nBuilt: 1\n", text)
+
     def test_land_preconditions_and_commit(self):
         self.started()
         self.acceptance("test_cart.py", "def test_ex1():  # EX-1\n    pass\n")

@@ -558,11 +558,16 @@ def move(s, state):
     git("mv", s["path"], dest)
     return dest
 
+def drop_drafts():
+    """Review drafts are working files: removed before land and tag commit reviews/."""
+    for rel in [r for r in walk(REVIEWS) if r.endswith(".draft.md")]:
+        os.remove(os.path.join(ROOT, rel))
+
 def write_header(rel, key, value):
     """Sets the header line `<Key>: <value>` of a slice file, after the other header lines."""
     lines = read(rel).splitlines()
     top = next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))
-    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built)\b",
+    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built)(?:\*\*)?\s*:",
                                                           lines[i], re.I)) for i in range(top)) if m}
     mine = [i for i, k in hdr.items() if k == key.lower()]
     if mine:
@@ -604,7 +609,7 @@ def cmd_park(a):
     dest = move(s, "todo")
     lines = read(dest).splitlines()
     with open(os.path.join(ROOT, dest), "w", encoding="utf-8") as f:
-        f.write("\n".join(l for l in lines if not re.match(r"^[-*\s]*(?:\*\*)?base\b", l, re.I)) + "\n")
+        f.write("\n".join(l for l in lines if not re.match(r"^[-*\s]*(?:\*\*)?base(?:\*\*)?\s*:", l, re.I)) + "\n")
     git("add", "--", dest)
     git("commit", "-q", "-m", "mm park %s" % s["stem"])
     print("parked %s: %s" % (s["stem"], dest))
@@ -663,6 +668,9 @@ def cmd_review(a):
         body = ""
     need(body.strip(), "%s is missing or empty: the scores table and the findings go there"
          % (a.body or os.path.relpath(draft, ROOT)))
+    if not a.body:  # a draft left by an earlier, refused attempt is not this review
+        need(os.path.getmtime(draft) >= int(git("log", "-1", "--format=%ct").strip()),
+             "%s was written before HEAD: write the review of the code at HEAD" % os.path.relpath(draft, ROOT))
     k = max((r["k"] for r in reviews(target)), default=0) + 1
     rel = "%s/%s-%d.md" % (REVIEWS, target, k)
     os.makedirs(os.path.join(ROOT, REVIEWS), exist_ok=True)
@@ -687,6 +695,7 @@ def cmd_land(a):
          % (", ".join(missing), ", ".join(acceptance())))
     gate()
     move(s, "done")
+    drop_drafts()
     extra = [p for p in (REVIEWS, NOTES) if os.path.exists(os.path.join(ROOT, p))]
     if extra:
         git("add", "-A", "--", *extra)
@@ -703,6 +712,7 @@ def cmd_tag(a):
     need(not open_, "%s has slices not done: %s" % (rel, ", ".join(open_)))
     need(not dirty(), "the tree is dirty")
     gate()
+    drop_drafts()
     if os.path.isdir(os.path.join(ROOT, REVIEWS)):
         git("add", "-A", "--", REVIEWS)
         if subprocess.run(["git", "diff", "--cached", "--quiet", "--", REVIEWS], cwd=ROOT).returncode:

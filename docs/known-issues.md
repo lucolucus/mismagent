@@ -5,18 +5,11 @@ Accepted for now, with the fix each one would take. Line numbers refer to
 
 ## 0.7.2 — from the code review of `mm built` / `mm review` (2026-10-08)
 
-1. **Review drafts can be committed** (medium) — `cmd_review` (~l. 692) deletes
-   `.mismagent/reviews/<target>.draft.md` only when it succeeds without `--body`. After a refusal
-   (HEAD moved, bad score, dirty tree, wrong verdict) the draft stays: `mm land` and `mm tag`
-   (`git add -A -- .mismagent/reviews`, ~l. 707) commit it, and a later `mm review` with no new
-   draft — e.g. the architect's DIRECT — takes the stale one as its body.
-   *Fix:* land and tag skip or delete `*.draft.md`; `mm review` refuses a draft older than HEAD.
+1. ~~Review drafts can be committed~~ — **fixed**: `mm land` and `mm tag` remove `*.draft.md`
+   before committing `reviews/`; `mm review` refuses a draft written before HEAD's commit.
 
-2. **`write_header` can overwrite a prose line** (low) — its header pattern (~l. 565) matches any
-   line before the first `## ` that starts with `kind|release|examples|base|after|built`, colon
-   or not: a description line "Built on the cart model…" becomes `Built: 1`, and a line starting
-   "After …" becomes the insertion point.
-   *Fix:* require `\s*:` after the key.
+2. ~~`write_header` can overwrite a prose line~~ — **fixed**: a header line needs its colon
+   (`Built:`), in `write_header` and in `mm park`'s removal of `Base:`.
 
 3. **A slice started under 0.7.1 comes back as `resume`** (low) — the `## Progress` / old
    `progress.md` signal is gone (~l. 339): a slice in `doing` at upgrade time, finished but with

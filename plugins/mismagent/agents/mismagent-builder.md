@@ -35,6 +35,8 @@ Load the `craft` skill and follow its loop. For this slice:
 5. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
    a new `noqa`/disable line is a defect). Before returning DONE, `python3
    "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" gate` must be green (suite, lint, checks).
+   Green is read, never assumed: no pipe after the suite or the gate (`| tail` reports tail's exit
+   code) — redirect to a file, `echo EXIT $?`, read it; commit in a separate command, after `EXIT 0`.
 
 A `Kind: model` slice sets the pattern every later one copies: hold it to the highest bar. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path

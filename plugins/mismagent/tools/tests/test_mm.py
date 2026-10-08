@@ -586,6 +586,13 @@ class Gate(Repo):
             self.assertIn("%s: red" % key, out)
             self.assertIn(key, err)
 
+    def test_gate_red_verdict_is_the_last_line_through_a_pipe(self):
+        noise = "".join("echo noise-%d; " % i for i in range(40))
+        self.write("CLAUDE.md", "## mismagent\n- test: %sfalse\n- lint: true\n" % noise)
+        p = subprocess.run("%s %s gate 2>&1 | tail -3" % (sys.executable, MM), shell=True,
+                           cwd=self.dir, capture_output=True, text=True)
+        self.assertEqual(p.stdout.strip().splitlines()[-1], "gate: red (test)")
+
     def test_gate_red_on_missing_config_or_check(self):
         self.write("CLAUDE.md", "# nothing\n")
         self.assertEqual(self.mm("gate")[0], 1)
@@ -769,7 +776,13 @@ class Check(Repo):
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
         self.assertIn("no Evidence", out)
+        self.write(".mismagent/decisions/0002-store.md", "# Store\nSQLite.\n")
+        warned = [line for line in self.check()[1].splitlines() if "no Evidence" in line]
+        self.assertEqual(len(warned), 1, warned)
+        self.assertIn("2 decision(s)", warned[0])
+        self.assertIn("0001-stack.md, 0002-store.md", warned[0])
         self.write(".mismagent/decisions/0001-stack.md", "# Stack\nPython.\n\nEvidence: python3 --version\n")
+        self.write(".mismagent/decisions/0002-store.md", "# Store\nSQLite.\n\nEvidence: ls\n")
         self.assertNotIn("no Evidence", self.check()[1])
 
     def test_no_word_cap(self):

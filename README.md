@@ -56,7 +56,8 @@ important doubt (`NEEDS-HUMAN`) and each release.
   (`.claude/skills/conventions/`, rules with real files as examples) that the builder loads and the
   reviewer checks by. It grows with the code instead of being compacted.
 - **Every slice:** acceptance tests at the use-case seam first, test-first to green, a refactoring
-  pass, a commit at every green; a fresh reviewer blocks a quality defect in the diff exactly like a
+  pass, a commit at every green — green read from the exit code, never through a pipe (`mm gate`
+  ends on its verdict, so even a `| tail` shows it); a fresh reviewer blocks a quality defect in the diff exactly like a
   functional one.
 - **Every release:** a fresh reviewer scores the whole code from 1 to 5 on the seven
   dimensions of the [review table](plugins/mismagent/skills/craft/references/review-table.md)

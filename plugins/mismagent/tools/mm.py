@@ -418,9 +418,11 @@ def run_check(base=None):
     (exs, errors), warnings, marks = examples(), [], markers()
     known, retired = {e["id"] for e in exs}, {e["id"] for e in exs if e["superseded"]}
     sls = slices()
-    for rel in (r for r in walk(".mismagent/decisions") if r.endswith(".md")):
-        if not re.search(r"^(#+\s*)?Evidence\b", read(rel), re.M | re.I):
-            warnings.append("%s: no Evidence: section (every fact carries its source)" % rel)
+    bare = sorted(os.path.basename(r) for r in walk(".mismagent/decisions")
+                  if r.endswith(".md") and not re.search(r"^(#+\s*)?Evidence\b", read(r), re.M | re.I))
+    if bare:  # one line, however many: a flood of these pushes the verdict out of a reader's tail
+        warnings.append("%d decision(s) in .mismagent/decisions/ with no Evidence: section (every fact "
+                        "carries its source): %s" % (len(bare), ", ".join(bare)))
     for s in sls:
         where = s["path"]
         if not re.fullmatch(r"\d+-.+", s["stem"]):
@@ -505,7 +507,10 @@ def gate():
     if errors:
         red.append("check")
         detail += ["  check: " + e for e in errors]
-    need(not red, "\n".join(["gate red: " + ", ".join(red)] + detail))
+    if red:  # the verdict is the last line of stdout and of stderr, whatever a `| tail` keeps
+        verdict = "gate: red (%s)" % ", ".join(red)
+        print(verdict)
+        need(False, "\n".join(["gate red: " + ", ".join(red)] + detail + [verdict]))
     print("gate: green")
 
 def cmd_gate(a):
@@ -640,6 +645,7 @@ def main(argv=None):
         ROOT = p.stdout.strip()
         return a.fn(a)
     except Refused as e:
+        sys.stdout.flush()  # stdout first: piped, it is buffered and would land after stderr
         print("mm: %s" % e, file=sys.stderr)
         return 1
 

@@ -1,7 +1,7 @@
 {
   "name": "mismagent",
   "description": "mismAgent 0.7 — guides agents to write software that stays maintainable over long projects (XP + Naur: the code carries the theory; heir of BMad and Agentheim). /mismagent:specify turns a request into approved examples and vertical slices through an investigative interview; /mismagent:build conducts one action at a time: a builder per slice (acceptance tests first at the use-case seam, TDD, refactoring), a fresh reviewer on a seven-dimension review table, an architect who decides the structure at birth and curates it from the code. State in files and git; the tool mm computes and moves state.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "author": {
     "name": "Luca Parsani"
   }

@@ -42,14 +42,14 @@ harness keeps both honest. Design: [`v0.5-vision.md`](https://github.com/lucoluc
 | piece | role |
 |---|---|
 | `mismagent-explore` skill + `mismagent-challenger` agent | a new idea: dialogue on the problem → `brief.md`; a fresh adversary tries to kill it; an event storm of the domain with its hotspots → `event-storm.md` |
-| `mismagent-specify` skill | intake, stack, the investigation rule by rule, examples, vertical slices — one release at a time |
+| `mismagent-specify` skill | intake, the stack review (architect and challenger in parallel, confronted Socratically with the human), the investigation rule by rule, examples, vertical slices — one release at a time |
 | `mismagent-build` skill | the conductor: asks `mm next`, does exactly one action, settles doubts, stops for the human |
-| `mismagent-architect` agent | `skeleton` (structure at birth: `ARCHITECTURE.md`, error policy, sensors, the model slice) · `design-pass` (from the code: refactoring slices) · `escalate` |
+| `mismagent-architect` agent | `stack` (options from the problem's forces, blind to the human's preference) · `skeleton` (structure at birth: `ARCHITECTURE.md`, error policy, sensors, the model slice) · `design-pass` (from the code: refactoring slices) · `escalate` |
 | `mismagent-builder` agent | one slice: acceptance tests first at the use-case seam, TDD, refactoring, a commit at every green |
 | `mismagent-reviewer` agent | a fresh reviewer on the review table: a slice's diff, or the whole release |
 | `mismagent-craft` skill | the XP inner loop and its references, incl. `review-table.md` |
 | `mismagent-conventions` skill | with the human: the agents' proposals → `.agents/skills/conventions/` (how code is written in the project) |
-| `mismagent-build/scripts/mm.py` | computes and moves: `status`, `next`, `start`, `land`, `gate`, `tag`, `check` |
+| `mismagent-build/scripts/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
 
 ## In a project
 `ARCHITECTURE.md` and `AGENTS.md` (section `## mismagent`: test, lint, smoke, thresholds) at the root;

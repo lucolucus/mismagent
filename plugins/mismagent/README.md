@@ -23,14 +23,14 @@ checking back every ten minutes, and resumes by itself once you have answered.
 | piece | role |
 |---|---|
 | `skills/explore` + `agents/mismagent-challenger` | a new idea: dialogue on the problem → `brief.md`; a fresh adversary tries to kill it; an event storm of the domain with its hotspots → `event-storm.md` |
-| `skills/specify` | intake, stack, the investigation rule by rule, examples, vertical slices — one release at a time |
+| `skills/specify` | intake, the stack review (architect and challenger in parallel, confronted Socratically with the human), the investigation rule by rule, examples, vertical slices — one release at a time |
 | `commands/build.md` | the conductor: asks `mm next`, does exactly one action, settles doubts, stops for the human |
-| `agents/mismagent-architect` | `skeleton` (structure at birth: `ARCHITECTURE.md`, error policy, sensors, the model slice) · `design-pass` (from the code: refactoring slices) · `escalate` |
+| `agents/mismagent-architect` | `stack` (options from the problem's forces, blind to the human's preference) · `skeleton` (structure at birth: `ARCHITECTURE.md`, error policy, sensors, the model slice) · `design-pass` (from the code: refactoring slices) · `escalate` |
 | `agents/mismagent-builder` | one slice: acceptance tests first at the use-case seam, TDD, refactoring, a commit at every green |
 | `agents/mismagent-reviewer` | a fresh reviewer on the review table: a slice's diff, or the whole release |
 | `skills/craft` | the XP inner loop and its references, incl. `review-table.md` |
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
-| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `land`, `gate`, `tag`, `check` |
+| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
 | `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, the conventions skill) |
 
 ## In a project

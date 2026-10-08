@@ -21,7 +21,10 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 1. `git diff <base>..HEAD`, `<base>` = the slice file's `Base:` — this is what you review. Run
    `MM gate` and `MM check --base <base>`.
 2. **Examples:** each example of the slice has an acceptance test that proves *it* — the same given,
-   when and then, not a weaker one — and passes. Tests of other examples were not edited.
+   when and then, not a weaker one — and passes. Tests of other examples were not edited — except
+   in a **migration** slice (a stack change), which ports the tests it names: each ported test
+   keeps its `EX-<n>` marker and proves the same given, when and then as the one it replaces
+   (compare with `git show <base>:<old path>`), nothing weakened, nothing dropped.
 3. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
    diff against `ARCHITECTURE.md` and the skill; what it does first of its kind is proposed in
    `.mismagent/conventions-proposals.md`, and each proposal matches the diff.

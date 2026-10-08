@@ -53,7 +53,8 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
 3. **Act.** Local → write the `## Answer` (the choice and why), and if it constrains later work a
    short file in `.mismagent/decisions/`; commit; the next call resumes the slice. Important →
    write in the slice file the options, the strongest argument for each and your recommendation;
-   commit; print `NEEDS-HUMAN: <slice file>` and stop. 
+   commit; print `NEEDS-HUMAN: <slice file>` and stop. A doubt about the stack itself → print
+   `NEEDS-HUMAN: /mismagent:specify stack <slice file>` (its stack review answers the slice).
 
 ## 3. Never
 Build, review or design; edit code, tests, requirements or `examples.md`; tag without `--confirm`;

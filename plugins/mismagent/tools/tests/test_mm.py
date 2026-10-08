@@ -2,6 +2,7 @@
 Run: python3 -m unittest discover -s plugins/mismagent/tools/tests -p 'test_mm.py' -v"""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -452,6 +453,124 @@ class StartLand(Repo):
         self.assertIn(".mismagent/reviews/01-cart-3.md", self.git("show", "--name-only", "--format="))
         self.assertEqual(self.git("status", "--porcelain"), "")
 
+
+    def test_park_returns_a_slice_without_work_to_todo(self):
+        self.started()
+        self.write(".mismagent/slices/doing/01-cart.md",
+                   self.read(".mismagent/slices/doing/01-cart.md") + "\n## Question\nStack?\n## Answer\nSee 0002.\n")
+        self.commit("answer")
+        code, out, err = self.mm("park", "01-cart")
+        self.assertEqual(code, 0, err)
+        text = self.read(".mismagent/slices/todo/01-cart.md")
+        self.assertNotIn("Base:", text)
+        self.assertIn("## Answer", text)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "mm park 01-cart")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(self.next()["action"], "start")
+
+    def test_park_preconditions(self):
+        self.slice("01-cart")
+        self.commit("plan")
+        self.assertEqual(self.mm("park", "01-cart")[0], 1)  # not in doing
+        self.mm("start", "01-cart")
+        self.write("src/cart.py", "x = 1\n")
+        code, _, err = self.mm("park", "01-cart")
+        self.assertEqual((code, "dirty" in err), (1, True))
+        self.commit("code")
+        code, _, err = self.mm("park", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("work since Base", err)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/01-cart.md")))
+
+    def test_park_refuses_a_missing_or_invalid_base(self):
+        self.started()
+        rel = ".mismagent/slices/doing/01-cart.md"
+        original = self.read(rel)
+        for base in ("", "Base: 0000000000000000000000000000000000000000\n"):
+            text = re.sub(r"Base: .*\n", base, original)
+            self.assertEqual(bool(base), "Base:" in text)
+            self.write(rel, text)
+            self.commit("base " + (base or "missing"))
+            code, _, err = self.mm("park", "01-cart")
+            self.assertEqual(code, 1)
+            self.assertIn("no valid Base", err)
+            self.assertTrue(os.path.exists(os.path.join(self.dir, rel)))
+
+    def test_a_parked_slice_waits_for_its_after_slices(self):
+        self.started("01-work", kind="refactor", examples="")
+        self.mm("park", "01-work")
+        self.slice("02-migrate", kind="refactor", examples="")
+        self.slice("03-migrate-more", kind="refactor", examples="")
+        rel = ".mismagent/slices/todo/01-work.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 02, 03-migrate-more\nExamples:"))
+        self.commit("migration queued")
+        self.assertEqual(self.check()[0], 0, self.check()[2])
+        self.assertEqual(self.next()["slice"], "02-migrate")
+        os.makedirs(os.path.join(self.dir, ".mismagent/slices/done"), exist_ok=True)
+        self.git("mv", ".mismagent/slices/todo/02-migrate.md", ".mismagent/slices/done/02-migrate.md")
+        self.commit("02 done")
+        self.assertEqual(self.next()["slice"], "03-migrate-more")  # 01 still waits for 03
+        self.git("mv", ".mismagent/slices/todo/03-migrate-more.md", ".mismagent/slices/done/03-migrate-more.md")
+        self.commit("03 done")
+        self.assertEqual(self.next()["slice"], "01-work")
+
+    def test_every_todo_slice_waiting_is_idle(self):
+        self.slice("01-a", extra="")
+        rel = ".mismagent/slices/todo/01-a.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 02\nExamples:"))
+        self.slice("02-b", state="doing")
+        self.write(".mismagent/slices/doing/02-b.md",
+                   self.read(".mismagent/slices/doing/02-b.md").replace("Examples:", "Base: %s\nExamples:" % self.head()))
+        self.commit("plan")
+        self.git("mv", ".mismagent/slices/doing/02-b.md", ".mismagent/slices/todo/02-b.md")
+        self.write(".mismagent/slices/todo/02-b.md",
+                   self.read(".mismagent/slices/todo/02-b.md").replace("Examples:", "After: 01\nExamples:"))
+        self.commit("a cycle")
+        d = self.next()
+        self.assertEqual(d["action"], "idle")
+        self.assertIn("waits", d["reason"])
+
+    def test_check_refuses_an_after_naming_no_slice(self):
+        self.slice("01-a")
+        rel = ".mismagent/slices/todo/01-a.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 07, 01-a\nExamples:"))
+        self.commit("plan")
+        code, out, err = self.check()
+        self.assertEqual(code, 1)
+        self.assertIn("After: '07'", out + err)
+        self.assertIn("After: '01-a'", out + err)
+
+    def test_an_open_stack_review_holds_the_flow(self):
+        self.started()
+        status = ".mismagent/stack-reviews/0002-status.md"
+        self.write(status, "entry: standalone\nslice: 01-cart\nstep: 6\nnext: handoff\nstate: decided\n")
+        self.commit("stack 0002 decided")
+        d = self.next()
+        self.assertEqual(d["action"], "idle")
+        self.assertIn("0002", d["reason"])
+        self.write(status, "entry: standalone\nstep: 7\nnext: none\n- **State:** done\n")
+        self.commit("stack 0002 done")
+        self.assertEqual(self.next()["action"], "build")
+        self.write(status, "entry: standalone\n")  # no state: open until it says done
+        self.commit("status rewritten")
+        self.assertEqual(self.next()["action"], "idle")
+
+    def test_start_refuses_a_held_flow_or_a_waiting_slice(self):
+        self.slice("01-a")
+        self.slice("02-b")
+        rel = ".mismagent/slices/todo/02-b.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 01\nExamples:"))
+        self.write(".mismagent/stack-reviews/0002-status.md", "state: open\n")
+        before = self.commit("plan")
+        code, _, err = self.mm("start", "01-a")
+        self.assertEqual((code, "stack review 0002 is open" in err), (1, True))
+        self.write(".mismagent/stack-reviews/0002-status.md", "state: done\n")
+        before = self.commit("review done")
+        code, _, err = self.mm("start", "02-b")
+        self.assertEqual((code, "waits for 01" in err), (1, True))
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (before, ""))
+        self.assertTrue(os.path.exists(os.path.join(self.dir, rel)))
+        self.assertEqual(self.mm("start", "01-a")[0], 0)
 
 class Gate(Repo):
     def test_gate_green(self):

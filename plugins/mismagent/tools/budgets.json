@@ -1,18 +1,18 @@
 {
-  "_note": "Word caps (wc -w) for the operative prompt files; checked by prompt_budget.py in the test suite. History v0.18-v0.26: per-file caps at size rounded up to 10, total ratcheted at ~19,800 (see git history). v0.5 reset the budgets: the plugin was rebuilt around mm.py (which owns all the git and the counting) and six operative files; each cap is the v0.5 build plan's budget, the total (4100) is the ratchet. A capped file not yet written is listed, not an error; an operative file with no cap is an error. Lower a cap when a file shrinks; never raise one without a reason. Explore (+ challenger) added to the core at the user's request (2026-09-29): total 5000, the vision's cap for the core. The conventions skill added at the user's request (2026-10-01: the project's conventions are decided with the human), paid for by trimming the architect (900 -> 830) and the other prompts; the total stays 5000.",
+  "_note": "Word caps (wc -w) for the operative prompt files; checked by prompt_budget.py in the test suite. History v0.18-v0.26: per-file caps at size rounded up to 10, total ratcheted at ~19,800 (see git history). v0.5 reset the budgets: the plugin was rebuilt around mm.py (which owns all the git and the counting) and six operative files; each cap is the v0.5 build plan's budget, the total (4100) is the ratchet. A capped file not yet written is listed, not an error; an operative file with no cap is an error. Lower a cap when a file shrinks; never raise one without a reason. Explore (+ challenger) added to the core at the user's request (2026-09-29): total 5000, the vision's cap for the core. The conventions skill added at the user's request (2026-10-01: the project's conventions are decided with the human), paid for by trimming the architect (900 -> 830) and the other prompts; the total stays 5000. The stack review added at the user's request (2026-10-08: in the aurora test a stated preference for Haskell was transcribed, not examined): the architect's MODE stack, the challenger attacking a stack, specify's review steps. The user raised the total to 9000 the same day: the caps are ours, what counts is that the prompts work.",
   "description_chars": 250,
   "references_total": 1700,
   "references_file": 400,
   "references_file_exceptions": {},
-  "total": 5000,
+  "total": 9000,
   "files": {
-    "plugins/mismagent/agents/mismagent-architect.md": 830,
+    "plugins/mismagent/agents/mismagent-architect.md": 1500,
     "plugins/mismagent/agents/mismagent-builder.md": 750,
     "plugins/mismagent/agents/mismagent-reviewer.md": 650,
-    "plugins/mismagent/commands/build.md": 600,
+    "plugins/mismagent/commands/build.md": 700,
     "plugins/mismagent/skills/craft/SKILL.md": 170,
-    "plugins/mismagent/skills/specify/SKILL.md": 1000,
-    "plugins/mismagent/agents/mismagent-challenger.md": 480,
+    "plugins/mismagent/skills/specify/SKILL.md": 1600,
+    "plugins/mismagent/agents/mismagent-challenger.md": 900,
     "plugins/mismagent/skills/explore/SKILL.md": 750,
     "plugins/mismagent/skills/conventions/SKILL.md": 350
   }

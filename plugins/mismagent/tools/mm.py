@@ -9,11 +9,14 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0)
   .mismagent/examples.md: | id | given | when | then | rule | req | release |, ids EX-<n>; a `then`
     containing `(superseded by EX-<n>)` retires the row (no acceptance marker required)
-  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base:, ## Question/Answer
+  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After:,
+    ## Question/Answer — After: lists slices (NN or stem) that must be done before it starts
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — "at HEAD" = SHA (>= 7 hex)
     is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · tests/acceptance/**: markers EX-<n> (not E501)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
+  .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
+    (`idle`): the stack is in question until specify's review and its handoff are finished
   .claude/skills/conventions/**.md: the project's conventions skill, written with the human in
     /mismagent:conventions; every `path` it cites must exist
 Design choices:
@@ -34,6 +37,9 @@ Design choices:
 - Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/.
 - No word cap on .mismagent/: agents read the map, the conventions skill and the tail of
   progress.md, never the history whole; what lasts is kept current in the skill, not compacted.
+- `park` puts a doing slice back in todo only while it has no work since Base (a stack change
+  that must come first): half-done work never leaves doing unreviewed. A todo slice whose After:
+  slices are not all done is skipped by `next`; when every todo slice waits -> `idle`.
 - Agents only propose conventions; with no slice doing, a pending proposal (or a done model slice
   and no skill yet) -> `conventions`: the human decides before the next slice starts.
 """
@@ -52,6 +58,7 @@ EXAMPLES, NOTES, REVIEWS, PROGRESS = (M + "/examples.md", M + "/design-notes.md"
                                       M + "/progress.md")
 ACCEPTANCE = "tests/acceptance"
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
+STACK_REVIEWS = M + "/stack-reviews"
 CITED = re.compile(r"`([\w.\-/]+)`")
 IGNORED_DIRTY = (REVIEWS + "/", NOTES)
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
@@ -133,7 +140,7 @@ def examples():
 def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
-         "examples": [], "bad_examples": [], "base": ""}
+         "examples": [], "bad_examples": [], "base": "", "after": []}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -147,13 +154,15 @@ def parse_slice(state, name):
             if st:
                 sections[-1][1].append(st)
             continue
-        hm = re.match(r"^(kind|release|examples|base)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
+        hm = re.match(r"^(kind|release|examples|base|after)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
         if hm:
             key, val = hm.group(1).lower(), hm.group(2).strip()
             if key == "examples":
                 toks = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
                 s["examples"] = [t for t in toks if EX_ID.match(t)]
                 s["bad_examples"] = [t for t in toks if not EX_ID.match(t)]
+            elif key == "after":
+                s["after"] = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
             else:
                 s[key] = val.split()[0] if val else ""
     s["kind"] = s["kind"].lower()
@@ -177,6 +186,22 @@ def find_slice(arg, sls):
     return hits[0]
 
 DEMOTE = {"PASS": "REWORK", "HEALTHY": "DESIGN-PASS"}
+
+def dep(ref, sls):
+    """The slice an After: reference names (its number or its stem), or None."""
+    hits = [s for s in sls if s["stem"] == ref or (ref.isdigit() and s["num"] == int(ref))]
+    return hits[0] if len(hits) == 1 else None
+
+def waits_for(s, sls):
+    """The After: references of s not yet done."""
+    return [r for r in s["after"] if not (dep(r, sls) and dep(r, sls)["state"] == "done")]
+
+def open_stack_reviews():
+    """Stack reviews whose N-status.md does not say `state: done` (specify's review, then handoff)."""
+    rels = [r for r in ls(STACK_REVIEWS) if r.endswith("-status.md")]
+    return [r[:-len("-status.md")] for r in rels if not re.search(
+        r"^[-*\s]*state\s*:\s*(?:\*\*\s*)?done\b", read("%s/%s" % (STACK_REVIEWS, r)).replace("**", ""),
+        re.M | re.I)]
 
 def reviews(prefix):
     """-> [{k, verdict, sha, path, why}] of <prefix>-<k>.md sorted by k; `verdict` is the one that
@@ -248,6 +273,10 @@ def decide():
 
     if not sls:
         return act("idle", "no slices yet: run /mismagent:specify first")
+    held = open_stack_reviews()
+    if held:
+        return act("idle", "stack review %s is open (%s/%s-status.md): /mismagent:specify finishes it"
+                   % (", ".join(held), STACK_REVIEWS, held[0]))
     missing = [k for k in ("test", "lint") if not cfg.get(k)]
     if not os.path.isfile(os.path.join(ROOT, "ARCHITECTURE.md")) or missing:
         return act("skeleton", "CLAUDE.md ## mismagent lacks " + " and ".join(missing) if missing
@@ -321,6 +350,12 @@ def decide():
         rel = next((r for r in order if r not in tagged), order[-1] if order else "")
         return act("design-pass", "%d design notes, no refactor slice in todo" % notes,
                    notes=notes, release=rel)
+    waiting = {s["stem"]: waits_for(s, sls) for s in todo}
+    ready = [s for s in todo if not waiting[s["stem"]]]
+    if todo and not ready:
+        return act("idle", "every todo slice waits (After:): " + "; ".join(
+            "%s for %s" % (st, ", ".join(w)) for st, w in waiting.items()))
+    todo = ready
     if todo:
         return act("start", "%s slice first in todo" % (todo[0]["kind"] or "?"),
                    slice=todo[0]["stem"], path=todo[0]["path"])
@@ -395,6 +430,8 @@ def run_check(base=None):
         if not s["release"]:
             errors.append("%s: no Release:" % where)
         errors += ["%s: Examples: %r is not EX-<n>" % (where, t) for t in s["bad_examples"]]
+        errors += ["%s: After: %r names no single slice" % (where, r) for r in s["after"]
+                   if not dep(r, sls) or dep(r, sls)["stem"] == s["stem"]]
         for ex in s["examples"]:
             if ex not in known:
                 errors.append("%s: example %s is not in examples.md" % (where, ex))
@@ -500,6 +537,10 @@ def cmd_start(a):
     need(s["state"] == "todo", "%s is in %s, not todo" % (s["stem"], s["state"]))
     doing = [x["stem"] for x in sls if x["state"] == "doing"]
     need(not doing, "a slice is already in doing: %s" % ", ".join(doing))
+    held = open_stack_reviews()
+    need(not held, "stack review %s is open: nothing starts until it is done" % ", ".join(held))
+    waits = waits_for(s, sls)
+    need(not waits, "%s waits for %s (After:)" % (s["stem"], ", ".join(waits)))
     need(not dirty(), "the tree is dirty: commit or discard first")
     sha = head()
     dest = move(s, "doing")
@@ -507,6 +548,25 @@ def cmd_start(a):
     git("add", "--", dest)
     git("commit", "-q", "-m", "mm start %s" % s["stem"])
     print("started %s: %s (Base %s)" % (s["stem"], dest, sha[:12]))
+    return 0
+
+def cmd_park(a):
+    s = find_slice(a.slice, slices())
+    need(s["state"] == "doing", "%s is in %s, not doing" % (s["stem"], s["state"]))
+    need(not dirty(), "the tree is dirty: commit or discard first")
+    need(s["base"] and subprocess.run(["git", "rev-parse", "-q", "--verify", s["base"] + "^{commit}"],
+                                      cwd=ROOT, capture_output=True).returncode == 0,
+         "%s has no valid Base: (%r): its work cannot be checked" % (s["stem"], s["base"]))
+    work = git("diff", "--name-only", "%s..HEAD" % s["base"], "--", ".", ":(exclude).mismagent").split()
+    need(not work, "%s has work since Base (%d file(s)): finish it, or revert it first"
+         % (s["stem"], len(work)))
+    dest = move(s, "todo")
+    lines = read(dest).splitlines()
+    with open(os.path.join(ROOT, dest), "w", encoding="utf-8") as f:
+        f.write("\n".join(l for l in lines if not re.match(r"^[-*\s]*(?:\*\*)?base\b", l, re.I)) + "\n")
+    git("add", "--", dest)
+    git("commit", "-q", "-m", "mm park %s" % s["stem"])
+    print("parked %s: %s" % (s["stem"], dest))
     return 0
 
 def cmd_land(a):
@@ -546,6 +606,8 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
     ("status", "slices per state and release, examples vs acceptance tests, notes", "--json"),
     ("next", "exactly one next action: <action> <arg...> — <reason>", "--json"),
     ("start", "todo -> doing, write Base:, commit (clean tree, nothing in doing)",
+     ("slice", "slice stem (NN-name), its number, or its path")),
+    ("park", "doing -> todo, drop Base:, commit (clean tree, no work since Base)",
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("land", "doing -> done, commit (PASS at HEAD, clean tree, gate green)",
      ("slice", "slice stem (NN-name), its number, or its path")),

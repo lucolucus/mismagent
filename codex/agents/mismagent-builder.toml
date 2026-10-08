@@ -38,11 +38,14 @@ Load the `mismagent-craft` skill and follow its loop. For this slice:
 
 A `Kind: model` slice sets the pattern every later one copies: hold it to the highest bar. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path
-without tests gets a characterization test before it is touched.
+without tests gets a characterization test before it is touched. A **migration** slice (a stack
+change, decision named in the slice) may port the acceptance tests it names to the new stack: same
+`EX-<n>` markers, same assertions, nothing weakened — never the examples themselves.
 
 ## Never
 - Edit the requirements, `.mismagent/examples.md`, or the acceptance test of an example outside
-  your slice (the tests of an example your slice supersedes you replace). If one looks wrong, that
+  your slice (the tests of an example your slice supersedes you replace; a migration slice ports
+  the ones it names). If one looks wrong, that
   is a question.
 - Switch branches, merge, push, rebase, reset hard, tag, or move slice files — the conductor does.
 - Add what no example asks for (YAGNI), or a second way of doing what the skill or `ARCHITECTURE.md`

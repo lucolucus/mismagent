@@ -31,9 +31,72 @@ human prefers a one-page brief here. If `event-storm.md` exists, the release is 
 timeline: each slice is one path through it, and its open hotspots are your first questions. Say
 in three lines what you understood, what you will do (examples and slices for
 **one** release — the next — never the whole product), and ask what you must. First time only:
-- the **stack** — language, interface toolkit, persistence, where it runs: the human decides; write
-  `.mismagent/decisions/0001-stack.md` (choice, alternatives, why, `Evidence:`);
-- `.mismagent/brief.md`, if explore did not write it — one page: problem, users, value, scope.
+- `.mismagent/brief.md`, if explore did not write it — one page: problem, users, value, scope;
+- the **stack** (language, interface toolkit, persistence, where it runs): the stack review below.
+
+## The stack review
+Two ways in. **Intake** (first time): run it, then go on to §2. **Standalone** — the human asks
+to change the stack, or `/mismagent-build` sends you here (`/skill:mismagent-specify stack <slice>`): do
+only this section. A fork, never a transcription: never accept a stated preference without the
+review, never argue for your own. `MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mm.py"`.
+
+Files, in `.mismagent/stack-reviews/`, for review `N` (the next four-digit number unused in both
+`decisions/` and `stack-reviews/`, reserved by the first commit): `N-input.md` (the neutral
+packet), `N-preference.md` (the human's lean and why), `N.md` (the architect's review),
+`N-answers.md` (the human's answers, neutral), `N-challenge-<k>.md` (each challenger verdict, as
+it returned), `N-status.md` — the authority on where it stands: `entry:` intake|standalone,
+`slice:` and `release:` if any, `step:` the last one done, `next:` the open question or action,
+`state:` open|decided|done. On entry, a review whose status is not `done` is pending: resume it
+from there (a `decided` one only finishes its handoff, never reopens the choice); never start
+another. Until the status says `done`, `mm next` holds the build (`idle`): nothing is built on a
+stack in question.
+
+1. **Ask, separately**: the hard **constraints** (where it must run, budget, who operates it,
+   what must keep working) and what the human leans to and **why** — the product's needs,
+   learning, pleasure, what they know. A personal reason is legitimate: name it as one and take it
+   as an objective, not a bias to correct.
+2. **Write and commit** `N-input.md` — the problem, users and volumes, the event storm's timeline
+   and hotspots, the examples that stress the stack (quoted, not linked), the constraints, for a
+   change the **incumbent** stack and what is built on it; never the preference nor its reason —
+   and `N-preference.md`, `N-status.md`.
+3. **In parallel**, two fresh dispatches with paths only, no summary of this conversation:
+   **mismagent-architect** `MODE: stack` with `N-input.md` alone; if there is a preference,
+   **mismagent-challenger** `MODE: stack` on it with `N-input.md` and `N-preference.md`. Save each
+   verdict as `N-challenge-<k>.md`; commit.
+4. **Every leader is attacked.** Before the human decides, the option you will recommend and the
+   architect's first — including a hybrid or a leader that changed — has faced the challenger on
+   its own rationale (with `N.md`). Reuse a verdict only if it covered that same combination and
+   rationale; do not re-ask an objection already answered.
+5. **Confront Socratically**, a few questions at a time, each with your view: the architect's
+   questions first (the answers may flip the ranking); per dominant force, what each option
+   assumes and which example gets harder; where preference and best fit differ, what the
+   difference buys and costs *in the human's own objectives*. A mixed answer is allowed (the part
+   that carries the force in the fitting stack). An answer that breaks an assumption the ranking
+   hangs on → write it in `N-answers.md` and dispatch the architect again with it. Recommend.
+   Keep `N-status.md` current and commit as you go.
+6. **The human decides.** Write `.mismagent/decisions/N-stack.md`: choice · forces · alternatives
+   with gives/costs · the human's reason · costs accepted · `Supersedes:` the old decision (whose
+   title gets `(superseded by N)`) · `Evidence:` the review files; status `decided`. Commit
+   (`stack N`). An informed
+   choice closes the matter: reopen it only for new material evidence (a hotspot answered later
+   that breaks a force), never because you would still choose otherwise.
+7. **The handoff**, in this order, the status updated and committed at each step:
+   - **A slice sent you here.** The stack kept → its `## Answer`: decision `N`, the stack stays;
+     commit. Changed → ask whether the slice can finish on the current stack. **Yes** (the
+     default: kept small, it lands before the migration) → its `## Answer`: decision `N`, finish
+     on the current stack; commit. **No** → `MM park <slice>` first (it refuses a slice with work
+     since Base: then the human chooses — finish it, or revert that work — and you stop there,
+     the question still open); once parked, its `## Answer`: decision `N`, waits for the
+     migration; commit.
+   - **The incumbent kept** (no change) → nothing to migrate: skip the next point.
+   - **A change on a built project** (code exists) → the **target release** of the migration:
+     the slice's, or the current one if untagged; when every release is tagged, agree the next one
+     with the human (a tagged release stays what it was). Write it as `release:` in the status;
+     commit. Dispatch **mismagent-architect** `MODE: design-pass` with the reason `stack N` and
+     that release; it queues the migration slices. A parked slice then gets `After:` the
+     migration slices' numbers (`mm` will not start it before they land); commit.
+   - Status `done`; commit. Intake → go on to §2. Standalone → end your last message with
+     `STACK N`.
 
 ## 2. The investigation, rule by rule
 For each capability of the release:

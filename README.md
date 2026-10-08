@@ -74,7 +74,7 @@ important doubt (`NEEDS-HUMAN`) and each release.
 | [`v0.5-core.md`](docs/rationale/v0.5-core.md) | the minimal core, what this plugin ships |
 | [`v0.5-derivation.md`](docs/rationale/v0.5-derivation.md) | non-normative: how we got here |
 
-The design keeps the name 0.5; the plugin ships as **0.7.0**, because builds numbered 0.5.0 and
+The design keeps the name 0.5; the plugin ships as **0.7.x**, because builds numbered 0.5.0 and
 0.6.0 of the earlier flow still sit in Claude Code's plugin cache, which is keyed by version.
 
 The v0.26 flow (explore → model → worker-composer, parallel building blocks) is retired to

@@ -51,10 +51,11 @@ important doubt (`NEEDS-HUMAN`) and each release.
 - **Structure at birth:** the architect writes `ARCHITECTURE.md` before the first slice — layering,
   one owner per table, the error policy — and wires the sensors (formatter, linter, thresholds,
   suppression count) into the gate.
-- **Adopting existing code:** the architect maps the code as it is and wires the build's own tasks
-  as sensors; a file already over the line limit is frozen at its length (`.mismagent/oversize.md`)
-  instead of raising the limit, and acceptance tests can live where the build wants them
-  (`acceptance:` in `CLAUDE.md`).
+- **Files short by construction:** `ARCHITECTURE.md` says what one file holds (a use case, an
+  entity, a screen's state); a second thing is a second file. Adopting existing code, the architect
+  takes that rule from the best-kept code, and a file holding several things is split along it by a
+  design pass, never by line count. Acceptance tests live where the build wants them (`acceptance:`
+  in `CLAUDE.md`).
 - **Conventions decided with you:** the model slice and every slice that does something new propose
   how code is written here; you decide each proposal, and the result is a project skill
   (`.claude/skills/conventions/`, rules with real files as examples) that the builder loads and the

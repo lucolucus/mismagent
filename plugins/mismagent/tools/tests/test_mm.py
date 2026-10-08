@@ -734,18 +734,6 @@ class Check(Repo):
         self.commit()
         self.assertEqual(self.check()[0], 0)
 
-    def test_oversize_files_are_frozen(self):
-        self.write("CLAUDE.md", CLAUDE.replace("400", "3"))
-        self.write("src/old.py", "a = 1\n" * 5)
-        self.write(".mismagent/oversize.md", "# Oversize\n\n- `src/old.py`: 5\n")
-        self.commit()
-        code, out, _ = self.check()
-        self.assertEqual(code, 0, out)
-        self.assertIn("1 file(s) above max_file_lines 3, frozen in .mismagent/oversize.md", out)
-        self.write("src/old.py", "a = 1\n" * 6)
-        self.commit()
-        self.assertError("src/old.py: 6 lines > max_file_lines 3 (frozen at 5 in .mismagent/oversize.md)")
-
     def test_long_convention_topic_warns(self):
         self.write(".claude/skills/conventions/references/tests.md", "word " * 301)
         code, out, _ = self.check()

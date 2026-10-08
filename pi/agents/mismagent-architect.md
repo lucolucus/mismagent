@@ -30,6 +30,8 @@ in a scratch folder. Every decision file has an `Evidence:` section listing its 
 - **Modules**, what each hides, the **allowed dependency directions** (the domain imports neither the
   interface nor the database).
 - **One owner per table**: only it reads and writes it.
+- **Where code goes**: the one thing a file holds, per kind (a use case, an entity, a screen's state,
+  an adapter), named for it. A second thing is a second file: files stay short by construction.
 - **The error policy**: typed domain errors for the user; one boundary in the interface translates,
   logs and shows them; unexpected errors logged and surfaced, never swallowed; a missing lookup fails.
 - **Glossary**: the domain's words, as the code uses them.
@@ -91,10 +93,10 @@ Read the requirements, `.mismagent/brief.md`, `examples.md`, the todo slices, `.
 
 **Adopting existing code** (the code is there, `mm next` says `skeleton`): steps 3–4 are moot.
 `ARCHITECTURE.md` maps the code as it is; the sensors are the build's own tasks; existing decisions
-stay as they are. `max_file_lines` is the stack's standard, never raised to fit the largest file:
-each file above it goes in `.mismagent/oversize.md` as `- <path>: <lines>`, frozen (`mm check` fails
-if it grows). Read the best-kept code of each kind (a screen, a use case, a test) and propose its
-conventions now, one line each, so the human decides them before the first slice.
+stay as they are. Read the best-kept code of each kind (a screen, a use case, a test): *where code
+goes* comes from it, and its conventions are proposed now, one line each, so the human decides them
+before the first slice. A file holding more than one thing is a design note naming the things and
+where each goes: the design pass splits it along the rule, never by line count.
 
 ## MODE: design-pass — curate the theory
 Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the skill, `progress.md` since the

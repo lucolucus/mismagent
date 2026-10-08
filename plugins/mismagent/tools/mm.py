@@ -15,8 +15,6 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — "at HEAD" = SHA (>= 7 hex)
     is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
-  .mismagent/oversize.md: `- <path>: <lines>` — a file already above max_file_lines when the project
-    was adopted, frozen at that length: an error only if it grows (the limit stays the standard one)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
     (`idle`): the stack is in question until specify's review and its handoff are finished
@@ -59,7 +57,6 @@ STATES = ("todo", "doing", "done")
 M = ".mismagent"
 EXAMPLES, NOTES, REVIEWS, PROGRESS = (M + "/examples.md", M + "/design-notes.md", M + "/reviews",
                                       M + "/progress.md")
-OVERSIZE = M + "/oversize.md"
 TOPIC_WORDS = 300
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
@@ -267,11 +264,6 @@ def unmarked(s, marks, retired):
     """The slice's examples with no acceptance marker (a superseded one needs none)."""
     return [ex for ex in s["examples"] if ex not in marks and ex not in retired]
 
-def frozen():
-    """-> {path: lines} from .mismagent/oversize.md."""
-    return {m.group(1): int(m.group(2)) for m in (re.match(r"^[-*]\s*`?([^`:]+?)`?\s*:\s*(\d+)\s*$", line.strip())
-                                                  for line in read(OVERSIZE).splitlines()) if m}
-
 def count_items(rel):
     return sum(1 for line in read(rel).splitlines() if line.lstrip().startswith("- "))
 
@@ -460,19 +452,12 @@ def run_check(base=None):
             errors.append("%s: in %s without Base:" % (where, s["state"]))
     cfg = config()
     limit, allowed = cfg_int(cfg, "max_file_lines", 400), cfg_int(cfg, "suppressions", 0)
-    count, frozen_at, held = 0, frozen(), 0
+    count = 0
     for rel in sources():
         lines = read(rel).splitlines()
         count, n = count + sum(1 for line in lines if SUPPRESS.search(line)), len(lines)
         if n > limit and not rel.startswith("tests/"):
-            if n <= frozen_at.get(rel, 0):
-                held += 1
-            else:
-                errors.append("%s: %d lines > max_file_lines %d%s" % (rel, n, limit, " (frozen at %d in %s)"
-                              % (frozen_at[rel], OVERSIZE) if rel in frozen_at else ""))
-    if held:
-        warnings.append("%d file(s) above max_file_lines %d, frozen in %s: split one when a slice touches it"
-                        % (held, limit, OVERSIZE))
+            errors.append("%s: %d lines > max_file_lines %d" % (rel, n, limit))
     if count > allowed:
         errors.append("suppression markers: %d > suppressions %d" % (count, allowed))
     if base:

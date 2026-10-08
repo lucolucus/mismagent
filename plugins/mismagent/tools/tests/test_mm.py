@@ -86,10 +86,12 @@ class Repo(unittest.TestCase):
     def work(self, stem="01-cart", code="x = 1\n", msg="code"):
         """Builder work: code plus the progress entry, committed."""
         self.write("src/cart.py", code)
-        path = ".mismagent/slices/doing/%s.md" % stem
-        if os.path.exists(os.path.join(self.dir, path)):
-            self.write(path, self.read(path) + "\n## Progress\nbuilt it\n")
-        return self.commit(msg)
+        sha = self.commit(msg)
+        if os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/%s.md" % stem)):
+            code, _, err = self.mm("built", stem)
+            self.assertEqual(code, 0, err)
+            sha = self.head()
+        return sha
 
     def acceptance(self, rel, text):
         self.write("tests/acceptance/" + rel, text)
@@ -182,20 +184,45 @@ class Next(Repo):
         self.commit("code")
         d = self.next()  # committed work but no progress entry: the builder was cut
         self.assertEqual(d["action"], "resume")
-        self.assertIn("no '## Progress' in .mismagent/slices/doing/01-cart.md", d["reason"])
-        path = ".mismagent/slices/doing/01-cart.md"
-        self.write(path, self.read(path) + "\n## Progress\nbuilt it\n")
-        self.commit("progress")
+        self.assertIn("no `Built: 1` in .mismagent/slices/doing/01-cart.md", d["reason"])
+        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        self.assertIn("Built: 1", self.read(".mismagent/slices/doing/01-cart.md"))
         self.assertEqual(self.next()["action"], "review")
         code, out, _ = self.mm("next")
         self.assertTrue(out.startswith("review 01-cart — "), out)
 
-    def test_progress_heading_in_the_old_log_still_counts(self):
+    def test_a_builder_cut_in_a_rework_resumes(self):
         self.started()
-        self.write("src/cart.py", "x = 1\n")
-        self.write(".mismagent/progress.md", "## 01-cart\nok\n")
-        self.commit("code")
+        self.work()
+        self.review("01-cart-1", "REWORK")
+        self.assertEqual(self.next()["action"], "rework")
+        self.write("src/cart.py", "x = 2\n")
+        self.commit("half the fix")  # cut before mm built
+        d = self.next()
+        self.assertEqual(d["action"], "resume")
+        self.assertIn("no `Built: 2`", d["reason"])
+        self.assertEqual(self.mm("built", "01-cart")[0], 0)
         self.assertEqual(self.next()["action"], "review")
+
+    def test_built_preconditions(self):
+        self.slice("01-cart")
+        self.commit("plan")
+        self.assertIn("not doing", self.mm("built", "01-cart")[2])
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.assertIn("nothing built since mm start", self.mm("built", "01-cart")[2])
+        self.write("src/cart.py", "x = 1\n")
+        self.assertIn("dirty", self.mm("built", "01-cart")[2])
+        self.commit("code")
+        self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: false"))
+        self.commit("red")
+        code, out, err = self.mm("built", "01-cart")
+        self.assertEqual((code, out.strip().splitlines()[-1]), (1, "gate: red (test)"))
+        self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
+        self.write("CLAUDE.md", CLAUDE)
+        self.commit("green")
+        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        self.review("01-cart-1", "REWORK")
+        self.assertIn("review 1 is at HEAD", self.mm("built", "01-cart")[2])
 
     def test_land_on_pass_at_head(self):
         self.started()
@@ -436,6 +463,42 @@ class StartLand(Repo):
         self.assertEqual(code, 1)
         self.assertIn("EX-1 has no acceptance marker under tests/acceptance/", err)
         self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/01-cart.md")))
+
+    def body(self, text="| dimension | score |\n\nNo blocking finding.\n"):
+        self.write(".mismagent/reviews/01-cart.draft.md", text)
+        return os.path.join(self.dir, ".mismagent/reviews/01-cart.draft.md")
+
+    def test_review_writes_the_header(self):
+        self.started()
+        sha = self.work()
+        self.body()
+        code, out, err = self.mm("review", "01-cart", "pass", "--sha", sha[:9],
+                                 "--scores", "simple=4 naming=5 tests=4")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out.strip(), ".mismagent/reviews/01-cart-1.md")
+        text = self.read(".mismagent/reviews/01-cart-1.md")
+        self.assertTrue(text.startswith("VERDICT: PASS\nSHA: %s\nSCORES: simple=4 naming=5 modularity=- "
+                                        "duplication=- concision=- errors=- tests=4\n" % sha), text)
+        self.assertIn("No blocking finding.", text)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart.draft.md")))
+        self.assertEqual(self.next()["action"], "land")
+
+    def test_review_refusals(self):
+        self.started()
+        sha = self.work()
+        def review(*args):
+            return self.mm("review", *args, "--body", self.body())
+        self.assertIn("HEAD moved", review("01-cart", "PASS", "--sha", "abcdef1", "--scores", "simple=4")[2])
+        self.assertIn("is a REWORK", review("01-cart", "PASS", "--sha", sha, "--scores", "simple=3")[2])
+        self.assertIn("takes PASS | REWORK | DIRECT", review("01-cart", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
+        self.assertIn("needs --scores", review("01-cart", "REWORK", "--sha", sha)[2])
+        self.assertIn("scores: speed", review("01-cart", "REWORK", "--sha", sha, "--scores", "speed=4")[2])
+        self.assertIn("missing or empty", self.mm("review", "01-cart", "REWORK", "--sha", sha,
+                                                  "--scores", "simple=3", "--body", "nope.md")[2])
+        self.assertEqual(review("01-cart", "DIRECT", "--sha", sha)[0], 0)  # the architect: no scores
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart-2.md")))
+        self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
+        self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha, "--scores", "simple=3")[0], 0)
 
     def test_land_preconditions_and_commit(self):
         self.started()
@@ -755,7 +818,7 @@ class Check(Repo):
 
     def test_acceptance_folders_from_claude_md(self):
         self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400",
-                                               "- max_file_lines: 400\n- acceptance: app/src/acc, web/acc/"))
+                                               "- max_file_lines: 400\n- acceptance: `app/src/acc`, `web/acc/`"))
         self.write(".mismagent/slices/done/01-cart.md",
                    slice_text(examples="EX-1, EX-2").replace("Examples", "Base: abc1234\nExamples"))
         self.write("app/src/acc/CartTest.kt", "// EX-1\n")

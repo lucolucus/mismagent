@@ -72,7 +72,9 @@ important doubt (`NEEDS-HUMAN`) and each release.
   is below 4, the architect reads the code and queues refactoring slices before the next request. If
   one is still below 4 after two design passes, you decide whether to confirm the release, with
   the reason.
-- **Tools compute, agents judge:** `mm` owns the state, the git moves and every count.
+- **Tools compute, agents judge:** `mm` owns the state, the git moves and every count. Agents
+  signal through it, never by hand: `mm built` closes a builder's round (gate green, `Built:`
+  written), `mm review` writes the verdict lines and refuses when HEAD moved during the review.
 
 ## The design, in three layers
 | file | layer |

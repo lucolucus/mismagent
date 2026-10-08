@@ -13,11 +13,11 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     acceptance marker required). The old single .mismagent/examples.md is still read, with a warning
   .mismagent/brief.md: one page (a warning above BRIEF_WORDS): decisions go to decisions/, a
     release's scope and open questions to releases/<release>.md
-  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After:,
-    ## Question/Answer, ## Progress (the builder's, when it returns) — After: lists slices (NN or
-    stem) that must be done before it starts
-  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — "at HEAD" = SHA (>= 7 hex)
-    is a prefix of HEAD
+  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After: Built:,
+    ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
+    must be done before it starts; Built: <round> is written by `mm built`, never by hand
+  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES: — written by `mm review`
+    (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
@@ -30,8 +30,9 @@ Design choices:
   them) and minus untracked run debris (__pycache__/, *.pyc, .pytest_cache/, *.db, *.sqlite*, *.log).
 - Base = the HEAD `start` began from (a commit cannot carry its own SHA). A doing slice has work when
   Base..HEAD changes something outside .mismagent/; no work -> `build`. With work, a clean tree and
-  no review at HEAD: `review` only if the slice file has a `## Progress` section (or, from before
-  0.7.2, progress.md a `## <slice stem>` heading), else `resume`.
+  no review at HEAD: `review` only if the slice's `Built:` is this round (reviews so far + 1),
+  else `resume` — a builder cut before `mm built` has not finished. `mm built` runs the gate first,
+  so no builder returns over a red gate.
 - Verdicts are checked against SCORES (`name=<n>`, `-` = not assessed): PASS with a score < 4 counts
   as REWORK, HEALTHY with a score < 4 as DESIGN-PASS. The architect answers an escalation with
   VERDICT: DIRECT (-> `rework` following it) or PASS; a REWORK after a DIRECT -> `stuck` (human).
@@ -62,7 +63,7 @@ KINDS = ("model", "feature", "refactor")
 STATES = ("todo", "doing", "done")
 M = ".mismagent"
 EXAMPLES, OLD_EXAMPLES, BRIEF = M + "/examples", M + "/examples.md", M + "/brief.md"
-NOTES, REVIEWS, OLD_PROGRESS = M + "/design-notes.md", M + "/reviews", M + "/progress.md"
+NOTES, REVIEWS = M + "/design-notes.md", M + "/reviews"
 BRIEF_WORDS = 600
 TOPIC_WORDS = 300
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
@@ -154,7 +155,7 @@ def examples():
 def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
-         "examples": [], "bad_examples": [], "base": "", "after": []}
+         "examples": [], "bad_examples": [], "base": "", "after": [], "built": 0}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -168,7 +169,7 @@ def parse_slice(state, name):
             if st:
                 sections[-1][1].append(st)
             continue
-        hm = re.match(r"^(kind|release|examples|base|after)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
+        hm = re.match(r"^(kind|release|examples|base|after|built)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
         if hm:
             key, val = hm.group(1).lower(), hm.group(2).strip()
             if key == "examples":
@@ -177,6 +178,8 @@ def parse_slice(state, name):
                 s["bad_examples"] = [t for t in toks if not EX_ID.match(t)]
             elif key == "after":
                 s["after"] = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
+            elif key == "built":
+                s["built"] = int(val) if val.isdigit() else 0
             else:
                 s[key] = val.split()[0] if val else ""
     s["kind"] = s["kind"].lower()
@@ -262,8 +265,8 @@ def walk(top):
 
 def acceptance():
     """The acceptance folders: CLAUDE.md `acceptance:` (comma-separated), else tests/acceptance."""
-    return [d.strip().strip("/") for d in config().get("acceptance", "").split(",") if d.strip()] \
-        or ["tests/acceptance"]
+    folders = (d.strip().strip("`").strip().strip("/") for d in config().get("acceptance", "").split(","))
+    return [d for d in folders if d] or ["tests/acceptance"]
 
 def markers():
     """-> {EX-id: [files]} from the acceptance folders."""
@@ -333,12 +336,11 @@ def decide():
                    check=False).split() if s["base"] else []
         if not work:
             return act("build", "no change outside .mismagent/ since mm start", **one)
-        if not (re.search(r"^##\s+Progress\b", read(s["path"]), re.M | re.I)
-                or re.search(r"^##\s+" + re.escape(s["stem"]), read(OLD_PROGRESS), re.M)):
-            return act("resume", "%d file(s) changed but no '## Progress' in %s: the builder was cut"
-                       % (len(work), s["path"]), **one)
-        return act("review", "%d file(s) changed since mm start, progress entry written, no review at HEAD"
-                   % len(work), **one)
+        if s["built"] != len(revs) + 1:
+            return act("resume", "%d file(s) changed but no `Built: %d` in %s: the builder was cut before "
+                       "mm built" % (len(work), len(revs) + 1, s["path"]), **one)
+        return act("review", "%d file(s) changed since mm start, built (round %d), no review at HEAD"
+                   % (len(work), s["built"]), **one)
 
     proposals = count_items(PROPOSALS)
     if proposals:
@@ -556,16 +558,17 @@ def move(s, state):
     git("mv", s["path"], dest)
     return dest
 
-def write_base(rel, sha):
+def write_header(rel, key, value):
+    """Sets the header line `<Key>: <value>` of a slice file, after the other header lines."""
     lines = read(rel).splitlines()
     top = next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))
-    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base)\b",
+    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built)\b",
                                                           lines[i], re.I)) for i in range(top)) if m}
-    base = [i for i, key in hdr.items() if key == "base"]
-    if base:
-        lines[base[0]] = "Base: " + sha
+    mine = [i for i, k in hdr.items() if k == key.lower()]
+    if mine:
+        lines[mine[0]] = "%s: %s" % (key, value)
     else:
-        lines.insert(max(hdr) + 1 if hdr else 0, "Base: " + sha)
+        lines.insert(max(hdr) + 1 if hdr else 0, "%s: %s" % (key, value))
     with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -582,7 +585,7 @@ def cmd_start(a):
     need(not dirty(), "the tree is dirty: commit or discard first")
     sha = head()
     dest = move(s, "doing")
-    write_base(dest, sha)
+    write_header(dest, "Base", sha)
     git("add", "--", dest)
     git("commit", "-q", "-m", "mm start %s" % s["stem"])
     print("started %s: %s (Base %s)" % (s["stem"], dest, sha[:12]))
@@ -605,6 +608,70 @@ def cmd_park(a):
     git("add", "--", dest)
     git("commit", "-q", "-m", "mm park %s" % s["stem"])
     print("parked %s: %s" % (s["stem"], dest))
+    return 0
+
+def cmd_built(a):
+    s = find_slice(a.slice, slices())
+    need(s["state"] == "doing", "%s is in %s, not doing" % (s["stem"], s["state"]))
+    need(not dirty(), "the tree is dirty: commit your work first")
+    work = git("diff", "--name-only", "%s..HEAD" % s["base"], "--", ".", ":(exclude).mismagent",
+               check=False).split() if s["base"] else []
+    need(work, "nothing built since mm start (no change outside .mismagent/ since Base)")
+    revs = reviews(s["stem"])
+    r = at_head(revs, head())
+    need(not r, "review %d is at HEAD: nothing changed since it" % (r or {"k": 0})["k"])
+    gate()
+    rnd = len(revs) + 1
+    write_header(s["path"], "Built", rnd)
+    git("add", "--", s["path"])
+    git("commit", "-q", "--allow-empty", "-m", "%s: built (round %d)" % (s["stem"], rnd))  # again in a round: same header
+    print("built %s, round %d: ready for review" % (s["stem"], rnd))
+    return 0
+
+SCORE_NAMES = ("simple", "naming", "modularity", "duplication", "concision", "errors", "tests")
+
+def cmd_review(a):
+    v, sls = a.verdict.upper(), slices()
+    try:
+        mine = find_slice(a.target, sls)
+    except Refused:
+        mine = None
+    if mine:
+        need(mine["state"] == "doing", "%s is in %s, not doing" % (mine["stem"], mine["state"]))
+        target, allowed = mine["stem"], ("PASS", "REWORK", "DIRECT")
+    else:
+        need(any(x["release"] == a.target for x in sls), "%s is neither a slice nor a release" % a.target)
+        target, allowed = a.target, ("HEALTHY", "DESIGN-PASS")
+    need(v in allowed, "verdict %s: %s takes %s" % (v, target, " | ".join(allowed)))
+    sha = head()
+    need(len(a.sha) >= 7 and sha.startswith(a.sha.lower()),
+         "HEAD moved since you read it (%s, now %s): review again what is there now" % (a.sha, sha[:12]))
+    need(not dirty(), "the tree is dirty: a review covers committed code only")
+    scores = dict(re.findall(r"([\w-]+)\s*=\s*(\S+)", a.scores or ""))
+    bad = [k for k in scores if k not in SCORE_NAMES] + ["%s=%s" % kv for kv in scores.items()
+                                                       if kv[1] not in ("1", "2", "3", "4", "5", "-")]
+    need(not bad, "scores: %s (names %s, values 1-5 or -)" % (", ".join(bad), " ".join(SCORE_NAMES)))
+    need(v == "DIRECT" or scores, "%s needs --scores" % v)
+    low = ["%s=%s" % kv for kv in scores.items() if kv[1] in ("1", "2", "3")]
+    need(not (low and v in DEMOTE), "%s with %s < 4 is a %s" % (v, " ".join(low), DEMOTE.get(v, "")))
+    draft = os.path.join(ROOT, REVIEWS, "%s.draft.md" % target)  # under reviews/: it leaves the tree clean
+    src = a.body or draft  # --body is the caller's path, relative to where mm runs
+    try:
+        with open(src, encoding="utf-8") as f:
+            body = f.read()
+    except (OSError, UnicodeDecodeError):
+        body = ""
+    need(body.strip(), "%s is missing or empty: the scores table and the findings go there"
+         % (a.body or os.path.relpath(draft, ROOT)))
+    k = max((r["k"] for r in reviews(target)), default=0) + 1
+    rel = "%s/%s-%d.md" % (REVIEWS, target, k)
+    os.makedirs(os.path.join(ROOT, REVIEWS), exist_ok=True)
+    line = " ".join("%s=%s" % (n, scores.get(n, "-")) for n in SCORE_NAMES)
+    with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
+        f.write("VERDICT: %s\nSHA: %s\nSCORES: %s\n\n%s\n" % (v, sha, line, body.strip()))
+    if not a.body:
+        os.remove(draft)
+    print(rel)
     return 0
 
 def cmd_land(a):
@@ -651,6 +718,10 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("park", "doing -> todo, drop Base:, commit (clean tree, no work since Base)",
      ("slice", "slice stem (NN-name), its number, or its path")),
+    ("built", "the builder is done: gate green, write Built: <round>, commit",
+     ("slice", "slice stem (NN-name), its number, or its path")),
+    ("review", "write the next review file from its draft (HEAD unchanged since --sha, scores well formed)",
+     ("target", "slice stem or number, or release token")),
     ("land", "doing -> done, commit (PASS at HEAD, clean tree, gate green)",
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("gate", "run test and lint from CLAUDE.md ## mismagent, then check", None),
@@ -668,6 +739,12 @@ def parser():
             s.add_argument("--json", action="store_true", help="machine-readable output")
         elif arg:
             s.add_argument(arg[0], help=arg[1])
+    rv = sub.choices["review"]
+    rv.add_argument("verdict", help="PASS | REWORK | DIRECT (a slice), HEALTHY | DESIGN-PASS (a release)")
+    rv.add_argument("--sha", required=True, help="the HEAD you read when the review began")
+    rv.add_argument("--scores", help='"simple=4 naming=5 ..." (- = not assessed)')
+    rv.add_argument("--body", help="file with the scores table and the findings "
+                    "(default: .mismagent/reviews/<target>.draft.md, removed once used)")
     sub.choices["check"].add_argument("--base", help="also refuse modified acceptance tests and "
                                       "changed requirement files since this ref")
     return p

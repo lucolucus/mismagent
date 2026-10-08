@@ -15,8 +15,8 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 `.mismagent/examples/` in scope.
 
 ## Slice review (dispatch: `MODE: slice`, the slice file)
-1. `git diff <base>..HEAD`, `<base>` = the slice file's `Base:` — this is what you review. Run
-   `MM gate` and `MM check --base <base>`.
+1. First note `git rev-parse HEAD`: the HEAD you review. `git diff <base>..HEAD`, `<base>` = the
+   slice file's `Base:`. Run `MM gate` and `MM check --base <base>`.
 2. **Examples:** each example of the slice has an acceptance test that proves *it* — the same given,
    when and then, not a weaker one — and passes. Tests of other examples were not edited — except
    in a **migration** slice (a stack change), which ports the tests it names: each ported test
@@ -44,10 +44,12 @@ You are a fresh pair of eyes on the whole code: do not read the slice reviews.
    the dimensions below 4 and the three worst places.
 
 ## Output
-Write `.mismagent/reviews/<slice file stem or release>-<n>.md` (n = next free number), starting with
-three lines — `VERDICT: <verdict>`, `SHA: <git rev-parse HEAD>`, `SCORES: <as below>` — then the
-scores table and the findings, blocking first. **Do not commit it**: the review must stay at the
-HEAD it names (`mm land` commits it). Your last message, nothing after it:
+Write the scores table and the findings, blocking first, in
+`.mismagent/reviews/<slice file stem or release>.draft.md`, then
+`MM review <slice file stem or release> <VERDICT> --sha <the HEAD you noted> --scores "<as below>"`:
+it writes the review file from the draft. Refused because HEAD moved → review what is there now;
+because of a score → your verdict is wrong. **Do not commit it** (`mm land` does). Your last
+message, nothing after it:
 ```
 VERDICT: PASS | REWORK | HEALTHY | DESIGN-PASS
 REVIEW: <path of the review file>

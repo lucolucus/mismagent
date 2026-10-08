@@ -38,10 +38,9 @@ Load the `mismagent-craft` skill and follow its loop. For this slice:
    it): do it well, then propose it in `.mismagent/conventions-proposals.md`: `- create|update
    <topic>: <the rule> — <your files> (<why>)`. The human decides after the slice.
 5. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
-   a new `noqa`/disable line is a defect). Before returning DONE, `python3
-   "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mm.py" gate` must be green (suite, lint, checks).
-   Green is read, never assumed: no pipe after the suite or the gate (`| tail` reports tail's exit
-   code) — redirect to a file, `echo EXIT $?`, read it; commit in a separate command, after `EXIT 0`.
+   a new `noqa`/disable line is a defect). Green is read, never assumed: no pipe after the suite
+   (`| tail` reports tail's exit code) — redirect to a file, `echo EXIT $?`, read it; commit in a
+   separate command, after `EXIT 0`.
 
 A `Kind: model` slice sets the pattern every later one copies: hold it to the highest bar. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path
@@ -74,6 +73,8 @@ COMMITS: <n>
 TESTS: <passed>/<total> (acceptance: <ids>)
 NOTES: <one line: what the next slice should know, or none>
 ```
-Before returning DONE, end your slice file with `## Progress` (a rework: add `Rework <k>:` lines
-under it) and at most five lines: what changed, what you learned, what the next slice should know.
-Commit it — the tool reads that section as "the builder finished".
+Before returning DONE (a rework too): end your slice file with `## Progress` (a rework: a
+`Rework <k>:` line under it), at most five lines — what changed, what you learned, what the next
+slice should know — and commit it. Then `python3 "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mm.py" built <slice>`:
+it runs the gate (suite, lint, checks), writes `Built:` and commits. Refused → fix, run it again;
+never DONE without it, never `Built:` by hand.

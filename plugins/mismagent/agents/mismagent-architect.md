@@ -118,9 +118,10 @@ slices done since the last pass, then the code and its tests.
 
 ## MODE: escalate — a slice stuck after two reworks
 Read the slice, its reviews and the diff. Decide by the standard, `ARCHITECTURE.md` and the skill,
-not by taste. Write the next review file (`.mismagent/reviews/<slice stem>-<n>.md`, first lines
-`VERDICT:`, `SHA: <HEAD>`), **not committed** (it stays at that HEAD): `DIRECT` with exactly what the
-builder must change, or `PASS` with why the finding does not block (residue → `design-notes.md`).
+not by taste. Write `.mismagent/reviews/<slice stem>.draft.md`, then `MM review <slice stem>
+DIRECT|PASS --sha <the HEAD you read>` (PASS also `--scores`), **not committed**: `DIRECT` with
+exactly what the builder must change, or `PASS` with why the finding does not block (residue →
+`design-notes.md`).
 
 ## Return (your last message)
 ```

@@ -38,7 +38,7 @@ both honest. Heir of **BMad** and **Agentheim**.
 | You type | What happens |
 |---|---|
 | `/mismagent:explore <idea>` | For a new product: a dialogue on the problem → a one-page brief; a fresh-context challenger tries to kill it (you decide: stop, reshape, go on); an event storm of the domain — the timeline of events, who does what, what can be undone, the hotspots. |
-| `/mismagent:specify <request>` | An interview, not a transcription: real cases with real values, the edges you would not volunteer, each rule restated for you to confirm. Out: the stack decision (first time), `examples.md`, vertical slices for **the next release only**. |
+| `/mismagent:specify <request>` | An interview, not a transcription: real cases with real values, the edges you would not volunteer, each rule restated for you to confirm. Out: the stack decision (first time), the release file, the examples (one file per capability), vertical slices for **the next release only**. |
 | `/mismagent:build` | **One action per call**, decided by the tool `mm`: build a slice (acceptance tests first, TDD, refactoring), review it on the review table, land it, run a design pass, or stop for you. Run it again, or under `/loop`. |
 | `/mismagent:build --confirm R0` | Your confirmation of a release: the tag. |
 | `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): you and the agent go through the agents' proposals one by one — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |
@@ -54,8 +54,10 @@ important doubt (`NEEDS-HUMAN`) and each release.
 - **Files short by construction:** `ARCHITECTURE.md` says what one file holds (a use case, an
   entity, a screen's state); a second thing is a second file. Adopting existing code, the architect
   takes that rule from the best-kept code, and a file holding several things is split along it by a
-  design pass, never by line count. Acceptance tests live where the build wants them (`acceptance:`
-  in `CLAUDE.md`).
+  design pass, never by line count. The specs too: a one-page brief rewritten in place, one file
+  per release (scope, open questions), per capability (its examples), per decision, and each slice
+  carries its own progress. Acceptance tests live where the build wants them (`acceptance:` in
+  `CLAUDE.md`).
 - **Conventions decided with you:** the model slice and every slice that does something new propose
   how code is written here; you decide each proposal, and the result is a project skill
   (`.claude/skills/conventions/`, rules with real files as examples) that the builder loads and the

@@ -18,9 +18,12 @@ ran now, a page you fetched (its URL), or the human's words. No source → it is
 as an **assumption** with how to check it (a question, a hotspot, a probe you can run), or leave it
 out. A guess presented as a fact is a defect.
 
-The interview lives on disk, so it survives a new session: open questions in `.mismagent/brief.md`
-under `## Open questions`, draft examples in `.mismagent/examples.md`. Start by reading them and
-resume where they stop.
+The interview lives on disk, so it survives a new session. Each thing has its file:
+`.mismagent/releases/<RN>.md` (the release's goal, in and out of scope, `## Open questions`),
+`.mismagent/examples/<capability>.md` (the examples), `.mismagent/decisions/NNNN-<name>.md` (one
+decision that outlives the release: what, why, what else was considered, `Evidence:` the human's
+words). `brief.md` stays one page about the product: rewritten in place, never appended to. Start
+by reading them and resume where they stop.
 
 ## 1. Intake
 Read the request, the requirements, the repository (code? tests? `ARCHITECTURE.md`?
@@ -108,15 +111,18 @@ For each capability of the release:
 3. **The rule.** Restate it in the human's words and ask for the counter-example ("so a paid sale
    can never change — not even to fix a wrong price?").
 4. The human confirms, corrects or cuts. A point nobody can answer yet stays under
-   `## Open questions`, never guessed.
+   `## Open questions` of the release file, never guessed.
 
 Ask a few questions at a time, grouped, each with your proposal, so the human can answer "ok".
 
 ## 3. Examples
-`.mismagent/examples.md` — one table for the whole product:
-`| id | given | when | then | rule | req | release |` — ids `EX-<n>`, never reused; concrete values;
+`.mismagent/examples/<capability>.md` — one file per capability (what the user can do, in the
+domain's words: `delete-project.md`), across releases:
+`| id | given | when | then | rule | req | release |` — ids `EX-<n>`, unique across the files, never
+reused; concrete values;
 falsifiable; `req` = the requirement it proves. A changed rule never rewrites a released example:
-add the new one and append `(superseded by EX-<n>)` to the old one's `then`.
+add the new one and append `(superseded by EX-<n>)` to the old one's `then`. An old single
+`examples.md`: split it by capability with the human first (`mm check` warns until you do).
 
 ## 4. Slices
 Write `.mismagent/slices/todo/NN-<name>.md` (NN continues the highest number anywhere under
@@ -133,7 +139,7 @@ Examples: EX-3, EX-4
 Show the human the list (one line per slice) and ask for the release cut.
 
 ## 5. Close
-No open question left for this release, the human has approved the examples and the slices →
+No open question left in `releases/<RN>.md`, the human has approved the examples and the slices →
 commit (`specify <RN>`) and end your last message with the line `SPECIFIED <RN>`. Building is
 `/mismagent:build`.
 

@@ -36,8 +36,10 @@ checking back every ten minutes, and resumes by itself once you have answered.
 ## In a project
 `ARCHITECTURE.md` and `CLAUDE.md` (section `## mismagent`: test, lint, smoke, thresholds) at the root;
 `.claude/skills/conventions/` (the project's conventions, yours);
-`tests/acceptance/` (one test per example, marker `EX-<n>`); `.mismagent/`: `brief.md`, `event-storm.md`,
-`examples.md`, `slices/{todo,doing,done}/`, `reviews/`, `progress.md`, `design-notes.md`,
-`decisions/`, `conventions-proposals.md`.
+`tests/acceptance/` (one test per example, marker `EX-<n>`; elsewhere with `acceptance:`);
+`.mismagent/`, one thing per file: `brief.md` (one page), `event-storm.md`, `releases/<R>.md`
+(scope, open questions), `examples/<capability>.md`, `decisions/NNNN-<name>.md`,
+`slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `design-notes.md`,
+`conventions-proposals.md`.
 
 The v0.26 flow (explore/model/worker-composer) is in `attic/v0.26/`.

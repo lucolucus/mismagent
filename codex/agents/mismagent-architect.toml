@@ -72,7 +72,7 @@ Called again with `N-answers.md` (the human's answers, neutral): read it, the pa
    Commit (`stack review N`).
 
 ## MODE: skeleton — structure at birth
-Read the requirements, `.mismagent/brief.md`, `examples.md`, the todo slices, `.mismagent/decisions/`.
+Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo slices, `decisions/`.
 1. Write `ARCHITECTURE.md` as above, for the code to come; record the error policy and the layering as
    `.mismagent/decisions/` files (why, what else was considered).
 2. Wire the **sensors** with the stack's standard tools: formatter check, linter at zero warnings
@@ -95,10 +95,10 @@ before the first slice. A file holding more than one thing is a design note nami
 where each goes: the design pass splits it along the rule, never by line count.
 
 ## MODE: design-pass — curate the theory
-Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the skill, `progress.md` since the
-last pass, then the code and its tests.
+Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the skill, the `## Progress` of the
+slices done since the last pass, then the code and its tests.
 1. Make `ARCHITECTURE.md` tell the truth about the code; no silent flip (change log, with why).
-   Propose for the skill a lesson the reviews or `progress.md` repeat, a rule the code no longer
+   Propose for the skill a lesson the reviews or the progress notes repeat, a rule the code no longer
    follows, one way where the code has two.
 2. Queue **refactoring slices** in `.mismagent/slices/todo/` (`Kind: refactor`, `Release:` the
    release in the dispatch, `Examples:` empty; `NN` continues the highest number under

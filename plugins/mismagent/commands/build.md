@@ -44,7 +44,7 @@ and stop.
 
 ## 2. Doubts
 A slice is blocked when its `## Question` has no `## Answer`. You neither guess nor forward blindly:
-1. **Frame it** against what the files say — `examples.md`, `ARCHITECTURE.md`, the `conventions`
+1. **Frame it** against what the files say — `.mismagent/examples/`, `ARCHITECTURE.md`, the `conventions`
    skill, `.mismagent/decisions/`,
    the requirements.
 2. **Classify.** *Important* = it changes what an example or rule means, the scope, money, the stack,
@@ -57,7 +57,7 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
    `NEEDS-HUMAN: /mismagent:specify stack <slice file>` (its stack review answers the slice).
 
 ## 3. Never
-Build, review or design; edit code, tests, requirements or `examples.md`; tag without `--confirm`;
+Build, review or design; edit code, tests, requirements or the examples; tag without `--confirm`;
 push; take a second action.
 
 ## Report (your last message)

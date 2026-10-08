@@ -8,10 +8,14 @@ a PASS at HEAD and a green gate. Exit: 0 ok · 1 check/gate failure or refused p
 line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespace and **bold**):
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
     acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere)
-  .mismagent/examples.md: | id | given | when | then | rule | req | release |, ids EX-<n>; a `then`
-    containing `(superseded by EX-<n>)` retires the row (no acceptance marker required)
+  .mismagent/examples/<capability>.md: | id | given | when | then | rule | req | release |, ids EX-<n>
+    unique across the files; a `then` containing `(superseded by EX-<n>)` retires the row (no
+    acceptance marker required). The old single .mismagent/examples.md is still read, with a warning
+  .mismagent/brief.md: one page (a warning above BRIEF_WORDS): decisions go to decisions/, a
+    release's scope and open questions to releases/<release>.md
   .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After:,
-    ## Question/Answer — After: lists slices (NN or stem) that must be done before it starts
+    ## Question/Answer, ## Progress (the builder's, when it returns) — After: lists slices (NN or
+    stem) that must be done before it starts
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — "at HEAD" = SHA (>= 7 hex)
     is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
@@ -26,18 +30,20 @@ Design choices:
   them) and minus untracked run debris (__pycache__/, *.pyc, .pytest_cache/, *.db, *.sqlite*, *.log).
 - Base = the HEAD `start` began from (a commit cannot carry its own SHA). A doing slice has work when
   Base..HEAD changes something outside .mismagent/; no work -> `build`. With work, a clean tree and
-  no review at HEAD: `review` only if progress.md has a `## <slice stem>` heading, else `resume`.
+  no review at HEAD: `review` only if the slice file has a `## Progress` section (or, from before
+  0.7.2, progress.md a `## <slice stem>` heading), else `resume`.
 - Verdicts are checked against SCORES (`name=<n>`, `-` = not assessed): PASS with a score < 4 counts
   as REWORK, HEALTHY with a score < 4 as DESIGN-PASS. The architect answers an escalation with
   VERDICT: DIRECT (-> `rework` following it) or PASS; a REWORK after a DIRECT -> `stuck` (human).
 - A DESIGN-PASS release review at HEAD asks for a pass unless two DESIGN-PASS reviews of that
   release came before it (two passes ran): then `confirm`.
 - check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
-  .mismagent/examples.md and the conventions skill; a modified (or renamed and edited) acceptance test is an error only while
+  the examples and the conventions skill; a modified (or renamed and edited) acceptance test is an error only while
   the doing slice is a feature and the file names none of its examples nor a superseded one.
 - Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/.
-- No word cap on .mismagent/: agents read the map, the conventions skill and the tail of
-  progress.md, never the history whole; what lasts is kept current in the skill, not compacted.
+- No word cap on .mismagent/ as a whole: each thing has its file (a capability's examples, a
+  decision, a release, a slice and its progress), so agents read the files they need, never the
+  history whole; what lasts is kept current in the skill and ARCHITECTURE.md, not compacted.
 - `park` puts a doing slice back in todo only while it has no work since Base (a stack change
   that must come first): half-done work never leaves doing unreviewed. A todo slice whose After:
   slices are not all done is skipped by `next`; when every todo slice waits -> `idle`.
@@ -55,8 +61,9 @@ import sys
 KINDS = ("model", "feature", "refactor")
 STATES = ("todo", "doing", "done")
 M = ".mismagent"
-EXAMPLES, NOTES, REVIEWS, PROGRESS = (M + "/examples.md", M + "/design-notes.md", M + "/reviews",
-                                      M + "/progress.md")
+EXAMPLES, OLD_EXAMPLES, BRIEF = M + "/examples", M + "/examples.md", M + "/brief.md"
+NOTES, REVIEWS, OLD_PROGRESS = M + "/design-notes.md", M + "/reviews", M + "/progress.md"
+BRIEF_WORDS = 600
 TOPIC_WORDS = 300
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
@@ -113,17 +120,22 @@ def config():
 def cfg_int(cfg, key, default):
     return int(cfg[key]) if cfg.get(key, "").isdigit() else default
 
+def example_files():
+    old = [OLD_EXAMPLES] if os.path.isfile(os.path.join(ROOT, OLD_EXAMPLES)) else []
+    return old + sorted(r for r in walk(EXAMPLES) if r.endswith(".md"))
+
 def examples():
-    """-> (rows [{id, release, superseded}], errors)."""
+    """-> (rows [{id, release, superseded, file}], errors)."""
     rows, errors = [], []
-    for n, line in enumerate(read(EXAMPLES).splitlines(), 1):
+    for rel, n, line in ((rel, n, line) for rel in example_files()
+                         for n, line in enumerate(read(rel).splitlines(), 1)):
         s = line.strip()
         if not s.startswith("|") or ("-" in s and re.fullmatch(r"[|:\-\s]+", s)):
             continue
         cells = [c.strip() for c in (s[1:-1] if s.endswith("|") and len(s) > 1 else s[1:]).split("|")]
         if cells[0].lower() == "id":
             continue
-        where = "examples.md:%d" % n
+        where = "%s:%d" % (rel, n)
         if len(cells) != 7:
             errors.append("%s: %d columns, expected 7 (id given when then rule req release)"
                           % (where, len(cells)))
@@ -132,10 +144,11 @@ def examples():
         elif not cells[6]:
             errors.append("%s: %s has no release" % (where, cells[0]))
         else:
-            rows.append({"id": cells[0], "release": cells[6],
+            rows.append({"id": cells[0], "release": cells[6], "file": rel,
                          "superseded": bool(SUPERSEDED.search(cells[3]))})
     ids = [r["id"] for r in rows]
-    errors += ["examples.md: duplicate id %s" % i for i in sorted(set(ids)) if ids.count(i) > 1]
+    errors += ["duplicate example id %s (%s)" % (i, ", ".join(r["file"] for r in rows if r["id"] == i))
+               for i in sorted(set(ids)) if ids.count(i) > 1]
     return rows, errors
 
 def parse_slice(state, name):
@@ -320,9 +333,10 @@ def decide():
                    check=False).split() if s["base"] else []
         if not work:
             return act("build", "no change outside .mismagent/ since mm start", **one)
-        if not re.search(r"^##\s+" + re.escape(s["stem"]), read(PROGRESS), re.M):
-            return act("resume", "%d file(s) changed but no '## %s' entry in progress.md: the builder was cut"
-                       % (len(work), s["stem"]), **one)
+        if not (re.search(r"^##\s+Progress\b", read(s["path"]), re.M | re.I)
+                or re.search(r"^##\s+" + re.escape(s["stem"]), read(OLD_PROGRESS), re.M)):
+            return act("resume", "%d file(s) changed but no '## Progress' in %s: the builder was cut"
+                       % (len(work), s["path"]), **one)
         return act("review", "%d file(s) changed since mm start, progress entry written, no review at HEAD"
                    % len(work), **one)
 
@@ -420,7 +434,7 @@ def sources():
 
 def guarded(path):
     base = os.path.basename(path)
-    return (path == EXAMPLES or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
+    return (path == OLD_EXAMPLES or path.startswith(EXAMPLES + "/") or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
             or (fnmatch.fnmatch(base.lower(), "requirements*") and base.lower().endswith(".md")))
 
 def run_check(base=None):
@@ -428,6 +442,13 @@ def run_check(base=None):
     (exs, errors), warnings, marks = examples(), [], markers()
     known, retired = {e["id"] for e in exs}, {e["id"] for e in exs if e["superseded"]}
     sls = slices()
+    if OLD_EXAMPLES in example_files():
+        warnings.append("%s is one table for the whole product: split it by capability into %s/<capability>.md "
+                        "(specify, with the human)" % (OLD_EXAMPLES, EXAMPLES))
+    words = len(read(BRIEF).split())
+    if words > BRIEF_WORDS:
+        warnings.append("%s: %d words > %d: rewrite it as one page; decisions go to decisions/, a release's "
+                        "scope and open questions to releases/<release>.md" % (BRIEF, words, BRIEF_WORDS))
     bare = sorted(os.path.basename(r) for r in walk(".mismagent/decisions")
                   if r.endswith(".md") and not re.search(r"^(#+\s*)?Evidence\b", read(r), re.M | re.I))
     if bare:  # one line, however many: a flood of these pushes the verdict out of a reader's tail
@@ -444,7 +465,7 @@ def run_check(base=None):
         errors += ["%s: Examples: %r is not EX-<n>" % (where, t) for t in s["bad_examples"]]
         errors += ["%s: After: %r names no single slice" % (where, r) for r in s["after"]
                    if not dep(r, sls) or dep(r, sls)["stem"] == s["stem"]]
-        errors += ["%s: example %s is not in examples.md" % (where, ex) for ex in s["examples"] if ex not in known]
+        errors += ["%s: example %s is not in %s/" % (where, ex, EXAMPLES) for ex in s["examples"] if ex not in known]
         if s["state"] == "done" or (base and s["state"] == "doing"):  # in review, the tests exist
             errors += ["%s: %s, but %s has no acceptance marker under %s/" % (where, s["state"], ex, ", ".join(acceptance()))
                        for ex in unmarked(s, marks, retired) if ex in known]

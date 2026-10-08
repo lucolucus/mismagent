@@ -12,7 +12,7 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 `MM` below = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`. Read `ARCHITECTURE.md`, the
 `conventions` skill (the topics the diff touches), the review table
 (`${CLAUDE_PLUGIN_ROOT}/skills/craft/references/review-table.md`) and the rows of
-`.mismagent/examples.md` in scope.
+`.mismagent/examples/` in scope.
 
 ## Slice review (dispatch: `MODE: slice`, the slice file)
 1. `git diff <base>..HEAD`, `<base>` = the slice file's `Base:` — this is what you review. Run

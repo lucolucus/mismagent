@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse(Edit|Write|MultiEdit|NotebookEdit) guard: the builder, the reviewer and the architect
 never write the human's files — the requirements (REQUISITI*.md, requirements*.md, any case),
-.mismagent/examples.md and the conventions skill (.claude/skills/conventions/). A doubt becomes a
+.mismagent/examples/ (and the old single .mismagent/examples.md) and the conventions skill (.claude/skills/conventions/). A doubt becomes a
 Question in the slice file; a convention, a line in .mismagent/conventions-proposals.md. Main-session calls pass
 untouched. A courtesy like guard-git.py: it reads the tool's path, not what a Bash command writes.
 """
@@ -13,7 +13,7 @@ import sys
 GUARDED = ("mismagent-builder", "mismagent-reviewer", "mismagent-architect")
 HUMAN_NAMES = ("requisiti*.md", "requirements*.md")
 HUMAN_SUFFIX = ".mismagent/examples.md"
-HUMAN_DIR = ".claude/skills/conventions/"
+HUMAN_DIRS = (".mismagent/examples/", ".claude/skills/conventions/")
 
 
 def human_file(path):
@@ -22,7 +22,7 @@ def human_file(path):
     if any(fnmatch.fnmatchcase(base, pattern) for pattern in HUMAN_NAMES):
         return True
     return (norm == HUMAN_SUFFIX or norm.endswith("/" + HUMAN_SUFFIX)
-            or norm.startswith(HUMAN_DIR) or "/" + HUMAN_DIR in norm)
+            or any(norm.startswith(d) or "/" + d in norm for d in HUMAN_DIRS))
 
 
 try:

@@ -35,7 +35,7 @@ class Repo(unittest.TestCase):
         self.git("config", "user.email", "test@example.com")
         self.git("config", "commit.gpgsign", "false")
         self.write("CLAUDE.md", CLAUDE)
-        self.write(".mismagent/examples.md", EXAMPLES)
+        self.write(".mismagent/examples/cart.md", EXAMPLES)
         self.write("ARCHITECTURE.md", "# Architecture\n")
         self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\n")
         self.commit("init")
@@ -86,7 +86,9 @@ class Repo(unittest.TestCase):
     def work(self, stem="01-cart", code="x = 1\n", msg="code"):
         """Builder work: code plus the progress entry, committed."""
         self.write("src/cart.py", code)
-        self.write(".mismagent/progress.md", "# Progress\n\n## %s — done\nbuilt it\n" % stem)
+        path = ".mismagent/slices/doing/%s.md" % stem
+        if os.path.exists(os.path.join(self.dir, path)):
+            self.write(path, self.read(path) + "\n## Progress\nbuilt it\n")
         return self.commit(msg)
 
     def acceptance(self, rel, text):
@@ -126,7 +128,7 @@ class Parsing(Repo):
         self.assertEqual(self.check()[0], 0)
 
     def test_status_markers_notes_superseded(self):
-        self.write(".mismagent/examples.md", EXAMPLES +
+        self.write(".mismagent/examples/cart.md", EXAMPLES +
                    "| EX-4 | x | y | nothing (superseded by EX-3) | R | Q | R1 |\n")
         self.acceptance("test_a.py", "# EX-1\n# EX-9\n# noqa: E501\n")
         self.write(".mismagent/design-notes.md", "# Notes\n- one\n- two\nnot a note\n")
@@ -180,12 +182,20 @@ class Next(Repo):
         self.commit("code")
         d = self.next()  # committed work but no progress entry: the builder was cut
         self.assertEqual(d["action"], "resume")
-        self.assertIn("progress.md", d["reason"])
-        self.write(".mismagent/progress.md", "## 01-cart\nok\n")
+        self.assertIn("no '## Progress' in .mismagent/slices/doing/01-cart.md", d["reason"])
+        path = ".mismagent/slices/doing/01-cart.md"
+        self.write(path, self.read(path) + "\n## Progress\nbuilt it\n")
         self.commit("progress")
         self.assertEqual(self.next()["action"], "review")
         code, out, _ = self.mm("next")
         self.assertTrue(out.startswith("review 01-cart — "), out)
+
+    def test_progress_heading_in_the_old_log_still_counts(self):
+        self.started()
+        self.write("src/cart.py", "x = 1\n")
+        self.write(".mismagent/progress.md", "## 01-cart\nok\n")
+        self.commit("code")
+        self.assertEqual(self.next()["action"], "review")
 
     def test_land_on_pass_at_head(self):
         self.started()
@@ -606,7 +616,7 @@ class Gate(Repo):
         self.write("CLAUDE.md", "# nothing\n")
         self.assertEqual(self.mm("gate")[0], 1)
         self.write("CLAUDE.md", CLAUDE)
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-1 | dup | x | y | R | Q | R0 |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-1 | dup | x | y | R | Q | R0 |\n")
         code, _, err = self.mm("gate")
         self.assertEqual(code, 1)
         self.assertIn("check", err)
@@ -651,22 +661,44 @@ class Check(Repo):
         self.assertEqual(code, 0, out)
 
     def test_malformed_examples(self):
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |\n")
         self.assertError("6 columns")
-        self.write(".mismagent/examples.md", EXAMPLES + "| E-4 | x | y | z | R | Q | R0 |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| E-4 | x | y | z | R | Q | R0 |\n")
         self.assertError("is not EX-<n>")
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |  |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |  |\n")
         self.assertError("no release")
 
     def test_duplicate_ids(self):
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-2 | x | y | z | R | Q | R1 |\n")
-        self.assertError("duplicate id EX-2")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-2 | x | y | z | R | Q | R1 |\n")
+        self.assertError("duplicate example id EX-2 (.mismagent/examples/cart.md, .mismagent/examples/cart.md)")
+        self.write(".mismagent/examples/cart.md", EXAMPLES)
+        self.write(".mismagent/examples/search.md", EXAMPLES.split("|EX-2")[0].replace("EX-1", "EX-2"))
+        self.assertError("duplicate example id EX-2 (.mismagent/examples/cart.md, .mismagent/examples/search.md)")
+
+    def test_examples_by_capability_and_the_old_single_file(self):
+        self.write(".mismagent/examples/search.md", "| id | given | when | then | rule | req | release |\n"
+                   "|---|---|---|---|---|---|---|\n| EX-9 | a | b | c | R | Q | R1 |\n")
+        self.slice("02-search", examples="EX-9")
+        self.assertEqual(self.check()[0], 0, self.check()[1])
+        os.remove(os.path.join(self.dir, ".mismagent/examples/search.md"))
+        self.assertError("example EX-9 is not in .mismagent/examples/")
+        os.remove(os.path.join(self.dir, ".mismagent/examples/cart.md"))
+        self.write(".mismagent/examples.md", EXAMPLES + "| EX-9 | a | b | c | R | Q | R1 |\n")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn(".mismagent/examples.md is one table for the whole product: split it by capability", out)
+
+    def test_brief_beyond_one_page_warns(self):
+        self.write(".mismagent/brief.md", "word " * 601)
+        self.assertIn("brief.md: 601 words > 600: rewrite it as one page", self.check()[1])
+        self.write(".mismagent/brief.md", "word " * 600)
+        self.assertNotIn("brief.md", self.check()[1])
 
     def test_bad_slice_headers(self):
         self.slice("01-cart", kind="epic")
         self.assertError("Kind 'epic'")
         self.slice("01-cart", examples="EX-7")
-        self.assertError("EX-7 is not in examples.md")
+        self.assertError("EX-7 is not in .mismagent/examples/")
         self.slice("01-cart", release="")
         self.assertError("no Release")
         os.remove(os.path.join(self.dir, ".mismagent/slices/todo/01-cart.md"))
@@ -683,7 +715,7 @@ class Check(Repo):
         self.assertEqual(self.check()[0], 0)
 
     def test_superseded_example_needs_no_marker(self):
-        self.write(".mismagent/examples.md",
+        self.write(".mismagent/examples/cart.md",
                    EXAMPLES.replace("|0 items|", "|0 items (superseded by EX-3)|"))
         self.write(".mismagent/slices/done/01-cart.md",
                    slice_text(examples="EX-1, EX-2").replace("Examples", "Base: abc1234\nExamples"))
@@ -758,7 +790,7 @@ class Check(Repo):
         self.assertNotIn("test_big.py", out)
 
     def test_base_acceptance_modified(self):
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-4 | x | y | z (superseded by EX-3) | R | Q | R1 |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z (superseded by EX-3) | R | Q | R1 |\n")
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
         self.acceptance("test_old.py", "# EX-4\n")
         base = self.commit("acc")
@@ -801,10 +833,10 @@ class Check(Repo):
         self.write("REQUISITI.md", "v2\n")
         self.assertError("REQUISITI.md: changed since", "--base", base)
         self.write("REQUISITI.md", "v1\n")
-        self.write(".mismagent/examples.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
         self.commit()
-        self.assertError(".mismagent/examples.md: changed since", "--base", base)
-        self.write(".mismagent/examples.md", EXAMPLES)
+        self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)
+        self.write(".mismagent/examples/cart.md", EXAMPLES)
         self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\nmore\n")
         self.commit()
         self.assertError(".claude/skills/conventions/SKILL.md: changed since", "--base", base)

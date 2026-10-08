@@ -29,8 +29,8 @@ problem · users and their context · value · in scope · out of scope · open 
 ## 2. The challenger
 Dispatch **mismagent-challenger** with the path of the brief. Show the human its verdict and its
 attacks, with your own view of each. **The human decides**: stop (KILL), change the brief (RESHAPE,
-then challenge again if the change is large), or go on (PROCEED). Record the decision and why at
-the end of the brief.
+then challenge again if the change is large), or go on (PROCEED). Record the decision and why in
+`.mismagent/decisions/NNNN-explore-<idea>.md`; the brief stays one page, rewritten in place.
 
 ## 3. The event storm (Brandolini, in text)
 Rebuild the domain as a **timeline of events**, in the past tense, in the human's words ("Sale
@@ -60,7 +60,7 @@ comes one release at a time, in `/mismagent:specify`.
 
 ## 4. Close
 Ask the human for a first release cut: which part of the timeline, end to end, is the smallest thing
-worth using. Write it under `## First release` in the brief. Commit (`explore`) and end your last
+worth using. Write it in `.mismagent/releases/R0.md` (goal, in scope, out of scope). Commit (`explore`) and end your last
 message with `EXPLORED`. Next: `/mismagent:specify R0`, which turns that part of the timeline into
 examples and slices, and the hotspots into its first questions.
 

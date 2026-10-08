@@ -29,6 +29,7 @@ class GuardHuman(unittest.TestCase):
         for path in ("/r/REQUISITI.md", "/r/docs/REQUISITI-R2.md", "/r/requisiti_v2.md",
                      "/r/requirements.md", "/r/Requirements-R1.md", "REQUIREMENTS.MD",
                      "/r/.mismagent/examples.md", ".mismagent/examples.md",
+                     "/r/.mismagent/examples/delete-project.md", ".mismagent/examples/search.md",
                      "/r/.claude/skills/conventions/SKILL.md",
                      ".claude/skills/conventions/references/errors.md"):
             self.assertEqual(decide(path), "deny", path)
@@ -41,7 +42,8 @@ class GuardHuman(unittest.TestCase):
 
     def test_other_files_allowed(self):
         for path in ("/r/src/requirements.py", "/r/requirements.txt", "/r/ARCHITECTURE.md",
-                     "/r/.mismagent/slices/S1.md", "/r/docs/examples.md",
+                     "/r/.mismagent/slices/S1.md", "/r/docs/examples.md", "/r/docs/examples/a.md",
+                     "/r/.mismagent/releases/R0.md", "/r/.mismagent/decisions/0001-x.md",
                      "/r/.mismagent/examples.md.bak", "/r/my-requirements.md",
                      "/r/.mismagent/conventions-proposals.md", "/r/.claude/skills/other/SKILL.md"):
             self.assertEqual(decide(path), "allow", path)

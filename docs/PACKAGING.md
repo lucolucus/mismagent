@@ -77,7 +77,8 @@ Two guards keep `codex/` and `pi/` in step with `plugins/`:
 
 ## Prompt budgets
 
-`plugins/mismagent/tools/budgets.json` caps the words of every operative prompt file (skills,
+`plugins/mismagent/tools/budgets.json` caps the words of every operative prompt file's body (skills,
 agents, the command), their total, the skills' `references/` (separately) and every frontmatter
 description (250 characters). `prompt_budget.py` checks it inside the tool tests; a new prompt
-file needs a budget, and a cap only goes down.
+file needs a budget, and a cap only goes down. The frontmatter is not counted: it is
+configuration (the `tools:` list), and the descriptions have their own cap.

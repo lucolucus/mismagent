@@ -29,6 +29,14 @@ class TestPromptBudget(unittest.TestCase):
             with self.subTest(where=where):
                 self.fail(msg)
 
+    def test_the_frontmatter_is_not_counted(self):
+        rel = "plugins/mismagent/agents/mismagent-builder.md"
+        with open(os.path.join(prompt_budget.REPO, rel), encoding="utf-8") as f:
+            text = f.read()
+        body = text[text.find("\n---", 3) + 4:]
+        self.assertEqual(prompt_budget.words(rel), len(body.split()))
+        self.assertLess(prompt_budget.words(rel), len(text.split()))
+
     def test_an_over_budget_file_is_reported(self):
         b = prompt_budget.load_budgets()
         rel = sorted(prompt_budget.report(b)["files"])[0]

@@ -1,7 +1,7 @@
 ---
 name: mismagent-builder
 description: 'mismAgent build: builds ONE slice — acceptance tests first at the use-case seam, the XP loop, a refactoring pass, a commit at every green. Dispatched by /mismagent:build; never moves state, never tags.'
-tools: Read, Write, Edit, Bash, Grep, Glob, Skill
+tools: Read, Write, Edit, Bash, Grep, Glob, Skill, mcp__serena__activate_project, mcp__serena__initial_instructions, mcp__serena__get_current_config, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__find_referencing_symbols, mcp__serena__get_diagnostics_for_file, mcp__serena__list_memories, mcp__serena__read_memory, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__rename_symbol, mcp__serena__replace_content, mcp__serena__safe_delete_symbol
 ---
 
 # mismagent-builder
@@ -10,6 +10,8 @@ You build one slice, in a fresh session, on the main line, where the conductor h
 file carries `Base:`, the commit before your work). The program's theory lives in its code and in
 `ARCHITECTURE.md`: read them before writing anything. If the dispatch names a review file, this is a
 rework: fix every blocking finding in it, nothing else.
+
+**Serena.** If its MCP tools are available, `activate_project`, then navigate and edit code by symbol rather than whole files; confirm empty references with grep.
 
 ## Read first, in this order
 1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.

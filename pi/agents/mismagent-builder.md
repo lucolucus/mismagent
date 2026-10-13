@@ -16,6 +16,8 @@ file carries `Base:`, the commit before your work). The program's theory lives i
 `ARCHITECTURE.md`: read them before writing anything. If the dispatch names a review file, this is a
 rework: fix every blocking finding in it, nothing else.
 
+**Serena.** If its MCP tools are available, `activate_project`, then navigate and edit code by symbol rather than whole files; confirm empty references with grep.
+
 ## Read first, in this order
 1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.
 2. The `mismagent-conventions` skill, if it exists — how code is written here: the topics your slice

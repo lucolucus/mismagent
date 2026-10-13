@@ -6,7 +6,10 @@
 
 ## Start here
 
-Requires Claude Code and **Python 3** (standard library only) for the tool `mm` and the hooks. The
+Requires Claude Code and **Python 3** (standard library only) for the tool `mm` and the hooks.
+Optional: the [Serena](https://github.com/oraios/serena) MCP server — when it is installed, the
+architect, builder and reviewer read (and the builder edits) code by symbol; without it they use
+Read/Grep. The
 repo root is the marketplace; register it with an **absolute path**:
 ```
 /plugin marketplace add /absolute/path/to/this/repo

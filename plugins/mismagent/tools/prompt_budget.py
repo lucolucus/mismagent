@@ -5,7 +5,8 @@ Reads budgets.json beside this file: a word cap per operative prompt file (every
 command, methodology file and PROFILE.md of the plugin), a cap on their total, a separate total
 cap for the skills' references/ plus a cap on each reference file, and a cap on every frontmatter
 `description` (characters).
-Words = whitespace-separated tokens of the whole file (as `wc -w`). A capped file that does not
+Words = whitespace-separated tokens of the body (as `wc -w`), the frontmatter left out: it is
+configuration, and the descriptions have their own cap. A capped file that does not
 exist yet is "not yet written" (listed, not an error); an operative file with no cap is an error.
 Usage: python3 prompt_budget.py  → JSON report; exit 1 if any cap is exceeded.
 """
@@ -29,8 +30,11 @@ def files(patterns):
 
 
 def words(rel):
+    """The body's words: the frontmatter is configuration (name, description, tools), not prompt."""
     with open(os.path.join(REPO, rel), encoding="utf-8") as f:
-        return len(f.read().split())
+        text = f.read()
+    end = text.find("\n---", 3) if text.startswith("---") else -1
+    return len(text[end + 4:].split() if end != -1 else text.split())
 
 
 class FrontmatterError(ValueError):

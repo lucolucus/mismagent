@@ -86,7 +86,9 @@ AGENT_NOTES = {
 def convert_agents():
     for name in plugin_agents():
         fm, body = parse_frontmatter(read(os.path.join(KERNEL, "agents", name + ".md")))
-        claude_tools = [t.strip() for t in fm.get("tools", "").split(",") if t.strip()]
+        # MCP tools (Serena) are optional in the source and pi has no MCP: dropped, the prose says "if available"
+        claude_tools = [t.strip() for t in fm.get("tools", "").split(",")
+                        if t.strip() and not t.strip().startswith("mcp__")]
         unknown = [t for t in claude_tools if t not in TOOL_MAP]
         if unknown:
             sys.exit("no pi mapping for tools %s: refusing to guess — update TOOL_MAP" % unknown)

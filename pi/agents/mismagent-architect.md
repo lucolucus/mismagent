@@ -17,6 +17,8 @@ the skeleton's entry point. You commit your own work.
 `MM` = `python3 "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mm.py"`; the review table is
 `@@MISMAGENT_SKILLS@@/mismagent-craft/references/review-table.md`.
 
+**Serena.** If its MCP tools are available, `activate_project`, then read the code by symbol (overview, references, implementations) to map modules; confirm empty references with grep.
+
 **Evidence, never invention.** Every fact you state — a number (a limit, a size, a price, a
 volume, a timing), what a language, library, model or platform can or cannot do, a defect, how
 existing code behaves — carries its source: a file and line you read, the output of a command you

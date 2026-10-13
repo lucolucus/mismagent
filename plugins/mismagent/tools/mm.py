@@ -39,7 +39,8 @@ Design choices:
 - A DESIGN-PASS release review at HEAD asks for a pass unless two DESIGN-PASS reviews of that
   release came before it (two passes ran): then `confirm`.
 - check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
-  the examples and the conventions skill; a modified (or renamed and edited) acceptance test is an error only while
+  the examples and the conventions skill — a change made only by `specify`/`conventions` commits
+  since Base is the human's, not the builder's; a modified (or renamed and edited) acceptance test is an error only while
   the doing slice is a feature and the file names none of its examples nor a superseded one.
 - Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/.
 - No word cap on .mismagent/ as a whole: each thing has its file (a capability's examples, a
@@ -440,6 +441,15 @@ def guarded(path):
     return (path == OLD_EXAMPLES or path.startswith(EXAMPLES + "/") or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
             or (fnmatch.fnmatch(base.lower(), "requirements*") and base.lower().endswith(".md")))
 
+HUMAN_COMMIT = re.compile(r"^(Revert \")?(specify|conventions)\b")  # a revert of one is the human's too
+
+def by_the_human(rel, base):
+    """Changed since base only by specify/conventions commits (the human's path), nothing uncommitted."""
+    if git("diff", "--name-only", "HEAD", "--", rel, check=False).strip():
+        return False
+    subjects = git("log", "--format=%s", "%s..HEAD" % base, "--", rel, check=False).splitlines()
+    return bool(subjects) and all(HUMAN_COMMIT.match(x) for x in subjects)
+
 def run_check(base=None):
     """-> (errors, warnings)."""
     (exs, errors), warnings, marks = examples(), [], markers()
@@ -497,7 +507,8 @@ def run_check(base=None):
                                   % (paths[-1], "modified" if st == "M" else "renamed and edited", base,
                                      doing[0]["stem"]))
         errors += ["%s: changed since %s (the human's file: specify or conventions changes it)" % (rel, base)
-                   for rel in git("diff", "--name-only", base).splitlines() if guarded(rel)]
+                   for rel in git("diff", "--name-only", base).splitlines()
+                   if guarded(rel) and not by_the_human(rel, base)]
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
         words = len(read(rel).split())
         if "/references/" in "/" + rel and words > TOPIC_WORDS:

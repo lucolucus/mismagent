@@ -945,6 +945,19 @@ class Check(Repo):
         self.commit()
         self.assertError(".claude/skills/conventions/SKILL.md: changed since", "--base", base)
 
+    def test_base_human_commits_are_not_the_builders(self):
+        base = self.commit("base")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.commit("specify R1: EX-4 (the human)")
+        self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\nmore\n")
+        self.commit("conventions after slice 01")
+        self.git("revert", "--no-edit", "HEAD")
+        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-5 | x | y | z | R | Q | R1 |\n")
+        self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)  # uncommitted
+        self.commit("01-cart: work")
+        self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)
+
     def test_bad_base_ref(self):
         self.assertEqual(self.check("--base", "no-such-ref")[0], 1)
 

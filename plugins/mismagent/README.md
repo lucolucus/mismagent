@@ -14,6 +14,7 @@ BMad.
 /mismagent:build                 # one action: build, review, land, design pass, or stop for you
 /mismagent:build --confirm R0    # your confirmation of a release → the tag
 /mismagent:conventions           # decide the agents' convention proposals → the project's conventions skill
+/mismagent:site                  # the project in the browser: releases as swimlanes, requirements → examples → tests
 ```
 Or leave `/loop /mismagent:build` running in a session of its own: the always-on conductor. It does
 every action as soon as it is ready (build, review, land, design pass); when it needs you it waits,
@@ -31,6 +32,7 @@ checking back every ten minutes, and resumes by itself once you have answered.
 | `skills/craft` | the XP inner loop and its references, incl. `review-table.md` |
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
 | `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
+| `tools/mmsite.py` + `mmsite.html` | read-only: one HTML page of the project — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
 | `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, the conventions skill) |
 
 ## In a project

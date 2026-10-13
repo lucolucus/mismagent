@@ -60,9 +60,15 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
 Build, review or design; edit code, tests, requirements or the examples; tag without `--confirm`;
 push; take a second action.
 
+## Page
+After a `land`, a `tag`, or before you stop for the human (`NEEDS-HUMAN`, `idle`, `confirm`), refresh
+the project page: `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mmsite.py"`. Read-only, not an action; it
+writes the same temp file each time, so the human reloads it. Its failure never stops the flow.
+
 ## Report (your last message)
 ```
 ACTION: <what mm said> <slice or release>
 DONE: <what happened, one line>
 NEXT: <what the next call will do, or NEEDS-HUMAN: …>
+PAGE: <the path mmsite printed, when you refreshed it>
 ```

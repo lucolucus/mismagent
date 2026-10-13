@@ -87,6 +87,7 @@ def adapt_common(text):
     """What every other runtime needs: the installed paths, AGENTS.md for CLAUDE.md, the project's
     skills under .agents/skills/, the plugin's skills under their prefixed names."""
     text = text.replace(PLUGIN_ROOT + "/tools/mm.py", MM)
+    text = text.replace(PLUGIN_ROOT + "/tools/mmsite.py", SKILLS + "/mismagent-build/scripts/mmsite.py")
     text = re.sub(re.escape(PLUGIN_ROOT) + r"/skills/([a-z0-9-]+)/", SKILLS + r"/mismagent-\1/", text)
     text = text.replace("CLAUDE.md", "AGENTS.md")
     text = text.replace(".claude/skills/", ".agents/skills/")
@@ -122,13 +123,16 @@ def ship_skills(out, adapt, note):
 
 # ---- what ships beside the skills --------------------------------------------------
 def ship_mm(out, adapt):
-    """mm.py ships in the build skill's scripts/. Its messages and the files it reads are adapted
+    """mm.py (and the page script beside it) ships in the build skill's scripts/. Its messages and the files it reads are adapted
     like the prompts (AGENTS.md, .agents/skills/conventions, the runtime's command names)."""
     src = read(os.path.join(KERNEL, "tools", "mm.py"))
     for needle in ('"CLAUDE.md"', '".claude/skills/conventions"'):
         if needle not in src:
             sys.exit("mm.py no longer reads %s: update derived.ship_mm" % needle)
     write(out, "skills/mismagent-build/scripts/mm.py", adapt(src), 0o755)
+    # the project page the build refreshes: its script imports mm from the same folder
+    for fn in ("mmsite.py", "mmsite.html"):
+        write(out, "skills/mismagent-build/scripts/" + fn, adapt(read(os.path.join(KERNEL, "tools", fn))))
 
 
 def agents_md_body(adapt):
@@ -141,6 +145,9 @@ def agents_md_body(adapt):
     text = replaced(text, "`docs/rationale/v0.5-vision.md` at the repository root",
                     "[`v0.5-vision.md`](%sdocs/rationale/v0.5-vision.md)" % SOURCE_URL, where)
     text = re.sub(r"\n\| `hooks/` \|[^\n]*", "", text)
+    # /mismagent:site is Claude-only: the build refreshes the page in every runtime
+    text = re.sub(r"\n/mismagent:site [^\n]*", "", text)
+    text = re.sub(r"\n\| `tools/mmsite\.py`[^\n]*", "", text)
     text = re.sub(r"\nThe v0\.26 flow .*", "\n", text, flags=re.S)
     # the Contents table names the plugin's files: name the installed pieces instead
     text = re.sub(r"`skills/([a-z-]+)`", r"`mismagent-\1` skill", text)

@@ -34,11 +34,13 @@ evidence you produce: tests you run, lines you cite. You write only your review 
    - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
      allows) without a test pinning it and a `Behavior change:` line in the slice file, a second
-     way of doing what the skill decides, something new not proposed, or the diff scores < 4 on a dimension it touches. Every blocking
+     way of doing what the skill decides, something new not proposed, a **wrong result** (input the
+     program should refuse is accepted, a success it did not prove is reported: fail-open), or the
+     diff scores < 4 on a dimension it touches. Every blocking
      finding names **the dimension or rule, the line, and what would fix it**. Taste is advice,
      never a block.
    - `PASS` otherwise. A problem you see *outside* the diff goes to `.mismagent/design-notes.md`
-     (one line); a problem *in* the diff is never sent there.
+     (one line; a wrong result starts `RISK:`); a problem *in* the diff is never sent there.
 
 ## Release review (dispatch: `MODE: release`, the release)
 You are a fresh pair of eyes on the whole code: do not read the slice reviews.

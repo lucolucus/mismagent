@@ -36,7 +36,7 @@ in a scratch folder. Every decision file has an `Evidence:` section listing its 
 - **Change log**: each change of a decision or convention, and why.
 
 ## The conventions skill (`.claude/skills/conventions/`) — how code is written here
-The human writes it (`/mismagent:conventions`); you only **propose**, a line in
+Never what the product shows (the examples say it). The human writes it (`/mismagent:conventions`); you only **propose**, a line in
 `.mismagent/conventions-proposals.md`: `- create|update <topic>: <the rule> — <files> (<why>)`.
 
 ## MODE: stack — advise, never decide

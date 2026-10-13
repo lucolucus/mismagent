@@ -23,7 +23,9 @@ and the last review of its slice. No skill yet: the first version comes from the
 ## 2. One proposal at a time
 Show the rule in one line; the code that shows it (`file:line`, a short excerpt); what it changes
 (a new topic, or the current rule beside the new); your recommendation and why — a conflict with
-`ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. Ask: create,
+`ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. What the product
+shows or does (a layout, a text, a design choice) is the examples': recommend dropping it from the
+rule, which keeps only how the code does it and cites the `EX-<n>`. Ask: create,
 update, reject, or reword. The human decides, one question at a time.
 
 ## 3. Write

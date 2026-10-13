@@ -13,7 +13,8 @@ the event storm (the line that starts with the code, else the first line naming 
 (`S`, `I`...) is listed whole once the examples cite one of it, hotspots `H<n>` always; `decision NNNN`
 is decisions/NNNN-*.md. Ranges (`1-3`, `F0–F2`) are expanded.
 
-Usage: python3 mmsite.py [--out FILE] [--open]   (from inside the project; default FILE: a temp file)
+Usage (from inside the project): python3 mmsite.py --serve [--open]   live, see mmsite_live.py
+                                 python3 mmsite.py [--out FILE] [--open]   one snapshot (default: a temp file)
 """
 import argparse
 import json
@@ -25,6 +26,7 @@ import tempfile
 import time
 
 import mm
+import mmsite_live
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EVENT_STORM, ARCHITECTURE = mm.M + "/event-storm.md", "ARCHITECTURE.md"
@@ -221,7 +223,7 @@ def collect():
     notes = old_progress()
     exs_full = examples_full(sls, marks)
     return dict(
-        project=os.path.basename(mm.ROOT), generated=time.strftime("%Y-%m-%d %H:%M"),
+        project=os.path.basename(mm.ROOT), generated=time.strftime("%Y-%m-%d %H:%M:%S"),
         head=mm.git("rev-parse", "--short", "HEAD", check=False).strip(), next=nxt,
         releases=releases(exs, sls, tagged), slices=[slice_data(s, sls, log, notes) for s in sls],
         examples=exs_full, requirements=requirements(exs_full), example_errors=ex_errors,
@@ -238,8 +240,12 @@ def render(data):
     return page.replace("/*DATA*/null", blob).replace("{{project}}", data["project"])
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="write a read-only HTML picture of the project")
-    p.add_argument("--out", help="the HTML file to write (default: a temp file)")
+    p = argparse.ArgumentParser(description="a read-only HTML picture of the project")
+    p.add_argument("--serve", action="store_true", help="keep it live: start (or reuse) the project's "
+                   "local server and print its URL; the page follows the project by itself")
+    p.add_argument("--stop", action="store_true", help="stop the project's server")
+    p.add_argument("--serve-here", action="store_true", help=argparse.SUPPRESS)  # the server itself
+    p.add_argument("--out", help="write a snapshot to this file (default: a temp file)")
     p.add_argument("--open", action="store_true", help="open it in the browser")
     a = p.parse_args(argv)
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
@@ -247,13 +253,26 @@ def main(argv=None):
         print("mm: not inside a git repository", file=sys.stderr)
         return 1
     mm.ROOT = top.stdout.strip()
-    out = a.out or os.path.join(tempfile.gettempdir(), "mismagent-%s.html" % os.path.basename(mm.ROOT))
-    with open(out, "w", encoding="utf-8") as f:
-        f.write(render(collect()))
+    if a.serve_here:
+        return mmsite_live.serve(collect, render)
+    if a.stop:
+        print("stopped" if mmsite_live.stop() else "no server running")
+        return 0
+    try:
+        out = mmsite_live.start(os.path.abspath(__file__)) if a.serve else snapshot(a.out)
+    except mm.Refused as e:
+        print("mm: %s" % e, file=sys.stderr)
+        return 1
     print(out)
     if a.open:
         subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", out], check=False)
     return 0
+
+def snapshot(out):
+    out = out or os.path.join(tempfile.gettempdir(), "mismagent-%s.html" % os.path.basename(mm.ROOT))
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(render(collect()))
+    return out
 
 if __name__ == "__main__":
     sys.exit(main())

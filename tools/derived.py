@@ -131,7 +131,7 @@ def ship_mm(out, adapt):
             sys.exit("mm.py no longer reads %s: update derived.ship_mm" % needle)
     write(out, "skills/mismagent-build/scripts/mm.py", adapt(src), 0o755)
     # the project page the build refreshes: its script imports mm from the same folder
-    for fn in ("mmsite.py", "mmsite.html"):
+    for fn in ("mmsite.py", "mmsite_live.py", "mmsite.html"):
         write(out, "skills/mismagent-build/scripts/" + fn, adapt(read(os.path.join(KERNEL, "tools", fn))))
 
 

@@ -7,7 +7,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+import urllib.request
 
 TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, TOOLS)
@@ -43,7 +45,8 @@ class Expand(unittest.TestCase):
         self.assertEqual(mmsite.expand("8, R3, EX-4"), ["event:8"])
 
 
-class Page(unittest.TestCase):
+class Project(unittest.TestCase):
+    """A temporary git project with one landed slice."""
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.dir)
@@ -62,13 +65,15 @@ class Page(unittest.TestCase):
                                                     "commit", "-qm", "mm land 01-open"]):
             subprocess.run(["git", *cmd], cwd=self.dir, check=True)
 
+
+class Page(Project):
     def data(self):
         out = os.path.join(self.dir, "page.html")
         subprocess.run([sys.executable, os.path.join(TOOLS, "mmsite.py"), "--out", out], cwd=self.dir,
                        check=True, capture_output=True)
         with open(out, encoding="utf-8") as f:
             page = f.read()
-        return json.loads(re.search(r"const DATA = (.*?);\n", page).group(1).replace("<\\/", "</"))
+        return json.loads(re.search(r"let DATA = (.*?);\n", page).group(1).replace("<\\/", "</"))
 
     def test_releases_come_from_the_brief_even_without_slices(self):
         d = self.data()
@@ -92,6 +97,42 @@ class Page(unittest.TestCase):
         self.assertEqual(reqs["code:S2"]["text"], "S2 no network")  # the cited family is listed whole
         self.assertEqual(reqs["code:H1"]["group"], "hotspot")
         self.assertEqual(reqs["decision:0001"]["text"], "0001 — Stack")
+
+
+class Live(Project):
+    def site(self, *args):
+        return subprocess.run([sys.executable, os.path.join(TOOLS, "mmsite.py"), *args], cwd=self.dir,
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    def get(self, url):
+        with urllib.request.urlopen(url, timeout=5) as r:
+            return json.load(r)
+
+    def test_the_server_is_reused_and_follows_the_project(self):
+        url = self.site("--serve")
+        self.addCleanup(self.site, "--stop")
+        self.assertTrue(url.startswith("http://127.0.0.1:"))
+        self.assertEqual(self.site("--serve"), url)  # a second call finds the running server
+        first = self.get(url + "data.json")
+        self.assertEqual(first["slices"][0]["stem"], "01-open")
+        self.assertEqual(self.get(url + "data.json?since=" + first["sig"]), {"sig": first["sig"]})
+        time.sleep(0.01)
+        with open(os.path.join(self.dir, ".mismagent/slices/done/01-open.md"), "a", encoding="utf-8") as f:
+            f.write("- a later note\n")
+        later = self.get(url + "data.json?since=" + first["sig"])
+        self.assertNotEqual(later["sig"], first["sig"])
+        self.assertIn("a later note", later["slices"][0]["progress"])
+
+    def test_stop_ends_it(self):
+        url = self.site("--serve")
+        self.assertEqual(self.site("--stop"), "stopped")
+        for _ in range(50):
+            try:
+                self.get(url + "health")
+            except OSError:
+                return
+            time.sleep(0.1)
+        self.fail("the server still answers after --stop")
 
 
 if __name__ == "__main__":

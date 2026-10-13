@@ -50,6 +50,10 @@ header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; backg
 .top .meta { color: var(--faint); font: 12px var(--mono); }
 .next { margin-left: auto; font-size: 13px; color: var(--warn-ink); background: var(--warn-wash); border: 1px solid var(--warn-line); border-radius: 999px; padding: 2px 12px; min-width: 0; max-width: 64ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .next:empty { display: none; }
+.pulse { font-size: 12px; color: var(--faint); display: inline-flex; align-items: center; gap: 6px; }
+.pulse::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--done); }
+.pulse.off::before { background: var(--bad); }
+.pulse.flash::before { box-shadow: 0 0 0 4px var(--ok-wash); }
 .next b { font-family: var(--mono); font-weight: 500; margin-right: 6px; }
 nav { display: flex; gap: 2px; padding: 0 14px; overflow-x: auto; }
 nav a { padding: 8px 10px; color: var(--soft); border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; }
@@ -225,19 +229,24 @@ details > div { padding: 0 14px 10px; }
 </head>
 <body>
 <header>
-  <div class="top"><h1 id="pname"></h1><span class="meta" id="pmeta"></span><span class="next" id="pnext"></span></div>
+  <div class="top"><h1 id="pname"></h1><span class="meta" id="pmeta"></span><span class="pulse" id="plive" hidden></span><span class="next" id="pnext"></span></div>
   <nav id="nav"></nav>
 </header>
 <main id="main"></main>
 <aside id="drawer"><div class="dh"><button class="back" id="back" title="back">←</button><h3 id="dtitle"></h3><button class="x" id="close" title="close">×</button></div><div class="db" id="dbody"></div></aside>
 <script>
-const DATA = /*DATA*/null;
+let DATA = /*DATA*/null;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-const SL = Object.fromEntries(DATA.slices.map((s) => [s.stem, s]));
-const EX = Object.fromEntries(DATA.examples.map((e) => [e.id, e]));
-const RQ = Object.fromEntries(DATA.requirements.map((r) => [r.id, r]));
-const RL = Object.fromEntries(DATA.releases.map((r) => [r.id, r]));
+let SL, EX, RQ, RL, NEXT;
+function index() {
+  SL = Object.fromEntries(DATA.slices.map((s) => [s.stem, s]));
+  EX = Object.fromEntries(DATA.examples.map((e) => [e.id, e]));
+  RQ = Object.fromEntries(DATA.requirements.map((r) => [r.id, r]));
+  RL = Object.fromEntries(DATA.releases.map((r) => [r.id, r]));
+  NEXT = DATA.next || {};
+}
+index();
 const STATES = ["todo", "doing", "done"];
 
 // ---- markdown (enough for the project's files: headings, lists, tables, code, quotes, inline marks)
@@ -301,7 +310,6 @@ const rqLink = (id) => { const r = RQ[id]; return `<a class="chip ${r && r.group
 const rlLink = (id) => `<a class="chip" data-open="release:${esc(id)}">${esc(id)}</a>`;
 const tone = (v) => /PASS|HEALTHY/.test(v) ? "ok" : /REWORK|DESIGN/.test(v) ? "warn" : "";
 const verdictChip = (v) => `<span class="pill ${tone(v)}">${esc(v || "?")}</span>`;
-const NEXT = DATA.next || {};
 
 // ---- pages
 const PAGES = {
@@ -530,12 +538,37 @@ document.addEventListener("keydown", (ev) => {
   else if (ev.key === "Enter" && ev.target.dataset && ev.target.dataset.open) open(ev.target.dataset.open);
 });
 window.addEventListener("hashchange", route);
-$("#pname").textContent = DATA.project;
-$("#pmeta").textContent = `HEAD ${DATA.head} · generated ${DATA.generated}`;
-const nx = DATA.next || {};
-$("#pnext").title = `${nx.action || ""} ${nx.slice || nx.release || ""} — ${nx.reason || ""}`;
-if (nx.action) $("#pnext").innerHTML = `<b>next: ${esc(nx.action)} ${esc((nx.slice || nx.release || "").split("-")[0])}</b>${esc(nx.reason || "")}`;
+function paintHeader() {
+  $("#pname").textContent = DATA.project;
+  $("#pmeta").textContent = `HEAD ${DATA.head} · ${LIVE ? "updated" : "generated"} ${DATA.generated}`;
+  const nx = NEXT;
+  $("#pnext").title = `${nx.action || ""} ${nx.slice || nx.release || ""} — ${nx.reason || ""}`;
+  $("#pnext").innerHTML = nx.action ? `<b>next: ${esc(nx.action)} ${esc((nx.slice || nx.release || "").split("-")[0])}</b>${esc(nx.reason || "")}` : "";
+}
+// served by `mmsite.py --serve`: poll the server, redraw only when the project changed
+const LIVE = /^https?:$/.test(location.protocol);
+async function poll() {
+  const dot = $("#plive");
+  try {
+    const r = await fetch(`data.json?since=${encodeURIComponent(DATA.sig || "")}`, {cache: "no-store"});
+    const j = await r.json();
+    dot.className = "pulse"; dot.textContent = "live";
+    if (j.project && j.sig !== DATA.sig) {
+      const focus = document.activeElement && document.activeElement.id, pos = focus === "fq" ? $("#fq").selectionStart : null;
+      const scroll = $("#dbody").scrollTop;
+      DATA = j; index(); paintHeader(); route();
+      if (stack.length) { open(stack[stack.length - 1], false); $("#dbody").scrollTop = scroll; }
+      if (focus && $("#" + focus)) { $("#" + focus).focus(); if (pos !== null) $("#fq").setSelectionRange(pos, pos); }
+      dot.classList.add("flash"); setTimeout(() => dot.classList.remove("flash"), 1200);
+    }
+  } catch (e) {
+    dot.className = "pulse off"; dot.textContent = "server stopped: run $mismagent-site again";
+  }
+  setTimeout(poll, 2500);
+}
+paintHeader();
 route();
+if (LIVE) { $("#plive").hidden = false; $("#plive").textContent = "live"; setTimeout(poll, 2500); }
 const fit = () => document.documentElement.style.setProperty("--hh", document.querySelector("header").offsetHeight + "px");
 fit(); window.addEventListener("resize", fit);
 </script>

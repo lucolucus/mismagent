@@ -58,16 +58,16 @@ Build, review or design; edit code, tests, requirements or the examples; tag wit
 push; take a second action.
 
 ## Page
-After a `land`, a `tag`, or before you stop for the human (`NEEDS-HUMAN`, `idle`, `confirm`), refresh
-the project page: `python3 "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mmsite.py"`. Read-only, not an action; it
-writes the same temp file each time, so the human reloads it. Its failure never stops the flow.
+Before you stop for the human (`NEEDS-HUMAN`, `idle`, `confirm`), make sure the project page is up:
+`python3 "@@MISMAGENT_SKILLS@@/mismagent-build/scripts/mmsite.py" --serve` (it reuses a running server and prints
+its URL; the page follows the project live). Read-only, not an action; its failure never stops the flow.
 
 ## Report (your last message)
 ```
 ACTION: <what mm said> <slice or release>
 DONE: <what happened, one line>
 NEXT: <what the next call will do, or NEEDS-HUMAN: …>
-PAGE: <the path mmsite printed, when you refreshed it>
+PAGE: <the URL mmsite printed, when you ran it>
 ```
 
 ## Codex execution notes (generated)

@@ -32,7 +32,7 @@ checking back every ten minutes, and resumes by itself once you have answered.
 | `skills/craft` | the XP inner loop and its references, incl. `review-table.md` |
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
 | `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
-| `tools/mmsite.py` + `mmsite.html` | read-only: one HTML page of the project — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
+| `tools/mmsite.py` + `mmsite_live.py` + `mmsite.html` | read-only: one live HTML page of the project, served on 127.0.0.1 — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
 | `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, the conventions skill) |
 
 ## In a project

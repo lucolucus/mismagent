@@ -4,10 +4,9 @@ description: 'mismAgent: a read-only picture of the project in the browser — r
 
 # /mismagent:site — the project at a glance
 
-Run `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mmsite.py" --open` from the project. It reads
-`.mismagent/`, the acceptance tests and git, writes one self-contained HTML page to a temp file,
-opens it, and prints its path. It never moves state and never writes inside the repository.
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mmsite.py" --serve --open` from the project: it starts
+the project's page server (or finds it running), opens the page and prints its URL. The page follows
+the project live; the server never moves state and stops after half an hour unwatched.
 
-Reply with the path and one line from the page's own counts (slices done of the total, examples
-with an acceptance test, what `mm` says is next). If the script fails, show its message; do not
+Reply with the URL and one line of counts (slices done, examples tested, what `mm` says is next). If the script fails, show its message; do not
 work around it.

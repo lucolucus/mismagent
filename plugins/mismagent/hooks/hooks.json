@@ -11,7 +11,7 @@
         ]
       },
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|mcp__serena__(replace_content|replace_symbol_body|insert_after_symbol|insert_before_symbol|rename_symbol|safe_delete_symbol|create_text_file)",
         "hooks": [
           {
             "type": "command",

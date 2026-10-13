@@ -37,7 +37,7 @@ evidence you produce: tests you run, lines you cite. You write only your review 
      finding names **the dimension or rule, the line, and what would fix it**. Taste is advice,
      never a block.
    - `PASS` otherwise. A problem you see *outside* the diff goes to `.mismagent/design-notes.md`
-     (one line; a wrong result starts `RISK:`); a problem *in* the diff is never sent there.
+     (one line `- where: what`; a wrong result `- RISK: where: what`); a problem *in* the diff is never sent there.
 
 ## Release review (dispatch: `MODE: release`, the release)
 You are a fresh pair of eyes on the whole code: do not read the slice reviews.

@@ -958,6 +958,57 @@ class Check(Repo):
         self.commit("01-cart: work")
         self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)
 
+    def test_base_a_lookalike_subject_is_not_the_human(self):
+        base = self.commit("base")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.commit("conventions-fix slice 01")
+        self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)
+
+    def test_base_a_human_subject_on_code_is_not_the_human(self):
+        base = self.commit("base")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.write("src/cart.py", "x = 2\n")
+        self.commit("specify R1: EX-4")
+        self.assertError(".mismagent/examples/cart.md: changed since", "--base", base)
+
+    def test_base_a_rename_by_the_human_keeps_the_builders_edit(self):
+        base = self.commit("base")
+        self.write(".mismagent/examples/cart.md", EXAMPLES.replace("EX-1", "EX-1 ") + "\n" * 30)
+        self.commit("01-cart: weaken")
+        self.git("mv", ".mismagent/examples/cart.md", ".mismagent/examples/basket.md")
+        self.commit("specify R1: rename")
+        self.assertError("changed since", "--base", base)
+
+    def test_base_staged_or_untracked_is_not_the_human(self):
+        self.write("REQUISITI.md", "v1\n")
+        base = self.commit("base")
+        self.write("REQUISITI.md", "v2\n")
+        self.commit("specify R1: v2")
+        self.write("REQUISITI.md", "v3\n")
+        self.git("add", "REQUISITI.md")
+        self.write("REQUISITI.md", "v2\n")
+        self.assertError("REQUISITI.md: changed since", "--base", base)
+
+    def test_base_not_an_ancestor_exempts_nothing(self):
+        base = self.commit("base")
+        self.git("checkout", "-q", "-b", "side")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-9 | x | y | z | R | Q | R1 |\n")
+        side = self.commit("specify R1: side")
+        self.git("checkout", "-q", "-")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.commit("specify R1: EX-4")
+        self.assertError("changed since", "--base", side)
+
+    def test_base_a_revert_with_a_net_change_is_the_human(self):
+        self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\nv1\n")
+        base = self.commit("base")
+        self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\nv2\n")
+        self.commit("conventions after slice 01")
+        self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\nv3\n")
+        self.commit("conventions after slice 02")
+        self.git("revert", "--no-edit", "HEAD")
+        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+
     def test_bad_base_ref(self):
         self.assertEqual(self.check("--base", "no-such-ref")[0], 1)
 

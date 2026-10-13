@@ -10,6 +10,10 @@ HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.absp
                     "hooks", "guard-human.py")
 
 
+SERENA_WRITERS = ("replace_content", "replace_symbol_body", "insert_after_symbol",
+                  "insert_before_symbol", "rename_symbol", "safe_delete_symbol", "create_text_file")
+
+
 def run(path, agent="mismagent-builder", tool="Write", key="file_path"):
     event = {"tool_name": tool, "tool_input": {key: path}}
     if agent is not None:
@@ -39,6 +43,21 @@ class GuardHuman(unittest.TestCase):
             self.assertEqual(decide("/r/REQUISITI.md", tool=tool), "deny", tool)
         self.assertEqual(decide("/r/requirements.md", tool="NotebookEdit", key="notebook_path"),
                          "deny")
+
+    def test_serena_writers_guarded(self):
+        for tool in SERENA_WRITERS:
+            self.assertEqual(decide(".mismagent/examples/cart.md", tool="mcp__serena__" + tool,
+                                    key="relative_path"), "deny", tool)
+        self.assertEqual(decide("src/cart.py", tool="mcp__serena__replace_content", key="relative_path"),
+                         "allow")
+
+    def test_the_matcher_names_every_serena_writer(self):
+        with open(os.path.join(os.path.dirname(os.path.dirname(HOOK)), "hooks", "hooks.json")) as f:
+            matchers = [h["matcher"] for h in json.load(f)["hooks"]["PreToolUse"]]
+        guard = next(m for m in matchers if "Write" in m)
+        for tool in SERENA_WRITERS:
+            self.assertRegex("mcp__serena__" + tool, "^(%s)$" % guard)
+        self.assertNotRegex("mcp__serena__find_symbol", "^(%s)$" % guard)  # reading stays free
 
     def test_other_files_allowed(self):
         for path in ("/r/src/requirements.py", "/r/requirements.txt", "/r/ARCHITECTURE.md",

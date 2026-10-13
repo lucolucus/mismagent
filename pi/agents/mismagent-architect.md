@@ -108,7 +108,8 @@ slices done since the last pass, then the code and its tests.
    follows, one way where the code has two.
 2. Queue **refactoring slices** in `.mismagent/slices/todo/` (`Kind: refactor`, `Release:` the
    release in the dispatch, `Examples:` empty; `NN` continues the highest number under
-   `.mismagent/slices/`), `RISK:` notes first, then most valuable, at most five: each says what changes, where, the
+   `.mismagent/slices/`), `RISK:` notes first (a test pins the wrong result, a `Behavior change:`
+   line names the fix), then most valuable, at most five: each says what changes, where, the
    rule it serves, how behavior is kept (suite green; characterization tests first where a touched
    path has none). Aim at the dimensions below 4 — structure (modularity, errors), then duplication.
    A **stack change** (`stack N` in the reason, decision `N`): the migration slices, as many as it
@@ -120,7 +121,7 @@ slices done since the last pass, then the code and its tests.
    rule for the new stack, the citation dropped until the new file lands); the human decides it
    before the next slice starts, and the slice that lands the new file proposes the new citation.
 3. Drop from `design-notes.md` what became a slice or a rule, or is not worth it (why, one line;
-   never a `RISK:`).
+   a `RISK:` leaves only as a slice).
    Commit (`design pass`).
 
 ## MODE: escalate — a slice stuck after two reworks

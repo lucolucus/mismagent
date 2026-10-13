@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse(Edit|Write|MultiEdit|NotebookEdit) guard: the builder, the reviewer and the architect
+"""PreToolUse(Edit|Write|MultiEdit|NotebookEdit and Serena's writing tools) guard: the builder, the reviewer and the architect
 never write the human's files — the requirements (REQUISITI*.md, requirements*.md, any case),
 .mismagent/examples/ (and the old single .mismagent/examples.md) and the conventions skill (.claude/skills/conventions/). A doubt becomes a
 Question in the slice file; a convention, a line in .mismagent/conventions-proposals.md. Main-session calls pass
@@ -33,7 +33,7 @@ agent = event.get("agent_type") or ""  # absent in the main session
 if agent.split(":")[-1] not in GUARDED:  # tolerate a plugin-namespaced type
     sys.exit(0)
 tool_input = event.get("tool_input") or {}
-path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+path = tool_input.get("file_path") or tool_input.get("notebook_path") or tool_input.get("relative_path") or ""
 if path and human_file(path):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",

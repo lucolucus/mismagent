@@ -40,7 +40,7 @@ Design choices:
   release came before it (two passes ran): then `confirm`.
 - check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
   the examples and the conventions skill — a change made only by `specify`/`conventions` commits
-  since Base is the human's, not the builder's; a modified (or renamed and edited) acceptance test is an error only while
+  (touching no code) since Base, an ancestor of HEAD, with nothing uncommitted, is the human's; a modified (or renamed and edited) acceptance test is an error only while
   the doing slice is a feature and the file names none of its examples nor a superseded one.
 - Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/.
 - No word cap on .mismagent/ as a whole: each thing has its file (a capability's examples, a
@@ -441,14 +441,24 @@ def guarded(path):
     return (path == OLD_EXAMPLES or path.startswith(EXAMPLES + "/") or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
             or (fnmatch.fnmatch(base.lower(), "requirements*") and base.lower().endswith(".md")))
 
-HUMAN_COMMIT = re.compile(r"^(Revert \")?(specify|conventions)\b")  # a revert of one is the human's too
+# the subjects specify and conventions commit with (a real revert of one too); never a lookalike
+HUMAN_COMMIT = re.compile(r'^(Revert "(?=.*"$))?(specify|conventions)([ :(]|$)')
 
-def by_the_human(rel, base):
-    """Changed since base only by specify/conventions commits (the human's path), nothing uncommitted."""
-    if git("diff", "--name-only", "HEAD", "--", rel, check=False).strip():
+def human_commit(sha):
+    """A specify/conventions commit that touches only the human's files, .mismagent/ and ARCHITECTURE.md."""
+    subject, *files = git("show", "--name-only", "--format=%s", sha).strip().splitlines()
+    return bool(HUMAN_COMMIT.match(subject)) and all(
+        guarded(f) or f.startswith(M + "/") or f == "ARCHITECTURE.md" for f in files if f)
+
+def by_the_human(paths, base):
+    """Changed since base (an ancestor of HEAD) only by the human's commits, nothing staged,
+    unstaged or untracked; a rename is followed under both names."""
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, "HEAD"], cwd=ROOT).returncode:
         return False
-    subjects = git("log", "--format=%s", "%s..HEAD" % base, "--", rel, check=False).splitlines()
-    return bool(subjects) and all(HUMAN_COMMIT.match(x) for x in subjects)
+    if git("status", "--porcelain", "--untracked-files=all", "--", *paths, check=False).strip():
+        return False
+    shas = git("log", "--full-history", "--format=%H", "%s..HEAD" % base, "--", *paths, check=False).split()
+    return bool(shas) and all(human_commit(x) for x in shas)
 
 def run_check(base=None):
     """-> (errors, warnings)."""
@@ -506,9 +516,11 @@ def run_check(base=None):
                     errors.append("%s: acceptance test %s since %s, naming no example of %s"
                                   % (paths[-1], "modified" if st == "M" else "renamed and edited", base,
                                      doing[0]["stem"]))
-        errors += ["%s: changed since %s (the human's file: specify or conventions changes it)" % (rel, base)
-                   for rel in git("diff", "--name-only", base).splitlines()
-                   if guarded(rel) and not by_the_human(rel, base)]
+        for line in git("diff", "--name-status", "-M", base).splitlines():
+            paths = line.split("\t")[1:]
+            if any(guarded(x) for x in paths) and not by_the_human(paths, base):
+                errors.append("%s: changed since %s (the human's file: specify or conventions changes it)"
+                              % (paths[-1], base))
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
         words = len(read(rel).split())
         if "/references/" in "/" + rel and words > TOPIC_WORDS:

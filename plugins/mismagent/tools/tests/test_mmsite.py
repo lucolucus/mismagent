@@ -98,6 +98,30 @@ class Page(Project):
         self.assertEqual(reqs["code:H1"]["group"], "hotspot")
         self.assertEqual(reqs["decision:0001"]["text"], "0001 — Stack")
 
+    def test_a_slice_built_in_a_worktree_is_seen_with_its_branch(self):
+        todo = os.path.join(self.dir, ".mismagent/slices/todo")
+        os.makedirs(todo)
+        with open(os.path.join(todo, "02-print.md"), "w", encoding="utf-8") as f:
+            f.write("Kind: feature\nRelease: R1\nExamples: EX-1\n\nPrint.\n")
+        git = lambda *a, cwd=self.dir: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                                                     cwd=cwd, check=True, capture_output=True)
+        git("add", "-A")
+        git("commit", "-qm", "specify 02")
+        tree = os.path.join(self.dir + "-wt", "02-print")
+        self.addCleanup(shutil.rmtree, self.dir + "-wt", True)
+        git("worktree", "add", "-q", "-b", "par/02-print", tree)
+        with open(os.path.join(tree, "print.py"), "w", encoding="utf-8") as f:
+            f.write("print()\n")
+        git("add", "-A", cwd=tree)
+        git("commit", "-qm", "02-print: a first green", cwd=tree)
+        with open(os.path.join(tree, "half.py"), "w", encoding="utf-8") as f:
+            f.write("x\n")
+        par = {s["stem"]: s["par"] for s in self.data()["slices"]}
+        self.assertIsNone(par["01-open"])
+        self.assertEqual((par["02-print"]["branch"], par["02-print"]["ahead"], par["02-print"]["dirty"]),
+                         ("par/02-print", 1, 1))
+        self.assertEqual(par["02-print"]["commits"][0]["subject"], "02-print: a first green")
+
 
 class Live(Project):
     def site(self, *args):

@@ -106,6 +106,8 @@ h2 { font: 600 15px var(--display); margin: 26px 0 10px; text-wrap: balance; }
 .card.done .t { font-weight: 500; font-size: 13px; }
 .card .n { color: var(--faint); font: 500 11.5px var(--mono); margin-right: 5px; }
 .card .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.card.par { border-style: dashed; }
+.live code { font-size: 10.5px; text-transform: none; letter-spacing: 0; }
 .live { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--warn-ink); }
 .status { background: var(--surface); border: 1px solid var(--warn-line); color: var(--warn-ink); border-radius: 10px; padding: 0 7px; font-size: 11.5px; line-height: 18px; }
 .pips { display: inline-flex; gap: 3px; margin-left: auto; }
@@ -248,6 +250,8 @@ function index() {
 }
 index();
 const STATES = ["todo", "doing", "done"];
+// a slice built in a worktree or on its own branch is in progress, whatever this checkout says
+const column = (s) => s.state !== "done" && s.par ? "doing" : s.state;
 
 // ---- markdown (enough for the project's files: headings, lists, tables, code, quotes, inline marks)
 function inline(t) {
@@ -305,7 +309,7 @@ function md(src) {
 // ---- links and chips
 const exState = (e) => e.superseded ? "gone" : e.tests.length ? "ok" : "warn";
 const exLink = (id) => { const e = EX[id]; return `<a class="chip ${e ? exState(e) : ""}" data-open="ex:${esc(id)}" title="${esc(e ? e.then : "")}">${esc(id)}</a>`; };
-const slLink = (stem) => { const s = SL[stem]; return s ? `<a class="sl ${s.state}" data-open="slice:${esc(stem)}" title="${esc(s.state)}"><i></i>${String(s.num).padStart(2, "0")} ${esc(s.title)}</a>` : `<span class="chip">${esc(stem)}</span>`; };
+const slLink = (stem) => { const s = SL[stem]; return s ? `<a class="sl ${column(s)}" data-open="slice:${esc(stem)}" title="${esc(s.state)}"><i></i>${String(s.num).padStart(2, "0")} ${esc(s.title)}</a>` : `<span class="chip">${esc(stem)}</span>`; };
 const rqLink = (id) => { const r = RQ[id]; return `<a class="chip ${r && r.group === "unknown" ? "bad" : ""}" data-open="req:${esc(id)}" title="${esc(r ? r.text : "")}">${esc(r ? (r.group === "event storm" ? "#" + id.split(":")[1] : r.group === "decision" ? "D" + id.split(":")[1] : r.label) : id)}</a>`; };
 const rlLink = (id) => `<a class="chip" data-open="release:${esc(id)}">${esc(id)}</a>`;
 const tone = (v) => /PASS|HEALTHY/.test(v) ? "ok" : /REWORK|DESIGN/.test(v) ? "warn" : "";
@@ -327,9 +331,10 @@ let folded = (() => { try { const v = JSON.parse(localStorage.getItem(FOLD_KEY))
 function saveFolds() { try { localStorage.setItem(FOLD_KEY, JSON.stringify([...folded])); } catch (e) {} }
 
 function progress() {
-  const n = (st) => DATA.slices.filter((s) => s.state === st).length;
+  const n = (st) => DATA.slices.filter((s) => column(s) === st).length;
+  const par = DATA.slices.filter((s) => s.par && s.state !== "done").length;
   const live = DATA.examples.filter((e) => !e.superseded), tested = live.filter((e) => e.tests.length);
-  let h = `<div class="summary"><span><b>${n("done")}</b> of ${DATA.slices.length} slices done</span><span><b>${n("doing")}</b> doing</span>
+  let h = `<div class="summary"><span><b>${n("done")}</b> of ${DATA.slices.length} slices done</span><span><b>${n("doing")}</b> doing${par ? `, ${par} of them in parallel` : ""}</span>
     <span><b>${tested.length}</b> of ${live.length} examples have an acceptance test</span>
     <span><b>${DATA.notes.length}</b> design note${DATA.notes.length === 1 ? "" : "s"}</span><span><b>${DATA.proposals.length}</b> convention proposal${DATA.proposals.length === 1 ? "" : "s"}</span></div>`;
   const head = (st, label) => `<div><span class="dot" style="background:var(--${st})"></span>${label} · ${n(st)}</div>`;
@@ -338,9 +343,9 @@ function progress() {
   const loose = DATA.slices.filter((s) => !RL[s.release]);
   if (loose.length) lanes.push([{id: "?", title: "slices naming no known release", tagged: false, reviews: []}, loose]);
   for (const [r, sl] of lanes) {
-    const c = Object.fromEntries(STATES.map((st) => [st, sl.filter((s) => s.state === st)]));
+    const c = Object.fromEntries(STATES.map((st) => [st, sl.filter((s) => column(s) === st)]));
     const shut = folded.has(r.id);
-    const ticks = `<div class="ticks" title="one square per slice">${sl.map((s) => `<i class="${s.state}"></i>`).join("")}</div>`;
+    const ticks = `<div class="ticks" title="one square per slice">${sl.map((s) => `<i class="${column(s)}"></i>`).join("")}</div>`;
     h += `<section class="swim${shut ? " folded" : ""}"><div class="rail" data-open="release:${esc(r.id)}" tabindex="0"><div class="rail-in">
       <div class="rid"><button type="button" class="fold" data-fold="${esc(r.id)}" aria-expanded="${!shut}" title="${shut ? "Expand" : "Collapse"} ${esc(r.id)}"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4 L6 8 L10 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>${esc(r.id)}${r.tagged ? '<span class="stamp">tagged</span>' : ""}</div>
       <div class="rtitle">${esc(r.title)}</div>
@@ -349,7 +354,7 @@ function progress() {
       ${r.reviews.length && !shut ? `<div class="row">${r.reviews.map((v) => verdictChip(v.verdict)).join(" ")}</div>` : ""}
       </div></div>`;
     if (shut) h += `<div class="folded-row" data-fold="${esc(r.id)}" title="Expand ${esc(r.id)}"><span>${esc(r.title)}</span>${sl.length ? `${ticks}<span>${c.done.length} of ${sl.length} done${c.doing.length ? ` · ${c.doing.length} doing` : ""}${c.todo.length ? ` · ${c.todo.length} to do` : ""}</span>` : "<span>planned</span>"}${r.reviews.map((v) => verdictChip(v.verdict)).join(" ")}</div>`;
-    else if (!sl.length) h += `<div class="planned">Planned in the brief. Specify it to give it slices and examples.</div>`;
+    else if (!sl.length) h += `<div class="planned">No slices yet: /skill:mismagent-specify gives it examples and slices.</div>`;
     else h += STATES.map((st) => `<div class="cell ${st}" data-st="${st}">${c[st].map(card).join("") || `<span class="none">${{todo: "nothing left to do", doing: "nothing in progress", done: "nothing landed yet"}[st]}</span>`}</div>`).join("");
     h += `</section>`;
   }
@@ -360,12 +365,15 @@ function card(s) {
   const num = `<span class="n">${String(s.num).padStart(2, "0")}</span>`;
   if (s.state === "done") return `<div class="card done" data-open="slice:${esc(s.stem)}" tabindex="0" title="${esc(s.kind)} · landed ${esc(s.landed)}">
     <div class="row"><span class="t">${num}${esc(s.title)}</span><span class="pips">${pips}</span></div></div>`;
-  return `<div class="card ${s.state}" data-open="slice:${esc(s.stem)}" tabindex="0">
-    ${s.state === "doing" ? `<span class="live">in progress${s.started ? " since " + esc(s.started) : ""}</span>` : ""}
+  const p = s.state !== "done" && s.par;
+  return `<div class="card ${column(s)}${p ? " par" : ""}" data-open="slice:${esc(s.stem)}" tabindex="0">
+    ${p ? `<span class="live">${p.path ? "in a worktree" : "on a branch"} · <code>${esc(p.branch)}</code></span>`
+      : s.state === "doing" ? `<span class="live">in progress${s.started ? " since " + esc(s.started) : ""}</span>` : ""}
     <div><span class="t">${num}${esc(s.title)}</span></div>
     <div class="row">${s.kind !== "feature" ? `<span class="kind">${esc(s.kind)}</span>` : ""}
       ${s.examples.length ? `<span class="chip">${s.examples.length} EX</span>` : ""}
       ${s.blocked ? '<span class="chip bad">question</span>' : ""}
+      ${p ? parChips(p) : ""}
       ${s.state === "doing" && NEXT.slice === s.stem ? `<span class="status" title="${esc(NEXT.reason)}">next: ${esc(NEXT.action)}</span>` : ""}
       ${s.state === "todo" && s.waits.length ? `<span class="after" title="waits for these slices">after ${esc(s.waits.join(", "))}</span>` : ""}
       <span class="pips">${pips}</span></div></div>`;
@@ -376,6 +384,12 @@ const GROUPS = [["event storm", "Event storm", "events"], ["brief", "Brief", "co
 const legend = () => `<div class="legend"><span><span class="chip ok">EX-1</span>has an acceptance test</span>
   <span><span class="chip warn">EX-2</span>no test yet</span><span><span class="chip gone">EX-8</span>superseded</span>
   <span><a class="sl done"><i></i>slice</a>dot: done, doing, to do</span></div>`;
+function parChips(p) {
+  const last = p.commits[0];
+  return `<span class="status" title="commits on ${esc(p.branch)} not in ${esc(p.base)}">${p.ahead ? `+${p.ahead} commit${p.ahead === 1 ? "" : "s"}` : "no commits yet"}</span>`
+    + (p.dirty ? `<span class="chip warn" title="uncommitted files in the worktree">${p.dirty} changed</span>` : "")
+    + (last ? `<span class="after" title="${esc(last.subject)}">last ${esc(last.date)}</span>` : "");
+}
 function requirementsPage() {
   const q = filter.q.toLowerCase();
   let h = `<div class="phead"><div><h2>From the event storm to the tests</h2>
@@ -465,7 +479,7 @@ function sliceView(stem) {
   const s = SL[stem]; if (!s) return;
   const reviews = rounds(s.reviews);
   return [`<span class="n">${String(s.num).padStart(2, "0")}</span>${esc(s.title)}`, `
-    <dl class="kv"><dt>state</dt><dd><span class="pill ${s.state === "done" ? "ok" : s.state === "doing" ? "warn" : ""}">${s.state}</span> <span class="kind">${esc(s.kind)}</span>${s.state === "doing" && NEXT.slice === s.stem ? ` <span class="status">next: ${esc(NEXT.action)}</span>` : ""}</dd>
+    <dl class="kv"><dt>state</dt><dd><span class="pill ${s.state === "done" ? "ok" : column(s) === "doing" ? "warn" : ""}">${column(s) === "doing" && s.state !== "doing" ? "doing (parallel)" : s.state}</span> <span class="kind">${esc(s.kind)}</span>${s.state === "doing" && NEXT.slice === s.stem ? ` <span class="status">next: ${esc(NEXT.action)}</span>` : ""}</dd>
     <dt>release</dt><dd>${rlLink(s.release)}</dd>
     <dt>examples</dt><dd>${s.examples.map(exLink).join(" ") || "—"}</dd>
     <dt>after</dt><dd>${s.after.map((a) => { const d = DATA.slices.find((x) => x.stem === a || String(x.num) === String(+a)); return d ? slLink(d.stem) : esc(a); }).join(" ") || "—"}</dd>
@@ -474,6 +488,7 @@ function sliceView(stem) {
     ${md(s.text)}
     ${s.qa.map((x) => `<h3>${esc(x.h)}</h3>${md(x.b)}`).join("")}
     ${s.examples.length ? `<h3>Examples</h3>` + s.examples.map((id) => EX[id] ? `<div class="box">${exLink(id)} ${inline(EX[id].then)}</div>` : "").join("") : ""}
+    ${s.par ? parView(s) : ""}
     ${s.reviews.length ? `<h3>Reviews · ${s.reviews.length} round${s.reviews.length === 1 ? "" : "s"}</h3>${reviews}` : ""}
     ${s.progress ? `<h3>Progress</h3>${md(s.progress)}` : ""}
     ${s.commits.length ? `<h3>Commits</h3><div class="log">${s.commits.map((c) => `<div><span>${esc(c.sha)} ${esc(c.date)}</span>${esc(c.subject)}</div>`).join("")}</div>` : ""}`];
@@ -485,6 +500,16 @@ function rounds(revs) {
       <div><div class="grid-scores">${Object.entries(r.scores).map(([k, v]) => `<span>${esc(k)}<b class="${v !== "-" && +v < 4 ? "low" : ""}">${v === "-" ? "–" : esc(v)}</b></span>`).join("")}</div>
       ${r.why ? `<p class="pill warn">${esc(r.why)}</p>` : ""}${md(r.body)}</div></details>`;
   }).join("") + `</div>`;
+}
+function parView(s) {
+  const p = s.par;
+  return `<h3>${p.path ? "In a worktree" : "On a branch"}${s.state === "done" ? " (landed: left over)" : ""}</h3>
+    <dl class="kv"><dt>branch</dt><dd><code>${esc(p.branch)}</code></dd>
+    ${p.path ? `<dt>worktree</dt><dd><code>${esc(p.path)}</code></dd>` : ""}
+    <dt>against ${esc(p.base)}</dt><dd>${p.ahead} ahead · ${p.behind} behind</dd>
+    ${p.path ? `<dt>uncommitted</dt><dd>${p.dirty ? `<span class="chip warn">${p.dirty} file${p.dirty === 1 ? "" : "s"}</span>` : "none"}</dd>` : ""}</dl>
+    ${p.progress ? `<h3>Progress in the worktree</h3>${md(p.progress)}` : ""}
+    ${p.commits.length ? `<h3>Commits on the branch</h3><div class="log">${p.commits.map((c) => `<div><span>${esc(c.sha)} ${esc(c.date)}</span>${esc(c.subject)}</div>`).join("")}</div>` : ""}`;
 }
 function exView(id) {
   const e = EX[id]; if (!e) return;

@@ -3,7 +3,7 @@
 One server per project, on 127.0.0.1 only. `start` reuses a running one (its port file in the temp
 directory, checked through /health) or launches a detached child and waits for it; it returns the
 URL at once, so an agent's call never blocks. The page polls /data.json: the server recomputes the
-data only when the project's signature changes (HEAD, tags, `git status`, the mtimes of
+data only when the project's signature changes (HEAD, tags, branches, worktrees and their `git status`, the mtimes of
 .mismagent/, the acceptance folders and the conventions skill), so an idle project costs a few git
 calls per poll. With no poll for IDLE_SECONDS the server exits by itself; `stop` ends it at once.
 """
@@ -35,8 +35,11 @@ def preferred_port(root):
 def signature():
     """What the page depends on, cheap to compute: a change here means the data may have changed."""
     h = hashlib.sha1()
-    for args in (("rev-parse", "HEAD"), ("tag", "-l"), ("status", "--porcelain")):
+    for args in (("rev-parse", "HEAD"), ("tag", "-l"), ("status", "--porcelain"),
+                 ("for-each-ref", "--format=%(refname) %(objectname)", "refs/heads"), ("worktree", "list", "--porcelain")):
         h.update(mm.git(*args, check=False).encode())
+    for path in sorted(mmsite_worktrees().values()):  # parallel work: its uncommitted edits too
+        h.update(subprocess.run(["git", "-C", path, "status", "--porcelain"], capture_output=True, text=True).stdout.encode())
     rels = ["CLAUDE.md"] + [r for top in [mm.M, mm.SKILL] + mm.acceptance() for r in mm.walk(top)]
     for rel in sorted(rels):
         try:
@@ -80,6 +83,10 @@ def stop():
         return True
     except (OSError, ValueError, KeyError):
         return False
+
+def mmsite_worktrees():
+    import mmsite  # the page's own reading of the worktrees
+    return mmsite.worktrees()
 
 def serve(collect, render):
     """Serve mm.ROOT in the foreground until idle, a SIGTERM or Ctrl-C."""

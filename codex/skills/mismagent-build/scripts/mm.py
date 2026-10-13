@@ -372,12 +372,13 @@ def decide():
     todo = sorted((s for s in sls if s["state"] == "todo"),
                   key=lambda s: (s["kind"] != "refactor", s["num"], s["stem"]))
     notes = count_items(NOTES)
-    if notes > NOTES_LIMIT and not any(s["kind"] == "refactor" for s in todo):
-        rel = next((r for r in order if r not in tagged), order[-1] if order else "")
-        return act("design-pass", "%d design notes, no refactor slice in todo" % notes,
-                   notes=notes, release=rel)
     waiting = {s["stem"]: waits_for(s, sls) for s in todo}
     ready = [s for s in todo if not waiting[s["stem"]]]
+    # only a refactor slice that can start now pays the notes down; one waiting (After:) holds nothing
+    if notes > NOTES_LIMIT and not any(s["kind"] == "refactor" for s in ready):
+        rel = next((r for r in order if r not in tagged), order[-1] if order else "")
+        return act("design-pass", "%d design notes, no refactor slice ready in todo" % notes,
+                   notes=notes, release=rel)
     if todo and not ready:
         return act("idle", "every todo slice waits (After:): " + "; ".join(
             "%s for %s" % (st, ", ".join(w)) for st, w in waiting.items()))

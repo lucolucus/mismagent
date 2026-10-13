@@ -291,6 +291,15 @@ class Next(Repo):
                                        "path": ".mismagent/slices/todo/05-cleanup.md",
                                        "reason": "refactor slice first in todo"})
 
+    def test_a_waiting_refactor_slice_does_not_hold_the_design_pass(self):
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
+        self.slice("01-cart")
+        self.slice("24-ship", kind="refactor", examples="")
+        rel = ".mismagent/slices/todo/24-ship.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 01\nExamples:"))
+        self.commit()
+        self.assertEqual(self.next()["action"], "design-pass")
+
     def test_five_notes_do_not_trigger(self):
         self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(5)))
         self.slice("01-cart")

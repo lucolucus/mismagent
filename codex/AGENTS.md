@@ -42,13 +42,15 @@ $mismagent-conventions           # decide the agents' convention proposals → t
 | `mismagent-reviewer` agent | a fresh reviewer on the review table: a slice's diff, or the whole release |
 | `mismagent-craft` skill | the XP inner loop and its references, incl. `review-table.md` |
 | `mismagent-conventions` skill | with the human: the agents' proposals → `.agents/skills/conventions/` (how code is written in the project) |
-| `mismagent-build/scripts/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
+| `mismagent-build/scripts/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `built`, `review`, `shot`, `land`, `gate`, `tag`, `check` |
 
 ## In a project
-`ARCHITECTURE.md` and `AGENTS.md` (section `## mismagent`: test, lint, smoke, thresholds) at the root;
+`ARCHITECTURE.md` and `AGENTS.md` (section `## mismagent`: test, lint, smoke, shot, thresholds) at the root;
 `.agents/skills/conventions/` (the project's conventions, yours);
 `tests/acceptance/` (one test per example, marker `EX-<n>`; elsewhere with `acceptance:`);
 `.mismagent/`, one thing per file: `brief.md` (one page), `event-storm.md`, `releases/<R>.md`
-(scope, open questions), `examples/<capability>.md`, `decisions/NNNN-<name>.md`,
-`slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `design-notes.md`,
+(scope, open questions), `examples/<capability>.md`, `design/` (the approved artboards, as images),
+`decisions/NNNN-<name>.md`,
+`slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `shots/` (the app's screens
+beside their artboards), `design-notes.md`,
 `conventions-proposals.md`.

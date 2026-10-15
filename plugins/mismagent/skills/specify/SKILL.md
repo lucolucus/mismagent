@@ -133,10 +133,17 @@ end to end. Order: risk first, then value. Each file:
 Kind: feature
 Release: <RN>
 Examples: EX-3, EX-4
+Design: <artboards its screens look like, if any>
 
 <what the user can do after this slice, two lines>
 ```
 Show the human the list (one line per slice) and ask for the release cut.
+
+**Designs.** Artboards the human brings (a canvas, a mockup, screenshots) are spec, like the
+examples: export each one the release uses as an image into `.mismagent/design/` — a link the
+agents cannot open is no spec (`mm check` refuses it) — and commit them with the examples. Walk
+each artboard with the human: all it draws is an example, a slice's `Design:`, or out of scope in
+the release file; nothing left implicit.
 
 ## 5. Close
 No open question left in `releases/<RN>.md`, the human has approved the examples and the slices →

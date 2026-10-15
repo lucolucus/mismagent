@@ -35,7 +35,13 @@ Load the `craft` skill and follow its loop. For this slice:
    it): do it well, then propose it in `.mismagent/conventions-proposals.md`: `- create|update
    <topic>: <the rule> — <your files> (<why>)`. A rule says how code is written; what the product
    shows or does is its examples', never copied. The human decides after the slice.
-5. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
+5. **A slice with `Design:`** — its screens look like those artboards. Read each image before
+   building: sizes, spacing, colours, radii, fonts and components are the artboard's, never the
+   toolkit's default. `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" shot <slice>` renders your
+   screens beside them (no `shot:` in `CLAUDE.md` yet: write it, headless, at the artboard's size);
+   look at each pair yourself. A difference you cannot close (the artboard and an example disagree,
+   it draws what no example asks) is a `## Question`, never a design note.
+6. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
    a new `noqa`/disable line is a defect). Green is read, never assumed: no pipe after the suite
    (`| tail` reports tail's exit code) — redirect to a file, `echo EXIT $?`, read it; commit in a
    separate command, after `EXIT 0`.
@@ -48,7 +54,7 @@ slice (a stack change, decision named in the slice) may port the acceptance test
 `EX-<n>` markers, same assertions, nothing weakened — never the examples themselves.
 
 ## Never
-- Edit the requirements, `.mismagent/examples/`, or the acceptance test of an example outside
+- Edit the requirements, `.mismagent/examples/`, `.mismagent/design/`, or the acceptance test of an example outside
   your slice (the tests of an example your slice supersedes you replace; a migration slice ports
   the ones it names). If one looks wrong, that
   is a question.

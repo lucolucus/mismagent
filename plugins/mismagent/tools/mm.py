@@ -7,15 +7,19 @@ records Base, the reviewer reviews Base..HEAD, a REWORK adds commits, nothing re
 a PASS at HEAD and a green gate. Exit: 0 ok · 1 check/gate failure or refused precondition (one
 line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespace and **bold**):
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
-    acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere)
+    acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere),
+    shot (renders the app's screens: one $MM_SHOTS/<name>.png per name in $MM_DESIGN)
   .mismagent/examples/<capability>.md: | id | given | when | then | rule | req | release |, ids EX-<n>
     unique across the files; a `then` containing `(superseded by EX-<n>)` retires the row (no
     acceptance marker required). The old single .mismagent/examples.md is still read, with a warning
   .mismagent/brief.md: one page (a warning above BRIEF_WORDS): decisions go to decisions/, a
     release's scope and open questions to releases/<release>.md
-  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After: Built:,
+  .mismagent/design/**: the human's approved artboards, as images (png, jpg, webp) beside any source
+  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Design: Base: After: Built:,
     ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
-    must be done before it starts; Built: <round> is written by `mm built`, never by hand
+    must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
+    lists the artboards the slice's screens must look like (images under .mismagent/design/)
+  .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
@@ -49,6 +53,9 @@ Design choices:
 - `park` puts a doing slice back in todo only while it has no work since Base (a stack change
   that must come first): half-done work never leaves doing unreviewed. A todo slice whose After:
   slices are not all done is skipped by `next`; when every todo slice waits -> `idle`.
+- Look is proven like behavior: a slice with Design: is built only with a screen per artboard,
+  rendered by the project's `shot` command at that commit (`mm built` runs it and commits them), so
+  the reviewer judges the pair, never the diff alone; a release's pairs are rendered by `mm shot`.
 - Agents only propose conventions; with no slice doing, a pending proposal (or a done model slice
   and no skill yet) -> `conventions`: the human decides before the next slice starts.
 """
@@ -57,6 +64,7 @@ import fnmatch
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -64,13 +72,15 @@ KINDS = ("model", "feature", "refactor")
 STATES = ("todo", "doing", "done")
 M = ".mismagent"
 EXAMPLES, OLD_EXAMPLES, BRIEF = M + "/examples", M + "/examples.md", M + "/brief.md"
+DESIGN, SHOTS = M + "/design", M + "/shots"
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 NOTES, REVIEWS = M + "/design-notes.md", M + "/reviews"
 BRIEF_WORDS = 600
 TOPIC_WORDS = 300
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
 CITED = re.compile(r"`([\w.\-/]+)`")
-IGNORED_DIRTY = (REVIEWS + "/", NOTES)
+IGNORED_DIRTY = (REVIEWS + "/", NOTES, SHOTS + "/")
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
 EX_ID = re.compile(r"^EX-\d+$")
 EX_MARK = re.compile(r"(?<![\w-])EX-\d+(?!\d)")
@@ -156,7 +166,7 @@ def examples():
 def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
-         "examples": [], "bad_examples": [], "base": "", "after": [], "built": 0}
+         "examples": [], "bad_examples": [], "design": [], "base": "", "after": [], "built": 0}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -170,13 +180,15 @@ def parse_slice(state, name):
             if st:
                 sections[-1][1].append(st)
             continue
-        hm = re.match(r"^(kind|release|examples|base|after|built)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
+        hm = re.match(r"^(kind|release|examples|design|base|after|built)\s*:\s*(.*)$", st.lstrip("-* ").replace("**", ""), re.I)
         if hm:
             key, val = hm.group(1).lower(), hm.group(2).strip()
             if key == "examples":
                 toks = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
                 s["examples"] = [t for t in toks if EX_ID.match(t)]
                 s["bad_examples"] = [t for t in toks if not EX_ID.match(t)]
+            elif key == "design":
+                s["design"] = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
             elif key == "after":
                 s["after"] = [t for t in re.split(r"[,\s]+", val) if t and t not in ("-", "—", "none")]
             elif key == "built":
@@ -280,6 +292,45 @@ def markers():
 def unmarked(s, marks, retired):
     """The slice's examples with no acceptance marker (a superseded one needs none)."""
     return [ex for ex in s["examples"] if ex not in marks and ex not in retired]
+
+def artboard(ref):
+    """The repo path of a Design: reference (from the root, or from .mismagent/design/)."""
+    ref = ref.strip("`")
+    return ref if ref.startswith(DESIGN + "/") else "%s/%s" % (DESIGN, ref)
+
+def design_errors(s):
+    """Each Design: reference must be an image under .mismagent/design/, there to be read."""
+    out = []
+    for ref in s["design"]:
+        rel = artboard(ref)
+        if "://" in ref:
+            out.append("%s: Design: %s is a link: the artboard is read from the repository — export it "
+                       "as an image into %s/ (specify)" % (s["path"], ref, DESIGN))
+        elif not rel.lower().endswith(IMAGE_EXT):
+            out.append("%s: Design: %s is not an image (%s): export the artboard as one" % (
+                s["path"], ref, " ".join(IMAGE_EXT)))
+        elif ".." in rel.split("/") or not os.path.isfile(os.path.join(ROOT, rel)):
+            out.append("%s: Design: %s does not exist under %s/" % (s["path"], ref, DESIGN))
+    return out
+
+def shoot(stem, refs):
+    """Runs the project's `shot` into .mismagent/shots/<stem>/ for these artboards; -> the dir."""
+    cmd = config().get("shot")
+    need(cmd, "no `shot` in CLAUDE.md ## mismagent: a screen per artboard is how the look is proven "
+         "(a command that writes $MM_SHOTS/<name>.png for each name in $MM_DESIGN)")
+    names = [os.path.splitext(os.path.basename(artboard(r)))[0] for r in refs]
+    out = "%s/%s" % (SHOTS, stem)
+    shutil.rmtree(os.path.join(ROOT, out), ignore_errors=True)
+    os.makedirs(os.path.join(ROOT, out))
+    env = dict(os.environ, MM_SHOTS=os.path.join(ROOT, out), MM_DESIGN=" ".join(names))
+    p = subprocess.run(cmd, shell=True, cwd=ROOT, env=env, capture_output=True, text=True)
+    tail = (p.stdout + p.stderr).strip().splitlines()[-10:]
+    need(p.returncode == 0, "shot: red (%s)\n%s" % (cmd, "\n".join(tail)))
+    missing = [n for n in names if not os.path.isfile(os.path.join(ROOT, out, n + ".png"))]
+    need(not missing, "shot wrote no %s in %s/" % (", ".join(n + ".png" for n in missing), out))
+    for ref, n in zip(refs, names):
+        print("%s  <->  %s/%s.png" % (artboard(ref), out, n))
+    return out
 
 def count_items(rel):
     return sum(1 for line in read(rel).splitlines() if line.lstrip().startswith("- "))
@@ -438,7 +489,8 @@ def sources():
 
 def guarded(path):
     base = os.path.basename(path)
-    return (path == OLD_EXAMPLES or path.startswith(EXAMPLES + "/") or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
+    return (path == OLD_EXAMPLES or path.startswith(EXAMPLES + "/") or path.startswith(DESIGN + "/")
+            or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
             or (fnmatch.fnmatch(base.lower(), "requirements*") and base.lower().endswith(".md")))
 
 # the subjects specify and conventions commit with (a real revert of one too); never a lookalike
@@ -489,6 +541,7 @@ def run_check(base=None):
         errors += ["%s: After: %r names no single slice" % (where, r) for r in s["after"]
                    if not dep(r, sls) or dep(r, sls)["stem"] == s["stem"]]
         errors += ["%s: example %s is not in %s/" % (where, ex, EXAMPLES) for ex in s["examples"] if ex not in known]
+        errors += design_errors(s)
         if s["state"] == "done" or (base and s["state"] == "doing"):  # in review, the tests exist
             errors += ["%s: %s, but %s has no acceptance marker under %s/" % (where, s["state"], ex, ", ".join(acceptance()))
                        for ex in unmarked(s, marks, retired) if ex in known]
@@ -650,11 +703,29 @@ def cmd_built(a):
     r = at_head(revs, head())
     need(not r, "review %d is at HEAD: nothing changed since it" % (r or {"k": 0})["k"])
     gate()
+    errs = design_errors(s)
+    need(not errs, "; ".join(errs))
+    shots = [shoot(s["stem"], s["design"])] if s["design"] else []
     rnd = len(revs) + 1
     write_header(s["path"], "Built", rnd)
-    git("add", "--", s["path"])
+    git("add", "-A", "--", s["path"], *shots)
     git("commit", "-q", "--allow-empty", "-m", "%s: built (round %d)" % (s["stem"], rnd))  # again in a round: same header
     print("built %s, round %d: ready for review" % (s["stem"], rnd))
+    return 0
+
+def cmd_shot(a):
+    sls = slices()
+    try:
+        mine = [find_slice(a.target, sls)]
+        target = mine[0]["stem"]
+    except Refused:
+        mine, target = [s for s in sls if s["release"] == a.target], a.target
+        need(mine, "%s is neither a slice nor a release" % a.target)
+    errs = [e for s in mine for e in design_errors(s)]
+    need(not errs, "; ".join(errs))
+    refs = list(dict.fromkeys(r for s in mine for r in s["design"]))
+    need(refs, "%s names no artboard (Design:)" % target)
+    shoot(target, refs)
     return 0
 
 SCORE_NAMES = ("simple", "naming", "modularity", "duplication", "concision", "errors", "tests")
@@ -737,10 +808,11 @@ def cmd_tag(a):
     need(not dirty(), "the tree is dirty")
     gate()
     drop_drafts()
-    if os.path.isdir(os.path.join(ROOT, REVIEWS)):
-        git("add", "-A", "--", REVIEWS)
-        if subprocess.run(["git", "diff", "--cached", "--quiet", "--", REVIEWS], cwd=ROOT).returncode:
-            git("commit", "-q", "-m", "review: %s" % rel, "--", REVIEWS)
+    kept = [p for p in (REVIEWS, "%s/%s" % (SHOTS, rel)) if os.path.isdir(os.path.join(ROOT, p))]
+    if kept:
+        git("add", "-A", "--", *kept)
+        if subprocess.run(["git", "diff", "--cached", "--quiet", "--", *kept], cwd=ROOT).returncode:
+            git("commit", "-q", "-m", "review: %s" % rel, "--", *kept)
     git("tag", "-a", rel, "-m", "mismagent release %s" % rel)
     print("tagged %s at %s" % (rel, head()[:12]))
     return 0
@@ -759,6 +831,9 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
     ("land", "doing -> done, commit (PASS at HEAD, clean tree, gate green)",
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("gate", "run test and lint from CLAUDE.md ## mismagent, then check", None),
+    ("shot", "render the screens of a slice's or a release's artboards (Design:) with the project's "
+     "shot command, into .mismagent/shots/<target>/; prints each pair",
+     ("target", "slice stem or number, or release token")),
     ("tag", "git tag -a <release> (all its slices done, clean tree, gate green)",
      ("release", "release token, e.g. R0")),
     ("check", "files well formed, acceptance markers, sensors, guarded files", None))

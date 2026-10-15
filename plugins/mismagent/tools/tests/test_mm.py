@@ -1048,5 +1048,79 @@ class Check(Repo):
         os.makedirs(os.path.join(self.dir, "tests/acceptance"), exist_ok=True)
         self.assertEqual(self.check()[0], 0)
 
+
+SHOT = ('- shot: for n in $MM_DESIGN; do [ "$n" = Gone ] || printf png > "$MM_SHOTS/$n.png"; done\n')
+
+
+class Design(Repo):
+    """Design: names the artboards a slice must look like; mm built proves the look with a screen each."""
+
+    def designed(self, design="Verde.png", shot=True):
+        self.write(".mismagent/design/Verde.png", "png")
+        self.write(".mismagent/design/Rosso.png", "png")
+        if shot:
+            self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", SHOT + "- max_file_lines"))
+        self.slice("01-cart", extra="", examples="EX-1\nDesign: " + design)
+        self.commit("specify R0")
+
+    def test_check_refuses_an_artboard_it_cannot_read(self):
+        for ref, why in (("https://claude.ai/artifact/x", "is a link"), ("Verde.html", "is not an image"),
+                         ("Giallo.png", "does not exist under .mismagent/design/"),
+                         ("../../CLAUDE.md.png", "does not exist")):
+            self.designed(ref)
+            code, out, _ = self.check()
+            self.assertEqual(code, 1, ref)
+            self.assertIn("Design: %s %s" % (ref, why), out)
+        self.designed("Verde.png, .mismagent/design/Rosso.png")
+        self.assertEqual(self.check()[0], 0, self.check()[1])
+
+    def test_built_commits_a_screen_per_artboard(self):
+        self.designed("Verde.png Rosso.png")
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        code, out, err = self.mm("built", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertIn(".mismagent/design/Verde.png  <->  .mismagent/shots/01-cart/Verde.png", out)
+        self.assertIn(".mismagent/shots/01-cart/Rosso.png", self.git("show", "--name-only", "HEAD"))
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual(self.next()["action"], "review")
+
+    def test_built_refuses_without_the_screens(self):
+        self.designed(shot=False)
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        self.assertIn("no `shot` in CLAUDE.md", self.mm("built", "01-cart")[2])
+        self.write(".mismagent/design/Gone.png", "png")
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", SHOT + "- max_file_lines"))
+        self.write(".mismagent/slices/doing/01-cart.md", self.read(".mismagent/slices/doing/01-cart.md")
+                   .replace("Design: Verde.png", "Design: Verde.png Gone.png"))
+        self.commit("specify R0: Gone")
+        self.assertIn("shot wrote no Gone.png", self.mm("built", "01-cart")[2])
+        self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
+
+    def test_shot_renders_a_release_and_tag_keeps_it(self):
+        self.designed("Verde.png")
+        self.slice("02-more", examples="EX-2\nDesign: Rosso.png Verde.png")
+        self.commit("specify R0: 02")
+        code, out, err = self.mm("shot", "R0")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out.count("<->"), 2)
+        self.assertEqual(self.mm("shot", "01")[0], 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, ".mismagent/shots/01-cart/Verde.png")))
+        self.slice("03-plain", release="R1", examples="EX-3")
+        self.commit("specify R1")
+        self.assertIn("R1 names no artboard", self.mm("shot", "R1")[2])
+        self.assertIn("R9 is neither a slice nor a release", self.mm("shot", "R9")[2])
+
+    def test_the_artboards_are_the_humans(self):
+        self.designed()
+        base = self.head()
+        self.write(".mismagent/design/Verde.png", "other")
+        self.commit("01-cart: closer to the code")
+        code, out, _ = self.check("--base", base)
+        self.assertIn(".mismagent/design/Verde.png: changed since", out)
+
 if __name__ == "__main__":
     unittest.main()

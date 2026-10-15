@@ -32,7 +32,7 @@ the review at HEAD):
 | `release-review` | dispatch a **fresh mismagent-reviewer** with `MODE: release` and the release |
 | `design-pass` | dispatch **mismagent-architect** with `MODE: design-pass`, the release and the reason |
 | `conventions` | print `NEEDS-HUMAN: /skill:mismagent-conventions` with mm's reason, and stop |
-| `confirm` | if `<the argument this skill was invoked with>` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and scores, and stop |
+| `confirm` | if `<the argument this skill was invoked with>` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and scores (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any), and stop |
 | `idle` | report the reason (e.g. the next release needs `/skill:mismagent-specify`) and stop |
 
 Agents commit their own work, `MM` commits state; you commit only an `## Answer` you write. An agent's `RESULT: BLOCKED` with a

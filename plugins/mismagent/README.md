@@ -31,17 +31,19 @@ checking back every ten minutes, and resumes by itself once you have answered.
 | `agents/mismagent-reviewer` | a fresh reviewer on the review table: a slice's diff, or the whole release |
 | `skills/craft` | the XP inner loop and its references, incl. `review-table.md` |
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
-| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `land`, `gate`, `tag`, `check` |
+| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `built`, `review`, `shot`, `land`, `gate`, `tag`, `check` |
 | `tools/mmsite.py` + `mmsite_live.py` + `mmsite.html` | read-only: one live HTML page of the project, served on 127.0.0.1 — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
-| `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, the conventions skill) |
+| `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, artboards, the conventions skill) |
 
 ## In a project
-`ARCHITECTURE.md` and `CLAUDE.md` (section `## mismagent`: test, lint, smoke, thresholds) at the root;
+`ARCHITECTURE.md` and `CLAUDE.md` (section `## mismagent`: test, lint, smoke, shot, thresholds) at the root;
 `.claude/skills/conventions/` (the project's conventions, yours);
 `tests/acceptance/` (one test per example, marker `EX-<n>`; elsewhere with `acceptance:`);
 `.mismagent/`, one thing per file: `brief.md` (one page), `event-storm.md`, `releases/<R>.md`
-(scope, open questions), `examples/<capability>.md`, `decisions/NNNN-<name>.md`,
-`slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `design-notes.md`,
+(scope, open questions), `examples/<capability>.md`, `design/` (the approved artboards, as images),
+`decisions/NNNN-<name>.md`,
+`slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `shots/` (the app's screens
+beside their artboards), `design-notes.md`,
 `conventions-proposals.md`.
 
 The v0.26 flow (explore/model/worker-composer) is in `attic/v0.26/`.

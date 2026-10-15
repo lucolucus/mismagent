@@ -34,6 +34,7 @@ class GuardHuman(unittest.TestCase):
                      "/r/requirements.md", "/r/Requirements-R1.md", "REQUIREMENTS.MD",
                      "/r/.mismagent/examples.md", ".mismagent/examples.md",
                      "/r/.mismagent/examples/delete-project.md", ".mismagent/examples/search.md",
+                     "/r/.mismagent/design/Curata-Verde.png", ".mismagent/design/a/b.html",
                      "/r/.claude/skills/conventions/SKILL.md",
                      ".claude/skills/conventions/references/errors.md"):
             self.assertEqual(decide(path), "deny", path)

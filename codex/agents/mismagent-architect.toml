@@ -82,7 +82,8 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    has one. Write the project's `AGENTS.md` section `## mismagent`:
    `- test:`, `- lint:`, `- smoke:` (starts the app headless, exercises one use case, exits — never
    a blocking main loop; on an empty skeleton it just starts and exits), `- max_file_lines:`,
-   `- suppressions: 0`; `- acceptance:` (comma-separated folders) only when the build wants the
+   `- suppressions: 0`; `- shot:` when slices name artboards (`Design:`): renders, headless, each
+   screen named in `$MM_DESIGN` into `$MM_SHOTS/<name>.png`; `- acceptance:` (comma-separated folders) only when the build wants the
    acceptance tests outside `tests/acceptance/`. A `.gitignore` for what running the app or its
    tests creates.
 3. Only the minimal entry point, the smoke hook and one trivial test.

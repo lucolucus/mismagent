@@ -27,13 +27,18 @@ evidence you produce: tests you run, lines you cite. You write only your review 
    in a **migration** slice (a stack change), which ports the tests it names: each ported test
    keeps its `EX-<n>` marker and proves the same given, when and then as the one it replaces
    (compare with `git show <base>:<old path>`), nothing weakened, nothing dropped.
-3. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
+3. **Look** (a slice with `Design:`): read each artboard beside its screen in
+   `.mismagent/shots/<slice>/` (rendered at HEAD by `mm built`). A visible difference — size,
+   spacing, colour, radius, font, a component, an element missing or added — is blocking, with the
+   pair and what differs, unless an `## Answer` or a decision accepts it.
+4. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
    diff against `ARCHITECTURE.md` and the skill; what it does first of its kind is proposed in
    `.mismagent/conventions-proposals.md`, and each proposal matches the diff.
-4. **Verdict:**
+5. **Verdict:**
    - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
-     allows) without a test pinning it and a `Behavior change:` line in the slice file, a second
+     allows) without a test pinning it and a `Behavior change:` line in the slice file, a look
+     difference (step 3), a second
      way of doing what the skill decides, something new not proposed, a **wrong result** (input the
      program should refuse is accepted, a success it did not prove is reported: fail-open), or the
      diff scores < 4 on a dimension it touches. Every blocking
@@ -46,7 +51,9 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 You are a fresh pair of eyes on the whole code: do not read the slice reviews.
 1. Run `MM gate` and **the app itself** through its `smoke` command (`AGENTS.md`, `## mismagent`);
    never start its interactive main loop. The examples in scope are those of the release's slices.
-2. Score the **whole code** on the table, all seven dimensions, with evidence.
+2. Score the **whole code** on the table, all seven dimensions, with evidence. `MM shot <release>`
+   renders every artboard of the release beside its screen now: each pair that differs is a
+   finding (the human sees the pairs at confirm).
 3. `HEALTHY` if every dimension is ≥ 4, the app runs, the suite is green; else `DESIGN-PASS`, naming
    the dimensions below 4 and the three worst places.
 

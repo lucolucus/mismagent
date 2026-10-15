@@ -1,6 +1,7 @@
 ---
 name: mismagent-builder
 description: 'mismAgent build: builds ONE slice — acceptance tests first at the use-case seam, the XP loop, a refactoring pass, a commit at every green. Dispatched by /mismagent:build; never moves state, never tags.'
+model: sonnet
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill, mcp__serena__activate_project, mcp__serena__initial_instructions, mcp__serena__get_current_config, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__find_referencing_symbols, mcp__serena__get_diagnostics_for_file, mcp__serena__list_memories, mcp__serena__read_memory, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__rename_symbol, mcp__serena__replace_content, mcp__serena__safe_delete_symbol
 ---
 

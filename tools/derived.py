@@ -105,6 +105,16 @@ def without_loop(text, where):
     return text[:start] + text[end + 2:]
 
 
+def without_models(text, where):
+    """Which model each agent runs on is Claude Code's (the agents' `model:`): other runtimes pick
+    theirs."""
+    start = text.find("Each agent runs on the model")
+    if start == -1:
+        sys.exit("%s: the models paragraph moved, update the generator" % where)
+    end = text.find("\n\n", start)
+    return text[:start] + text[end + 2:]
+
+
 # ---- skills ---------------------------------------------------------------------------
 def emit_skill(out, adapt, note, name, description, body):
     front = "---\nname: mismagent-%s\ndescription: %s\n---\n" % (name, json.dumps(adapt(description)))

@@ -1,6 +1,7 @@
 ---
 name: mismagent-reviewer
 description: 'mismAgent build: the fresh second pair of eyes. Reviews ONE slice (its diff) or ONE release (the whole code, the app run) on the review table; PASS or REWORK with the rule and the line. Dispatched by /mismagent:build; never edits code.'
+model: sonnet
 tools: Read, Bash, Grep, Glob, Write, mcp__serena__activate_project, mcp__serena__initial_instructions, mcp__serena__get_current_config, mcp__serena__get_symbols_overview, mcp__serena__find_symbol, mcp__serena__find_declaration, mcp__serena__find_implementations, mcp__serena__find_referencing_symbols, mcp__serena__get_diagnostics_for_file, mcp__serena__list_memories, mcp__serena__read_memory
 ---
 

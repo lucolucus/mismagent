@@ -15,7 +15,8 @@ Arguments: $ARGUMENTS
 flow waits for the human (`NEEDS-HUMAN`, `confirm` without `--confirm`, `idle`), or the tree has
 uncommitted changes you did not make (someone is working), do nothing and come back in ten
 minutes; the next tick resumes by itself once they have answered. Notify once per wait, not every
-tick.
+tick. After this conversation's third `land`, end the loop with `NEEDS-HUMAN: /clear, then /loop
+/mismagent:build`: the state is in the repo, and a long conversation slows every tick.
 
 ## 1. What next
 Run `MM next --json` and do exactly what its action says (`path`: the slice file now; `review`:
@@ -37,6 +38,9 @@ the review at HEAD):
 | `conventions` | print `NEEDS-HUMAN: /mismagent:conventions` with mm's reason, and stop |
 | `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and scores (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any), and stop |
 | `idle` | report the reason (e.g. the next release needs `/mismagent:specify`) and stop |
+
+Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`
+whose `k` is 2 or more.
 
 Agents commit their own work, `MM` commits state; you commit only an `## Answer` you write. An agent's `RESULT: BLOCKED` with a
 question, or an `MM` command that fails → print `NEEDS-HUMAN:` with the question or mm's message,

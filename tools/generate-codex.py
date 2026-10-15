@@ -21,7 +21,7 @@ import sys
 
 from derived import (KERNEL, ROOT, adapt_common, agents_md_body, check_tree, emit_skill, fresh,
                      parse_frontmatter, plugin_agents, read, ship_mm, ship_skills, without_loop,
-                     write)
+                     without_models, write)
 
 OUT = os.path.join(ROOT, "codex")
 
@@ -57,7 +57,7 @@ BUILD_NOTES = """
 
 def convert_build():
     fm, body = parse_frontmatter(read(os.path.join(KERNEL, "commands", "build.md")))
-    body = without_loop(body, "commands/build.md").rstrip() + "\n" + BUILD_NOTES
+    body = without_models(without_loop(body, "commands/build.md"), "commands/build.md").rstrip() + "\n" + BUILD_NOTES
     emit_skill(OUT, adapt, GENERATED_NOTE, "build", fm.get("description", ""), body)
     ship_mm(OUT, adapt)
 

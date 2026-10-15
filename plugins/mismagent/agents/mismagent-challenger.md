@@ -1,6 +1,7 @@
 ---
 name: mismagent-challenger
 description: 'mismAgent explore: the fresh-context adversary. Tries to demolish an idea or a stack before anyone builds it: wrong problem, unverified assumptions, scope, cheaper alternative, hidden cost, missing cases. Read-only; returns KILL, RESHAPE or PROCEED.'
+model: sonnet
 tools: Read, Glob, Grep, WebSearch, WebFetch
 ---
 

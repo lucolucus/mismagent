@@ -94,8 +94,8 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
 **Adopting existing code** (the code is there, `mm next` says `skeleton`): steps 3–4 are moot.
 `ARCHITECTURE.md` maps the code as it is; the sensors are the build's own tasks; existing decisions
 stay as they are. Read the best-kept code of each kind (a screen, a use case, a test): *where code
-goes* comes from it, and its conventions are proposed now, one line each, so the human decides them
-before the first slice. A file holding more than one thing is a design note naming the things and
+goes* comes from it, and its conventions are proposed now, one `- now ` line each, so the human
+decides them before the first slice. A file holding more than one thing is a design note naming the things and
 where each goes: the design pass splits it along the rule, never by line count.
 
 ## MODE: design-pass — curate the theory

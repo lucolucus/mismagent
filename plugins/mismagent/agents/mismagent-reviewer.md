@@ -69,3 +69,7 @@ REVIEW: <path of the review file>
 SCORES: simple=<n> naming=<n> modularity=<n> duplication=<n> concision=<n> errors=<n> tests=<n>
 ```
 (Scores you did not assess: `-`.)
+
+**`ADVISORY`** (the human asked, outside the flow): review the same way but write nothing — no
+draft, no `MM review`, no notes, no `MM shot` (read the shots there are). The findings, then the
+block above with `REVIEW: advisory`, are your last message.

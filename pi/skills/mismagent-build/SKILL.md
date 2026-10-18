@@ -14,11 +14,23 @@ Arguments: <the argument this skill was invoked with>
 
 **One action per call**, then report and stop.
 
-**The human wrote to you** since your last action → answer first, from the files (the slice, its
-progress and reviews, `MM status`, the examples, `ARCHITECTURE.md`, the decisions), briefly. A
-request is never yours to carry out: name the command that does it (`/skill:mismagent-specify`,
-`/skill:mismagent-conventions`, `--confirm`). Their answer to a doubt you put to them is the slice's
-`## Answer`: write it in their words and commit. Then take the tick's action.
+**The human wrote to you** since your last action — here, or as a message from another session
+(answer that one with `SendMessage` to it; send it your `NEEDS-HUMAN`/`FOR-HUMAN` lines too) →
+answer first, from the files (the slice, its progress and reviews, `MM status`, the examples,
+`ARCHITECTURE.md`, the decisions), briefly. Their answer to a doubt you put to them is the
+slice's `## Answer`: write it in their words and commit. A request that moves no state is this
+tick's action, in place of mm's: a **review** (a fresh **mismagent-reviewer**, `MODE: slice` or
+`release`, with `ADVISORY`), a **challenge** (the **mismagent-challenger**, `MODE: doubt` with
+their question inline, or an idea; you write nothing), a **design pass** — only when mm says
+`start` or `idle` (no slice doing), else it waits for that tick: the **mismagent-architect**,
+`MODE: design-pass`, the first untagged release and their reason. Any other request — a state move,
+a requirement, a convention, a tag — name the command that does it (`/skill:mismagent-specify`,
+`/skill:mismagent-conventions`, `--confirm`).
+
+**After a `land`, look back** before you report: the reviews and reworks of the release so far,
+`design-notes.md`, the proposals. The same rule broken in two slices, a file reworked again,
+proposals that are one rule, a slice that took three rounds → one `FOR-HUMAN:` line each, with the
+files; none → nothing.
 
 ## 1. What next
 Run `MM next --json` and do exactly what its action says (`path`: the slice file now; `review`:
@@ -62,7 +74,7 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
    `NEEDS-HUMAN: /skill:mismagent-specify stack <slice file>` (its stack review answers the slice).
 
 ## 3. Never
-Build, review or design; edit code, tests, requirements or the examples; tag without `--confirm`;
+Build, review or design yourself; edit code, tests, requirements or the examples; tag without `--confirm`;
 push; take a second action.
 
 ## Page

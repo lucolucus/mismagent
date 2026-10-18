@@ -60,12 +60,56 @@ class NotifyHuman(unittest.TestCase):
         self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: /mismagent:conventions")
         self.assertEqual(len(self.notified()), 2)
 
+    def test_the_same_wait_again_after_an_action(self):
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: .mismagent/slices/doing/48.md")
+        self.stop(last_assistant_message="still waiting")
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: .mismagent/slices/doing/48.md")
+        self.stop(last_assistant_message="ACTION: build 48\nDONE: built\nNEXT: review")
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: .mismagent/slices/doing/48.md")
+        self.assertEqual(len(self.notified()), 2)
+
+    def test_every_new_line_of_a_report(self):
+        self.stop(last_assistant_message="ACTION: land 48\nFOR-HUMAN: a\nFOR-HUMAN: b")
+        self.stop(last_assistant_message="ACTION: land 49\nFOR-HUMAN: a\nFOR-HUMAN: c")
+        self.assertEqual([n.split("|")[1] for n in self.notified()],
+                         ["FOR-HUMAN: a · FOR-HUMAN: b", "FOR-HUMAN: c"])
+
+    def test_prose_mentioning_the_mark_is_not_a_wait(self):
+        self.stop(last_assistant_message="There is no NEEDS-HUMAN: line here.")
+        self.assertEqual(self.notified(), [])
+
+    def test_a_failed_delivery_is_tried_again(self):
+        with open(self.recorder, "a") as f:
+            f.write('[ -e "%s.ok" ] || exit 1\n' % self.log)
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: confirm R2")
+        open(self.log + ".ok", "w").close()
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: confirm R2")
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: confirm R2")
+        self.assertEqual(len(self.notified()), 2)  # the recorder logs before it fails
+
+    def test_the_notifier_output_never_reaches_claude(self):
+        with open(self.recorder, "a") as f:
+            f.write('echo \'{"decision": "block", "reason": "x"}\'\n')
+        self.stop(last_assistant_message="NEXT: NEEDS-HUMAN: confirm R2")  # stop() asserts no stdout
+
+    def test_an_earlier_turn_is_not_this_stop(self):
+        transcript = os.path.join(self.dir, "t.jsonl")
+        with open(transcript, "w") as f:
+            for entry in ({"type": "assistant", "message": {"content": [{"type": "text", "text": "NEEDS-HUMAN: old"}]}},
+                          {"type": "user", "message": {"content": "my answer"}},
+                          {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash"}]}}):
+                f.write(json.dumps(entry) + "\n")
+        self.stop(transcript_path=transcript)
+        self.assertEqual(self.notified(), [])
+
     def test_read_from_the_transcript(self):
         transcript = os.path.join(self.dir, "t.jsonl")
         with open(transcript, "w") as f:
+            f.write(json.dumps({"type": "user", "message": {"content": "/mismagent:build"}}) + "\n")
             f.write(json.dumps({"type": "assistant", "message": {"content": [
                 {"type": "text", "text": "NEXT: NEEDS-HUMAN: confirm R2"}]}}) + "\n")
-            f.write(json.dumps({"type": "user", "message": {"content": "ok"}}) + "\n")
+            f.write(json.dumps({"type": "user", "message": {"content": [
+                {"type": "tool_result", "content": "ok"}]}}) + "\n")
         self.stop(transcript_path=transcript)
         self.assertEqual(self.notified(), ["mismAgent · p7read|NEEDS-HUMAN: confirm R2"])
 

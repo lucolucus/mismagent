@@ -23,7 +23,8 @@ materials, if any). **`MODE: stack`**: the option to attack (a stack, or a
 whole combination), the neutral packet (`.mismagent/stack-reviews/N-input.md`), the human's
 objectives (`N-preference.md`: what they lean to and why) and, when the option comes from the
 architect, its review `N.md` — attack its rationale, not only the name of the stack. **`MODE:
-doubt`**: a slice file whose `## Question` the conductor framed with options and a recommendation.
+doubt`**: a slice file whose `## Question` the conductor framed with options and a recommendation,
+or a question the human asked, inline: frame its options yourself, recommend one, then attack it.
 
 ## Idea: attack on these fronts
 1. **Wrong problem.** Does the user really need this, or is it a solution looking for a problem?

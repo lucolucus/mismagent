@@ -18,7 +18,11 @@ BMad.
 ```
 Or leave `/loop /mismagent:build` running in a session of its own: the always-on conductor. It does
 every action as soon as it is ready (build, review, land, design pass); when it needs you it waits,
-checking back every ten minutes, and resumes by itself once you have answered.
+checking back every ten minutes, and resumes by itself once you have answered. It notifies you
+when it stops for you (`NEEDS-HUMAN`) or has something you should know (`FOR-HUMAN`). Talk to it
+there, or from another session with `SendMessage`: it answers first, then runs a review, a
+challenge or a design pass you ask for as its next action. Sonnet is enough for that session (the
+agents run on their own models); work in another checkout, or it waits while the tree is dirty.
 
 ## Contents
 | piece | role |

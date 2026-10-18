@@ -33,7 +33,7 @@ checking back every ten minutes, and resumes by itself once you have answered.
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
 | `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `built`, `review`, `shot`, `land`, `gate`, `tag`, `check` |
 | `tools/mmsite.py` + `mmsite_live.py` + `mmsite.html` | read-only: one live HTML page of the project, served on 127.0.0.1 — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
-| `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, artboards, the conventions skill) |
+| `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, artboards, the conventions skill); a desktop notification when the conductor stops for the human (`MISMAGENT_NOTIFY` to send it elsewhere) |
 
 ## In a project
 `ARCHITECTURE.md` and `CLAUDE.md` (section `## mismagent`: test, lint, smoke, shot, thresholds) at the root;

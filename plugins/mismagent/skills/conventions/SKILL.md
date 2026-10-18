@@ -20,9 +20,10 @@ and the last review of its slice. No skill yet: the first version comes from the
 ## 2. One proposal at a time
 Show the rule in one line; the code that shows it (`file:line`, a short excerpt); what it changes
 (a new topic, or the current rule beside the new); your recommendation and why — a conflict with
-`ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. What the product
-shows or does (a layout, a text, a design choice) is the examples': recommend dropping it from the
-rule, which keeps only how the code does it and cites the `EX-<n>`. Ask: create,
+`ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. First the test: could an
+acceptance test prove it (the product shows, does or refuses something)? Then it is behavior, not a
+convention: say so; recommend reject (its examples keep it, a case they miss is for
+`/mismagent:specify`) or a reword to only how the code does it (one seam, one module), citing the `EX-<n>`. Ask: create,
 update, reject, or reword. The human decides, one question at a time.
 
 ## 3. Write

@@ -34,8 +34,9 @@ Load the `craft` skill and follow its loop. For this slice:
    A problem beyond the slice goes to `.mismagent/design-notes.md` (one line `- where: what, why`).
 4. **Something new** — the first of its kind the skill does not describe (a model slice: all of
    it): do it well, then propose it in `.mismagent/conventions-proposals.md`: `- create|update
-   <topic>: <the rule> — <your files> (<why>)`. A rule says how code is written; what the product
-   shows or does is its examples', never copied. The human decides after the slice.
+   <topic>: <the rule> — <your files> (<why>)`. A rule is what no test sees: where code goes, its
+   names, its shape. What a test could prove (the product shows, does, refuses) is behavior: its
+   examples', never a rule. The human decides after the slice.
 5. **A slice with `Design:`** — its screens look like those artboards. Read each image before
    building: sizes, spacing, colours, radii, fonts and components are the artboard's, never the
    toolkit's default. `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" shot <slice>` renders your

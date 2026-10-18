@@ -31,13 +31,14 @@ evidence you produce: tests you run, lines you cite. You write only your review 
    pair and what differs, unless an `## Answer` or a decision accepts it.
 4. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
    diff against `ARCHITECTURE.md` and the skill; what it does first of its kind is proposed in
-   `.mismagent/conventions-proposals.md`, and each proposal matches the diff.
+   `.mismagent/conventions-proposals.md`, and each proposal matches the diff and is no behavior
+   (what a test could prove is the examples').
 5. **Verdict:**
    - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
      allows) without a test pinning it and a `Behavior change:` line in the slice file, a look
      difference (step 3), a second
-     way of doing what the skill decides, something new not proposed, a **wrong result** (input the
+     way of doing what the skill decides, something new not proposed, a proposal that is behavior, a **wrong result** (input the
      program should refuse is accepted, a success it did not prove is reported: fail-open), or the
      diff scores < 4 on a dimension it touches. Every blocking
      finding names **the dimension or rule, the line, and what would fix it**. Taste is advice,

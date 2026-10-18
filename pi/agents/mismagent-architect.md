@@ -118,8 +118,8 @@ slices done since the last pass, then the code and its tests.
    new stack, then module by module behind the acceptance tests (each slice names the tests it
    ports, or they run from outside the code). Record the target in the change log of
    `ARCHITECTURE.md` now; each slice updates the map as the code moves. Where the conventions
-   skill cites a file the migration replaces, propose its transition now (`update <topic>:` the
-   rule for the new stack, the citation dropped until the new file lands); the human decides it
+   skill cites a file the migration replaces, propose its transition now (`- now update <topic>:`
+   the rule for the new stack, the citation dropped until the new file lands); the human decides it
    before the next slice starts, and the slice that lands the new file proposes the new citation.
 3. Drop from `design-notes.md` what became a slice or a rule, or is not worth it (why, one line;
    a `RISK:` leaves only as a slice).

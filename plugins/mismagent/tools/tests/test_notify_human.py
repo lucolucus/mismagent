@@ -46,6 +46,10 @@ class NotifyHuman(unittest.TestCase):
         self.stop(last_assistant_message="ACTION: stuck 48\nNEXT: NEEDS-HUMAN: .mismagent/slices/48.md")
         self.assertEqual(self.notified(), ["mismAgent · p7read|NEEDS-HUMAN: .mismagent/slices/48.md"])
 
+    def test_for_human_is_notified_too(self):
+        self.stop(last_assistant_message="NEXT: start 49\nFOR-HUMAN: /mismagent:conventions — 2 proposals")
+        self.assertEqual(self.notified(), ["mismAgent · p7read|FOR-HUMAN: /mismagent:conventions — 2 proposals"])
+
     def test_no_mark_no_notification(self):
         self.stop(last_assistant_message="ACTION: land 48\nNEXT: start 49")
         self.assertEqual(self.notified(), [])

@@ -18,6 +18,12 @@ minutes; the next tick resumes by itself once they have answered. Notify once pe
 tick. After this conversation's third `land`, end the loop with `NEEDS-HUMAN: /clear, then /loop
 /mismagent:build`: the state is in the repo, and a long conversation slows every tick.
 
+**The human wrote to you** since your last action → answer first, from the files (the slice, its
+progress and reviews, `MM status`, the examples, `ARCHITECTURE.md`, the decisions), briefly. A
+request is never yours to carry out: name the command that does it (`/mismagent:specify`,
+`/mismagent:conventions`, `--confirm`). Their answer to a doubt you put to them is the slice's
+`## Answer`: write it in their words and commit. Then take the tick's action.
+
 ## 1. What next
 Run `MM next --json` and do exactly what its action says (`path`: the slice file now; `review`:
 the review at HEAD):
@@ -25,7 +31,7 @@ the review at HEAD):
 | action | you do |
 |---|---|
 | `skeleton` | dispatch **mismagent-architect** with `MODE: skeleton` |
-| `start` | `MM start <slice>` (it prints the new path), then dispatch **mismagent-builder** with that file |
+| `start` | `MM start <slice>` (it prints the new path), then dispatch **mismagent-builder** with that file; with `proposals`, add `FOR-HUMAN: /mismagent:conventions — <n> proposal(s); the flow goes on, the release waits for them` |
 | `build` · `resume` | dispatch **mismagent-builder** with the slice file (`resume`: say its work was interrupted; it continues from the tree) |
 | `review` | dispatch **mismagent-reviewer** with `MODE: slice` and the slice file |
 | `rework` | dispatch **mismagent-builder** with the slice file and the `review` file |
@@ -57,7 +63,9 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
 3. **Act.** Local → write the `## Answer` (the choice and why), and if it constrains later work a
    short file in `.mismagent/decisions/`; commit; the next call resumes the slice. Important →
    write in the slice file the options, the strongest argument for each and your recommendation;
-   commit; print `NEEDS-HUMAN: <slice file>` and stop. A doubt about the stack itself → print
+   dispatch **mismagent-challenger** with `MODE: doubt` and the slice file, and write its verdict
+   under your recommendation as `### Challenge` (a RESHAPE that names a better option: put it
+   first, keep yours); commit; print `NEEDS-HUMAN: <slice file>` and stop. A doubt about the stack itself → print
    `NEEDS-HUMAN: /mismagent:specify stack <slice file>` (its stack review answers the slice).
 
 ## 3. Never
@@ -74,5 +82,6 @@ its URL; the page follows the project live). Read-only, not an action; its failu
 ACTION: <what mm said> <slice or release>
 DONE: <what happened, one line>
 NEXT: <what the next call will do, or NEEDS-HUMAN: …>
+FOR-HUMAN: <what the human should know while the flow goes on, when there is something>
 PAGE: <the URL mmsite printed, when you ran it>
 ```

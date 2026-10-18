@@ -324,17 +324,45 @@ class Next(Repo):
         self.assertEqual(d["action"], "skeleton")
         self.assertIn("lint", d["reason"])
 
-    def test_conventions_after_a_slice_with_proposals(self):
+    def test_proposals_ride_on_start(self):
         self.done_release()
         self.slice("02-more", examples="EX-2")
         self.write(".mismagent/conventions-proposals.md", "# Proposals\n\n- create errors: typed errors (`src/cart.py`)\n")
         self.commit()
         d = self.next()
-        self.assertEqual(d["action"], "conventions")
-        self.assertEqual(d["proposals"], 1)
+        self.assertEqual((d["action"], d["slice"], d["proposals"]), ("start", "02-more", 1))
         self.write(".mismagent/conventions-proposals.md", "# Proposals\n")
         self.commit()
-        self.assertNotEqual(self.next()["action"], "conventions")
+        self.assertNotIn("proposals", self.next())
+
+    def test_a_now_proposal_is_decided_before_the_next_slice(self):
+        self.done_release()
+        self.slice("02-more", examples="EX-2")
+        self.write(".mismagent/conventions-proposals.md",
+                   "- create errors: typed errors\n- now update db: no citation until `src/db.rs` lands\n")
+        self.commit()
+        d = self.next()
+        self.assertEqual((d["action"], d["proposals"]), ("conventions", 2))
+
+    def test_proposals_decided_before_the_release_review(self):
+        self.done_release()
+        self.write(".mismagent/conventions-proposals.md", "- create errors: typed errors\n")
+        self.commit()
+        d = self.next()
+        self.assertEqual((d["action"], d["proposals"]), ("conventions", 1))
+        self.write(".mismagent/conventions-proposals.md", "")
+        self.commit()
+        self.assertEqual(self.next()["action"], "release-review")
+
+    def test_proposals_decided_when_no_slice_can_start(self):
+        self.slice("02-more", examples="EX-2", release="R1")
+        rel = ".mismagent/slices/todo/02-more.md"
+        self.write(rel, self.read(rel).replace("Examples:", "After: 09\nExamples:"))
+        self.commit()
+        self.assertEqual(self.next()["action"], "idle")
+        self.write(".mismagent/conventions-proposals.md", "- create errors: typed errors\n")
+        self.commit()
+        self.assertEqual(self.next()["action"], "conventions")
 
     def test_proposals_wait_for_the_doing_slice(self):
         self.started()

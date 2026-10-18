@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Stop hook: when the conductor's last message stops for the human (a `NEEDS-HUMAN:` line), a
-desktop notification says so — under /loop the line alone scrolls by unseen. Once per wait: the
-same line in the same session is not notified twice. MISMAGENT_NOTIFY, if set, is a command run
+"""Stop hook: when the conductor's last message stops for the human (a `NEEDS-HUMAN:` line) or
+tells them something while the flow goes on (`FOR-HUMAN:`), a desktop notification says so — under
+/loop the line alone scrolls by unseen. Once per wait: the same line in the same session is not
+notified twice. MISMAGENT_NOTIFY, if set, is a command run
 with the title and the message as its two arguments instead of the desktop notification (e.g. a
 script that pushes to the phone). Never blocks: every failure is silent.
 """
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 
-MARK = "NEEDS-HUMAN:"
+MARKS = ("NEEDS-HUMAN:", "FOR-HUMAN:")
 
 
 def last_assistant_text(event):
@@ -43,7 +44,7 @@ def last_assistant_text(event):
 
 def needs_human(text):
     for line in text.splitlines():
-        at = line.find(MARK)
+        at = min((line.find(m) for m in MARKS if m in line), default=-1)
         if at >= 0:
             return line[at:].strip(" `*")
     return None

@@ -23,7 +23,8 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
-  .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
+  .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic;
+    `- now ` = decided before the next slice starts)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
     (`idle`): the stack is in question until specify's review and its handoff are finished
   .claude/skills/conventions/**.md: the project's conventions skill, written with the human in
@@ -56,8 +57,10 @@ Design choices:
 - Look is proven like behavior: a slice with Design: is built only with a screen per artboard,
   rendered by the project's `shot` command at that commit (`mm built` runs it and commits them), so
   the reviewer judges the pair, never the diff alone; a release's pairs are rendered by `mm shot`.
-- Agents only propose conventions; with no slice doing, a pending proposal (or a done model slice
-  and no skill yet) -> `conventions`: the human decides before the next slice starts.
+- Agents only propose conventions. A done model slice and no skill yet -> `conventions` before the
+  next slice starts, and so does a `- now ` proposal (a stack migration's transition); the others
+  ride on `start` (`proposals`: the human is told, the flow
+  goes on) and -> `conventions` only when no slice can start or before a release is reviewed.
 """
 import argparse
 import fnmatch
@@ -395,18 +398,24 @@ def decide():
                    % (len(work), s["built"]), **one)
 
     proposals = count_items(PROPOSALS)
-    if proposals:
+    urgent = sum(1 for line in read(PROPOSALS).splitlines() if line.lstrip().startswith("- now "))
+
+    def decide_them():
         return act("conventions", "%d proposal(s) in %s: the human decides them" % (proposals, PROPOSALS),
                    proposals=proposals)
     if any(s["kind"] == "model" and s["state"] == "done" for s in sls) and not os.path.isfile(
             os.path.join(ROOT, SKILL, "SKILL.md")):
         return act("conventions", "the model slice is done and there is no conventions skill yet")
+    if urgent:
+        return decide_them()
     tagged = tags()
     order = release_order(exs, sls)
     for rel in order:
         mine = [s for s in sls if s["release"] == rel]
         if rel in tagged or not mine or any(s["state"] != "done" for s in mine):
             continue
+        if proposals:  # a release is reviewed against the conventions as decided
+            return decide_them()
         revs = reviews(rel)
         r = at_head(revs, sha)
         if not r:
@@ -431,13 +440,15 @@ def decide():
         rel = next((r for r in order if r not in tagged), order[-1] if order else "")
         return act("design-pass", "%d design notes, no refactor slice ready in todo" % notes,
                    notes=notes, release=rel)
+    if proposals and not ready:
+        return decide_them()
     if todo and not ready:
         return act("idle", "every todo slice waits (After:): " + "; ".join(
             "%s for %s" % (st, ", ".join(w)) for st, w in waiting.items()))
     todo = ready
     if todo:
         return act("start", "%s slice first in todo" % (todo[0]["kind"] or "?"),
-                   slice=todo[0]["stem"], path=todo[0]["path"])
+                   slice=todo[0]["stem"], path=todo[0]["path"], **({"proposals": proposals} if proposals else {}))
     why = "every release is tagged" if order and set(order) <= tagged else "no slice in todo"
     return act("idle", why + ": the next release needs specify")
 

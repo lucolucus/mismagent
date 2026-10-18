@@ -1,7 +1,7 @@
 # Known issues
 
 Accepted for now, with the fix each one would take. Line numbers refer to
-`plugins/mismagent/tools/mm.py` at 0.7.2 (`39f617d`); the codex and pi copies are generated from it.
+`plugins/mismagent/tools/mm.py` at 0.7.2 (`39f617d`).
 
 ## 0.7.2 — from the code review of `mm built` / `mm review` (2026-10-08)
 

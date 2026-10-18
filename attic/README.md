@@ -15,3 +15,11 @@ superseded piece is a zombie in waiting. The full history is kept by `git log`.
 
 Redesign rationale: `plugins/mismagent/redesign/composer-spec.md` and the first adoption project's
 `MISMAGENT-LOG.md` (entries #16 and "REVIEW + FIX BATCH").
+
+## `ports/` — Codex and pi packagings (suspended 0.7.17)
+
+`codex/`, `pi/`, their generators and tests (`tools/`), the pre-commit hook and the CI workflow
+that regenerated them, and `PACKAGING.md`. Suspended because the 0.7.15–0.7.17 conductor relies on
+Claude Code-only pieces (the `Stop` notification hook, `/loop`, `SendMessage` between sessions):
+the generated views were behind and untested. To bring them back, move the folders back to the
+repo root, port those pieces, and re-enable `core.hooksPath .githooks`.

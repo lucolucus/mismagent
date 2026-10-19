@@ -14,10 +14,12 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/brief.md: one page (a warning above BRIEF_WORDS): decisions go to decisions/, a
     release's scope and open questions to releases/<release>.md
   .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Base: After: Built:,
-    ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
-    must be done before it starts; Built: <round> is written by `mm built`, never by hand
-  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES: — written by `mm review`
-    (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
+    ## Question/Answer, ## Progress (the builder's notes), ## Rework <k> (the builder's answer to
+    review k: one `- F<n>: FIXED|NOT_FIXED — …` line per finding) — After: lists slices (NN or stem)
+    that must be done before it starts; Built: <round> is written by `mm built`, never by hand
+  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES:, and for a REWORK or a
+    DIRECT its blocking findings, one `- F<n>: …` line each — written by `mm review` (it refuses when
+    HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
@@ -36,6 +38,9 @@ Design choices:
 - Verdicts are checked against SCORES (`name=<n>`, `-` = not assessed): PASS with a score < 4 counts
   as REWORK, HEALTHY with a score < 4 as DESIGN-PASS. The architect answers an escalation with
   VERDICT: DIRECT (-> `rework` following it) or PASS; a REWORK after a DIRECT -> `stuck` (human).
+- A rework is a closed list: `mm built` refuses until `## Rework <k>` answers every F<n> of review k
+  (a REWORK or DIRECT names at least one). A NOT_FIXED (the builder holds the finding wrong, with
+  evidence) skips the next review: -> `escalate`, the architect decides; to a DIRECT -> `stuck`.
 - A DESIGN-PASS release review at HEAD asks for a pass unless two DESIGN-PASS reviews of that
   release came before it (two passes ran): then `confirm`.
 - check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
@@ -72,6 +77,8 @@ CITED = re.compile(r"`([\w.\-/]+)`")
 IGNORED_DIRTY = (REVIEWS + "/", NOTES)
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
 EX_ID = re.compile(r"^EX-\d+$")
+FINDING = re.compile(r"^[\s*_>-]*(F\d+)[*_]*\s*:", re.M)
+ANSWER = re.compile(r"^[-*\s]*(F\d+)\s*:\s*(NOT[_ -]?FIXED|FIXED)\b", re.I)
 EX_MARK = re.compile(r"(?<![\w-])EX-\d+(?!\d)")
 SUPERSEDED = re.compile(r"\(\s*superseded\s+by\s+EX-\d+\s*\)", re.I)
 SUPPRESS = re.compile(r"noqa|pylint:\s*disable|eslint-disable|@SuppressWarnings|type:\s*ignore|nolint")
@@ -155,7 +162,7 @@ def examples():
 def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
-         "examples": [], "bad_examples": [], "base": "", "after": [], "built": 0}
+         "examples": [], "bad_examples": [], "base": "", "after": [], "built": 0, "rework": {}}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -183,6 +190,12 @@ def parse_slice(state, name):
             else:
                 s[key] = val.split()[0] if val else ""
     s["kind"] = s["kind"].lower()
+    for name, body in sections:  # ## Rework <k>: {F<n>: FIXED | NOT_FIXED}
+        rk = re.match(r"rework\s+(\d+)\b", name)
+        for m in (ANSWER.match(line.replace("**", "")) for line in body) if rk else ():
+            if m:
+                s["rework"].setdefault(int(rk.group(1)), {})[m.group(1).upper()] = (
+                    "FIXED" if m.group(2).upper() == "FIXED" else "NOT_FIXED")
     q = max((i for i, (name, _) in enumerate(sections) if name == "question"), default=-1)
     answered = max((i for i, (name, body) in enumerate(sections) if name == "answer" and body), default=-1)
     s["blocked"] = q > answered and bool(sections[q][1])  # an empty ## Answer answers nothing
@@ -220,8 +233,12 @@ def open_stack_reviews():
         r"^[-*\s]*state\s*:\s*(?:\*\*\s*)?done\b", read("%s/%s" % (STACK_REVIEWS, r)).replace("**", ""),
         re.M | re.I)]
 
+def findings(text):
+    """The blocking findings of a review, F<n> in order."""
+    return sorted(set(FINDING.findall(text)), key=lambda f: int(f[1:]))
+
 def reviews(prefix):
-    """-> [{k, verdict, sha, path, why}] of <prefix>-<k>.md sorted by k; `verdict` is the one that
+    """-> [{k, verdict, sha, path, why, findings}] of <prefix>-<k>.md sorted by k; `verdict` is the one that
     counts: a PASS/HEALTHY with an assessed score < 4 is demoted (REWORK/DESIGN-PASS), `why` says so."""
     out = []
     for name in ls(REVIEWS):
@@ -235,7 +252,7 @@ def reviews(prefix):
         scores = re.search(r"^[\s*_>-]*SCORES[\s*_]*:(.*)$", text, re.M | re.I)
         low = re.findall(r"([\w-]+)\s*=\s*([0-3])(?!\d)", scores.group(1)) if scores else []
         r = {"k": int(m.group(1)), "verdict": v.group(1).upper() if v else "", "path": path,
-             "sha": sha.group(1).lower() if sha else "", "why": ""}
+             "sha": sha.group(1).lower() if sha else "", "why": "", "findings": findings(text)}
         if low and r["verdict"] in DEMOTE:
             r["why"] = "%s with %s < 4 counts as %s" % (r["verdict"], " ".join("=".join(x) for x in low),
                                                        DEMOTE[r["verdict"]])
@@ -336,6 +353,14 @@ def decide():
                    check=False).split() if s["base"] else []
         if not work:
             return act("build", "no change outside .mismagent/ since mm start", **one)
+        last = revs[-1] if revs and revs[-1]["verdict"] in ("REWORK", "DIRECT") else None
+        held = [f for f, v in s["rework"].get(last["k"], {}).items() if v == "NOT_FIXED"] if last else []
+        if held and s["built"] == len(revs) + 1:
+            one["review"] = last["path"]
+            why = "## Rework %d of %s answers NOT_FIXED (%s)" % (last["k"], s["path"], ", ".join(held))
+            if last["verdict"] == "DIRECT" or directs:
+                return act("stuck", why + " to the architect's DIRECT: the human decides", **one)
+            return act("escalate", why + " to review %d: the architect decides" % last["k"], k=k, **one)
         if s["built"] != len(revs) + 1:
             return act("resume", "%d file(s) changed but no `Built: %d` in %s: the builder was cut before "
                        "mm built" % (len(work), len(revs) + 1, s["path"]), **one)
@@ -625,6 +650,16 @@ def cmd_built(a):
     revs = reviews(s["stem"])
     r = at_head(revs, head())
     need(not r, "review %d is at HEAD: nothing changed since it" % (r or {"k": 0})["k"])
+    last = revs[-1] if revs and revs[-1]["verdict"] in ("REWORK", "DIRECT") else None
+    if last and last["findings"]:
+        got = s["rework"].get(last["k"], {})
+        left = [f for f in last["findings"] if f not in got]
+        alien = [f for f in got if f not in last["findings"]]
+        need(not left and not alien, "%s: ## Rework %d must answer each finding of review %d (%s), one line "
+             "`- F<n>: FIXED — what changed` or `- F<n>: NOT_FIXED — why it is wrong, with evidence`; %s"
+             % (s["path"], last["k"], last["k"], ", ".join(last["findings"]),
+                "; ".join(x for x in ("missing " + ", ".join(left) if left else "",
+                                      "not in the review " + ", ".join(alien) if alien else "") if x)))
     gate()
     rnd = len(revs) + 1
     write_header(s["path"], "Built", rnd)
@@ -671,6 +706,8 @@ def cmd_review(a):
     if not a.body:  # a draft left by an earlier, refused attempt is not this review
         need(os.path.getmtime(draft) >= int(git("log", "-1", "--format=%ct").strip()),
              "%s was written before HEAD: write the review of the code at HEAD" % os.path.relpath(draft, ROOT))
+    need(v not in ("REWORK", "DIRECT") or findings(body), "%s names no blocking finding: one line each, "
+         "`- F1: <dimension or rule> — <file:line> — <what would fix it>`" % v)
     k = max((r["k"] for r in reviews(target)), default=0) + 1
     rel = "%s/%s-%d.md" % (REVIEWS, target, k)
     os.makedirs(os.path.join(ROOT, REVIEWS), exist_ok=True)

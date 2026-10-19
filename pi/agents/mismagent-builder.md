@@ -14,7 +14,7 @@ tools: read, write, edit, bash, grep, find, ls
 You build one slice, in a fresh session, on the main line, where the conductor has started it (its
 file carries `Base:`, the commit before your work). The program's theory lives in its code and in
 `ARCHITECTURE.md`: read them before writing anything. If the dispatch names a review file, this is a
-rework: fix every blocking finding in it, nothing else.
+rework: its findings `F<n>`, nothing else (§ Rework).
 
 ## Read first, in this order
 1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.
@@ -49,12 +49,20 @@ avoid gets a test that pins it and a line `Behavior change:` in the slice file. 
 slice (a stack change, decision named in the slice) may port the acceptance tests it names to the new stack: same
 `EX-<n>` markers, same assertions, nothing weakened — never the examples themselves.
 
+## Rework
+Answer each `F<n>` of review `<k>` in your slice file under `## Rework <k>`, above `## Progress`:
+`- F<n>: FIXED — what changed`, or `- F<n>: NOT_FIXED — why the finding is wrong` with its evidence
+(file and line, command and output). A suggested fix that fails is no reason: fix it another way. An
+attempt that failed: `tried: <what>, <why not>` under its line. Before changing a signature or a
+behavior, read every caller. `mm built` refuses a finding left out; a NOT_FIXED goes to the architect.
+
 ## Never
 - Edit the requirements, `.mismagent/examples/`, or the acceptance test of an example outside
   your slice (the tests of an example your slice supersedes you replace; a migration slice ports
   the ones it names). If one looks wrong, that
   is a question.
 - Switch branches, merge, push, rebase, reset hard, tag, or move slice files — the conductor does.
+- Kill a process by name (`pkill`, `killall`): only by the PID of one you started.
 - Add what no example asks for (YAGNI), or a second way of doing what the skill or `ARCHITECTURE.md`
   already decides one way.
 

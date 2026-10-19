@@ -76,6 +76,10 @@ important doubt (`NEEDS-HUMAN`) and each release.
 - **Tools compute, agents judge:** `mm` owns the state, the git moves and every count. Agents
   signal through it, never by hand: `mm built` closes a builder's round (gate green, `Built:`
   written), `mm review` writes the verdict lines and refuses when HEAD moved during the review.
+- **A rework is a closed list:** a REWORK numbers its blocking findings (`F1`, `F2`…); the builder
+  answers each in the slice file (`FIXED`, or `NOT_FIXED` with evidence that the finding is wrong)
+  and `mm built` refuses one left out. The next reviewer checks those answers first and blocks only
+  on what the rework changed; a `NOT_FIXED` skips it and goes to the architect.
 
 ## The design, in three layers
 | file | layer |

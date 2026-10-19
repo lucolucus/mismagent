@@ -20,6 +20,9 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 ## Slice review (dispatch: `MODE: slice`, the slice file)
 1. First note `git rev-parse HEAD`: the HEAD you review. `git diff <base>..HEAD`, `<base>` = the
    slice file's `Base:`. Run `MM gate` and `MM check --base <base>`.
+   **A rework** (`## Rework <k>` in the slice file): first check each `FIXED` line against its
+   finding in review `<k>`; one not fixed blocks again. A new blocking finding is in
+   the lines the rework changed, or loses data or fails an example; else it is advice.
 2. **Examples:** each example of the slice has an acceptance test that proves *it* — the same given,
    when and then, not a weaker one — and passes. Tests of other examples were not edited — except
    in a **migration** slice (a stack change), which ports the tests it names: each ported test
@@ -33,8 +36,8 @@ evidence you produce: tests you run, lines you cite. You write only your review 
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
      allows) without a test pinning it and a `Behavior change:` line in the slice file, a second
      way of doing what the skill decides, something new not proposed, or the diff scores < 4 on a dimension it touches. Every blocking
-     finding names **the dimension or rule, the line, and what would fix it**. Taste is advice,
-     never a block.
+     finding is one line `- F<n>: <dimension or rule> — <file:line> — <what would fix it>`, from
+     `F1`. Taste is advice: never numbered, never a block.
    - `PASS` otherwise. A problem you see *outside* the diff goes to `.mismagent/design-notes.md`
      (one line); a problem *in* the diff is never sent there.
 

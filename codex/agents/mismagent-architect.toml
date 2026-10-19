@@ -116,12 +116,12 @@ slices done since the last pass, then the code and its tests.
 3. Drop from `design-notes.md` what became a slice or a rule, or is not worth it (why, one line).
    Commit (`design pass`).
 
-## MODE: escalate — a slice stuck after two reworks
-Read the slice, its reviews and the diff. Decide by the standard, `ARCHITECTURE.md` and the skill,
-not by taste. Write `.mismagent/reviews/<slice stem>.draft.md`, then `MM review <slice stem>
-DIRECT|PASS --sha <the HEAD you read>` (PASS also `--scores`), **not committed**: `DIRECT` with
-exactly what the builder must change, or `PASS` with why the finding does not block (residue →
-`design-notes.md`).
+## MODE: escalate — a slice after two reworks, or a builder's NOT_FIXED
+Read the slice (its `## Rework`), its reviews and the diff. Decide by the standard,
+`ARCHITECTURE.md` and the skill, not taste. Write `.mismagent/reviews/<slice stem>.draft.md`,
+then `MM review <slice stem> DIRECT|PASS --sha <the HEAD you read>` (PASS also `--scores`), **not
+committed**: `DIRECT` with what the builder must change, one `- F<n>:` line each, or `PASS` with why
+the findings do not block (residue → `design-notes.md`).
 
 ## Return (your last message)
 ```

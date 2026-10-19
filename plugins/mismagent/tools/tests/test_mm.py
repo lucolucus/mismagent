@@ -79,9 +79,9 @@ class Repo(unittest.TestCase):
     def slice(self, name, state="todo", **kw):
         self.write(".mismagent/slices/%s/%s.md" % (state, name), slice_text(**kw))
 
-    def review(self, name, verdict, sha=None, scores="simple=4 naming=-"):
-        self.write(".mismagent/reviews/%s.md" % name,
-                   "# Review\nVERDICT: %s\nSHA: %s\nSCORES: %s\n" % (verdict, (sha or self.head())[:9], scores))
+    def review(self, name, verdict, sha=None, scores="simple=4 naming=-", body=""):
+        self.write(".mismagent/reviews/%s.md" % name, "# Review\nVERDICT: %s\nSHA: %s\nSCORES: %s\n%s"
+                   % (verdict, (sha or self.head())[:9], scores, body))
 
     def work(self, stem="01-cart", code="x = 1\n", msg="code"):
         """Builder work: code plus the progress entry, committed."""
@@ -410,6 +410,58 @@ class Next(Repo):
         self.review("01-cart-5", "PASS")
         self.assertEqual(self.next()["action"], "land")
 
+    def answer(self, k, *lines, stem="01-cart"):
+        """The builder's ## Rework <k>, committed."""
+        path = ".mismagent/slices/doing/%s.md" % stem
+        self.write(path, self.read(path) + "\n## Rework %d\n%s\n" % (k, "\n".join(lines)))
+        return self.commit("rework %d answered" % k)
+
+    def test_a_rework_answers_every_finding(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "REWORK", body="\n- F1: naming — src/cart.py:1 — say what x is\n"
+                    "- **F2**: errors — src/cart.py:1 — raise\nAdvice: a shorter module name.\n")
+        self.write("src/cart.py", "count = 1\n")
+        self.commit("fix")
+        code, _, err = self.mm("built", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("## Rework 1 must answer each finding of review 1 (F1, F2)", err)
+        self.assertIn("missing F1, F2", err)
+        self.answer(1, "- F1: FIXED — x is count", "- F3: FIXED — ?")
+        err = self.mm("built", "01-cart")[2]
+        self.assertIn("missing F2; not in the review F3", err)
+        self.answer(1, "- **F2**: fixed — raises ValueError")
+        self.assertIn("not in the review F3", self.mm("built", "01-cart")[2])  # two sections: one answer
+        path = ".mismagent/slices/doing/01-cart.md"
+        self.write(path, self.read(path).replace("- F3: FIXED — ?\n", ""))
+        self.commit("drop F3")
+        code, _, err = self.mm("built", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.next()["action"], "review")
+
+    def test_not_fixed_goes_to_the_architect_then_to_the_human(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "REWORK", body="- F1: naming — src/cart.py:1 — rename\n"
+                    "- F2: errors — src/cart.py:1 — raise\n")
+        self.write("src/cart.py", "count = 1\n")
+        self.answer(1, "- F1: FIXED — renamed", "- F2: NOT_FIXED — EX-1 says an empty cart returns 0, "
+                    "not an error (examples/cart.md:5)", "  tried: raising, EX-1 fails")
+        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        d = self.next()
+        self.assertEqual((d["action"], d["review"]), ("escalate", ".mismagent/reviews/01-cart-1.md"))
+        self.assertIn("NOT_FIXED (F2) to review 1: the architect decides", d["reason"])
+        self.review("01-cart-2", "DIRECT", scores="", body="- F1: errors — src/cart.py:1 — return 0, documented\n")
+        self.assertEqual(self.next()["action"], "rework")
+        self.write("src/cart.py", "count = 0\n")
+        path = ".mismagent/slices/doing/01-cart.md"
+        self.write(path, self.read(path) + "\n## Rework 2 (the DIRECT)\n- **F1**: not fixed — no\n")
+        self.commit("rework 2 answered")
+        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        d = self.next()
+        self.assertEqual(d["action"], "stuck")
+        self.assertIn("NOT_FIXED (F1) to the architect's DIRECT", d["reason"])
+
     def test_architect_pass_after_escalate_lands(self):
         self.started()
         for k in (1, 2, 3):
@@ -495,7 +547,11 @@ class StartLand(Repo):
         self.assertIn("scores: speed", review("01-cart", "REWORK", "--sha", sha, "--scores", "speed=4")[2])
         self.assertIn("missing or empty", self.mm("review", "01-cart", "REWORK", "--sha", sha,
                                                   "--scores", "simple=3", "--body", "nope.md")[2])
-        self.assertEqual(review("01-cart", "DIRECT", "--sha", sha)[0], 0)  # the architect: no scores
+        self.assertIn("REWORK names no blocking finding", review("01-cart", "REWORK", "--sha", sha,
+                                                                  "--scores", "simple=3")[2])
+        self.assertIn("DIRECT names no blocking finding", review("01-cart", "DIRECT", "--sha", sha)[2])
+        self.body("- F1: errors — src/cart.py:1 — raise, never return None\n")
+        self.assertEqual(self.mm("review", "01-cart", "DIRECT", "--sha", sha)[0], 0)  # the architect: no scores
         self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart-2.md")))
         self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
         self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha, "--scores", "simple=3")[0], 0)

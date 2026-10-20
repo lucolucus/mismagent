@@ -35,6 +35,7 @@ update, reject, or reword. The human decides, one question at a time.
   never appends a clause; a topic that will not fit is two topics.
 - A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.
+- A slice's `## Question` waiting on a proposal: write its `## Answer` (what was decided).
 - Remove every decided proposal, rejected ones too (a reason that matters later → "not: …" in its topic).
 - `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" check` green; commit (`conventions`).
 

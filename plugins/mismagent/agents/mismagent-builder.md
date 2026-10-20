@@ -69,7 +69,10 @@ A claim in `## Progress` or `design-notes.md` about a tool, a limit or a defect 
 
 ## When you cannot settle something
 Do not guess. Write it under `## Question` in your slice file: the question, the options you see,
-your recommendation and why; commit; return `BLOCKED`.
+your recommendation and why; commit; return `BLOCKED`. An option is what an agent can do: a change
+to the human's files (the conventions skill, the examples, the artboards) is theirs — when one is
+needed (a path the skill cites moved), write it with its exact change in
+`.mismagent/conventions-proposals.md` and name `/mismagent:conventions` in the question.
 
 ## Return (your last message, nothing after it)
 ```

@@ -60,7 +60,7 @@ the review at HEAD):
 Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`
 whose `k` is 2 or more.
 
-Agents commit their own work, `MM` commits state; you commit only an `## Answer` you write. An agent's `RESULT: BLOCKED` with a
+Agents commit their own work, `MM` commits state; you commit only an `## Answer` or a proposal you write. An agent's `RESULT: BLOCKED` with a
 question, or an `MM` command that fails → print `NEEDS-HUMAN:` with the question or mm's message,
 and stop.
 
@@ -77,7 +77,10 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
    write in the slice file the options, the strongest argument for each and your recommendation;
    dispatch **mismagent-challenger** with `MODE: doubt` and the slice file, and write its verdict
    under your recommendation as `### Challenge` (a RESHAPE that names a better option: put it
-   first, keep yours); commit; print `NEEDS-HUMAN: <slice file>` and stop. A doubt about the stack itself → print
+   first, keep yours). An option only the human's files can carry out (agents cannot edit the
+   conventions skill, the examples, the artboards) is the human's step, made ready: for the skill,
+   its exact change in `.mismagent/conventions-proposals.md` if not there yet. Commit; print
+   `NEEDS-HUMAN: <slice file> — <the decision, in a few words>` and stop. A doubt about the stack itself → print
    `NEEDS-HUMAN: /mismagent:specify stack <slice file>` (its stack review answers the slice).
 
 ## 3. Never

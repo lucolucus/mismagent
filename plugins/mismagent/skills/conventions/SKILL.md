@@ -15,10 +15,11 @@ No source → it is an **assumption**, said as one.
 
 ## 1. Read
 The proposals, the skill if it exists, `ARCHITECTURE.md`, and for each proposal the files it cites
-and the last review of its slice. No skill yet: the first version comes from the model slice's code.
+and the last review of its slice. No skill yet: the first version comes from the skeleton's proposals (good principles for this
+stack, each with its source); the model slice's code updates it.
 
 ## 2. One proposal at a time
-Show the rule in one line; the code that shows it (`file:line`, a short excerpt); what it changes
+Show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
 (a new topic, or the current rule beside the new); your recommendation and why — a conflict with
 `ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. First the test: could an
 acceptance test prove it (the product shows, does or refuses something)? Then it is behavior, not a
@@ -31,7 +32,7 @@ update, reject, or reword. The human decides, one question at a time.
   repository — load before writing or reviewing code here.`; then one line per topic →
   `references/<topic>.md`, the model slice first.
 - A reference, ≤ ~300 words (`mm check` warns above): the rule, why, the files that show it as
-  backticked paths (`mm check` fails on a missing one). An update rewrites the topic as one rule,
+  backticked paths (`mm check` fails on a missing one), or until there are any its source. An update rewrites the topic as one rule,
   never appends a clause; a topic that will not fit is two topics.
 - A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.

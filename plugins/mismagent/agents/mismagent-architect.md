@@ -38,7 +38,8 @@ in a scratch folder. Every decision file has an `Evidence:` section listing its 
 
 ## The conventions skill (`.claude/skills/conventions/`) — how code is written here
 Never what the product shows or does: what a test could prove is the examples'. The human writes it (`/mismagent:conventions`); you only **propose**, a line in
-`.mismagent/conventions-proposals.md`: `- create|update <topic>: <the rule> — <files> (<why>)`.
+`.mismagent/conventions-proposals.md`: `- create|update <topic>: <the rule> — <files> (<why>)`;
+before the code exists, `<files>` is the rule's source (the stack's style guide, a decision).
 
 ## MODE: stack — advise, never decide
 You get the **neutral packet** (`.mismagent/stack-reviews/N-input.md`): the problem, the
@@ -89,7 +90,13 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    tests creates.
 3. Only the minimal entry point, the smoke hook and one trivial test.
 4. Mark the first slice in todo that goes end to end through a real example `Kind: model`.
-5. `MM gate` green; commit (`skeleton`).
+5. **The first conventions**, so the model slice starts from good principles: for this stack and
+   this kind of product, the recognized practice — the repo and project layout (folders, tests,
+   scripts), names, file shape, tests, errors — fitted to `ARCHITECTURE.md` and the decisions.
+   One `- now create <topic>:` line each, its source named (the official guide, the framework's
+   documentation, a decision); no source, no rule. How a use case or a screen is shaped waits for
+   the model slice's code.
+6. `MM gate` green; commit (`skeleton`).
 
 **Adopting existing code** (the code is there, `mm next` says `skeleton`): steps 3–4 are moot.
 `ARCHITECTURE.md` maps the code as it is; the sensors are the build's own tasks; existing decisions

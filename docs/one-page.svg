@@ -44,7 +44,7 @@
 
   <!-- Title: why this page exists -->
   <text class="ink" x="32" y="56" font-size="28" font-weight="700">Coding agents that write software that stays maintainable</text>
-  <text class="soft" x="32" y="88" font-size="16">mismAgent, a Claude Code plugin · v0.7 · 2026-10-07</text>
+  <text class="soft" x="32" y="88" font-size="16">mismAgent, a Claude Code plugin · v0.7 · 2026-10-20</text>
   <line class="rule" x1="32" y1="110" x2="928" y2="110"/>
 
   <!-- From an idea to examples -->

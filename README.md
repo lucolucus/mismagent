@@ -95,8 +95,8 @@ The v0.26 flow (explore → model → worker-composer, parallel building blocks)
 [`attic/v0.26/`](attic/v0.26/).
 
 ## Working on this repo
-- `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool, the hooks, the prompt
-  budgets (operative prompts ≤ 5,000 words in all).
+- `python3 -m unittest discover -s plugins/mismagent/tools/tests` — the tool, the hooks, the prompts
+  (readable frontmatter, real `mm` subcommands; no word caps).
 - `bench/` — measuring the harness on the product, against a baseline: `converse.py` (a builder and a
   simulated user in turns), `scenarios/baseline/` (plain Claude Code, the design-pass experiment),
   `scenarios/long-horizon/` (four change requests: does the code stay maintainable?), `score.py`,

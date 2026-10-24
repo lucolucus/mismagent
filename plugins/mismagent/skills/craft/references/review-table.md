@@ -14,6 +14,9 @@ breaks and the line; anything else is advice.
 | **Error handling** | broad catches, swallowed errors, a missing lookup crashes with a type error | the error policy of `ARCHITECTURE.md`: typed domain errors, one boundary shows and logs | every failure has one obvious path, tested |
 | **Test quality** | multi-behavior tests, tests poking widget internals, slow or order-dependent | one behavior each, named as the behavior, at the use-case seam, fast | tests read as the specification |
 
+Always, under every dimension: SOLID, YAGNI, DRY, test first (the `craft` skill), and the project's
+conventions as decided.
+
 A slice passes when its diff scores **≥ 4 on every dimension it touches** and breaks no rule of
 `ARCHITECTURE.md`. A release is healthy when the whole code scores ≥ 4 on every dimension; below
 that, the architect runs a design pass.

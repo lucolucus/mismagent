@@ -5,8 +5,9 @@ description: 'mismAgent craft: decides the agents'' convention proposals with th
 
 # /mismagent:conventions — how code is written here, decided with the human
 
-You talk with the human. `.claude/skills/conventions/` says how code is written in this repository;
-agents propose in
+You talk with the human. `.claude/skills/conventions/` says how each **kind of code** is written in
+this repository (a message, a controller, a use case, a repository, the tests…), so builders never
+reinvent one and reviewers check the same standard; agents propose in
 `.mismagent/conventions-proposals.md`; the human decides; you write.
 
 **Evidence, never invention.** Every fact you state — what the code does, a defect, what a library
@@ -16,7 +17,9 @@ No source → it is an **assumption**, said as one.
 ## 1. Read
 The proposals, the skill if it exists, `ARCHITECTURE.md`, and for each proposal the files it cites
 and the last review of its slice. No skill yet: the first version comes from the skeleton's proposals (good principles for this
-stack, each with its source); the model slice's code updates it.
+stack, each with its source); the model slice's code updates it. A skill written per feature (topics
+without the six sections): its rules stay valid; propose to the human to regroup them by kind, one
+kind at a time, a feature's knowledge moved to `ARCHITECTURE.md` or a decision.
 
 ## 2. One proposal at a time
 Show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
@@ -24,16 +27,21 @@ Show the rule in one line; the code that shows it (`file:line`, a short excerpt)
 `ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. First the test: could an
 acceptance test prove it (the product shows, does or refuses something)? Then it is behavior, not a
 convention: say so; recommend reject (its examples keep it, a case they miss is for
-`/mismagent:specify`) or a reword to only how the code does it (one seam, one module), citing the `EX-<n>`. Ask: create,
+`/mismagent:specify`) or a reword to only how the code does it (one seam, one module), citing the `EX-<n>`.
+Then: is it a kind of code? A proposal named after a feature (export, tabs) → reword it into the
+kind it shows (an adapter, a screen's model), or recommend it goes to `ARCHITECTURE.md` or a
+decision. Ask: create,
 update, reject, or reword. The human decides, one question at a time.
 
 ## 3. Write
 - `SKILL.md`: frontmatter `name: conventions`, `description: How code is written in this
-  repository — load before writing or reviewing code here.`; then one line per topic →
-  `references/<topic>.md`, the model slice first.
-- A reference, ≤ ~300 words (`mm check` warns above): the rule, why, the files that show it as
-  backticked paths (`mm check` fails on a missing one), or until there are any its source. An update rewrites the topic as one rule,
-  never appends a clause; a topic that will not fit is two topics.
+  repository — load before writing or reviewing code here.`; then one line per kind →
+  `references/<kind>.md`: its *Where* in a few words.
+- A reference, one kind (`mm check` warns when a section is missing):
+  `## Where` (folder, file name) · `## Uses` (library, or none) · `## Shape` (a short skeleton) ·
+  `## Must` · `## Never` (one checkable rule per point) · `## Example` (backticked paths, `mm check`
+  fails on a missing one; until the code exists, the source). An update rewrites the topic, never
+  appends a clause; a topic holding two kinds is two topics.
 - A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.
 - A slice's `## Question` waiting on a proposal: write its `## Answer` (what was decided).
@@ -41,4 +49,4 @@ update, reject, or reword. The human decides, one question at a time.
 - `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" check` green; commit (`conventions`).
 
 ## 4. End
-Three lines: topics created, updated, rejected. Next: `/mismagent:build`.
+Three lines: kinds created, updated, rejected. Next: `/mismagent:build`.

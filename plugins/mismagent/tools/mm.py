@@ -12,7 +12,7 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/examples/<capability>.md: | id | given | when | then | rule | req | release |, ids EX-<n>
     unique across the files; a `then` containing `(superseded by EX-<n>)` retires the row (no
     acceptance marker required). The old single .mismagent/examples.md is still read, with a warning
-  .mismagent/brief.md: one page (a warning above BRIEF_WORDS): decisions go to decisions/, a
+  .mismagent/brief.md: one page: decisions go to decisions/, a
     release's scope and open questions to releases/<release>.md
   .mismagent/design/**: the human's approved artboards, as images (png, jpg, webp) beside any source
   .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Design: Base: After: Built:,
@@ -28,7 +28,8 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
     (`idle`): the stack is in question until specify's review and its handoff are finished
   .claude/skills/conventions/**.md: the project's conventions skill, written with the human in
-    /mismagent:conventions; every `path` it cites must exist
+    /mismagent:conventions; every `path` it cites must exist; a references/ topic is one kind of
+    code, with ## Where, Uses, Shape, Must, Never, Example (a warning when one is missing)
 Design choices:
 - Dirty tree = `git status` (which honours .gitignore) minus .mismagent/reviews/ and
   .mismagent/design-notes.md (the reviewer writes them after the HEAD it reviewed; `mm land` commits
@@ -78,8 +79,7 @@ EXAMPLES, OLD_EXAMPLES, BRIEF = M + "/examples", M + "/examples.md", M + "/brief
 DESIGN, SHOTS = M + "/design", M + "/shots"
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 NOTES, REVIEWS = M + "/design-notes.md", M + "/reviews"
-BRIEF_WORDS = 600
-TOPIC_WORDS = 300
+TOPIC_SECTIONS = ("Where", "Uses", "Shape", "Must", "Never", "Example")  # a topic is one kind of code
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
 CITED = re.compile(r"`([\w.\-/]+)`")
@@ -531,10 +531,6 @@ def run_check(base=None):
     if OLD_EXAMPLES in example_files():
         warnings.append("%s is one table for the whole product: split it by capability into %s/<capability>.md "
                         "(specify, with the human)" % (OLD_EXAMPLES, EXAMPLES))
-    words = len(read(BRIEF).split())
-    if words > BRIEF_WORDS:
-        warnings.append("%s: %d words > %d: rewrite it as one page; decisions go to decisions/, a release's "
-                        "scope and open questions to releases/<release>.md" % (BRIEF, words, BRIEF_WORDS))
     bare = sorted(os.path.basename(r) for r in walk(".mismagent/decisions")
                   if r.endswith(".md") and not re.search(r"^(#+\s*)?Evidence\b", read(r), re.M | re.I))
     if bare:  # one line, however many: a flood of these pushes the verdict out of a reader's tail
@@ -585,16 +581,39 @@ def run_check(base=None):
             if any(guarded(x) for x in paths) and not by_the_human(paths, base):
                 errors.append("%s: changed since %s (the human's file: specify or conventions changes it)"
                               % (paths[-1], base))
+    incomplete = []
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
-        words = len(read(rel).split())
-        if "/references/" in "/" + rel and words > TOPIC_WORDS:
-            warnings.append("%s: %d words > %d: rewrite the topic as one rule, or split it"
-                            % (rel, words, TOPIC_WORDS))
-        for cited in set(CITED.findall(read(rel))):
+        text = read(rel)
+        if "/references/" in "/" + rel:
+            secs = sections(text)
+            missing = [s for s in TOPIC_SECTIONS if s not in secs]
+            if missing:
+                incomplete.append("%s (%s)" % (os.path.basename(rel), ", ".join(missing)))
+            if "Where" in secs:  # Where names folders to come: only Example cites files that must exist
+                text = secs.get("Example", "")
+        for cited in set(CITED.findall(text)):
             if ("/" in cited or os.path.splitext(cited)[1] in SOURCE_EXT) and not any(
                     os.path.exists(os.path.join(ROOT, d, cited)) for d in ("", SKILL)):
                 errors.append("%s: cites %s, which does not exist (update the skill)" % (rel, cited))
+    if incomplete:  # one line, however many: an old feature-named skill has dozens
+        warnings.append("%d convention topic(s) missing sections (a topic is one kind of code: ## %s): %s"
+                        % (len(incomplete), ", ## ".join(TOPIC_SECTIONS), "; ".join(incomplete)))
     return errors, warnings
+
+def sections(text):
+    """{title: body} of the `## ` headings of a Markdown text, outside fenced code."""
+    secs, title, fence = {}, None, None
+    for line in text.splitlines():
+        m = re.match(r" {0,3}(`{3,}|~{3,})", line)
+        if m:
+            fence = None if fence and m.group(1)[0] == fence else (fence or m.group(1)[0])
+        h = None if fence else re.match(r" {0,3}##[ \t]+(.+?)[ \t]*#*[ \t]*$", line)
+        if h:
+            title = h.group(1)
+            secs.setdefault(title, "")
+        elif title:
+            secs[title] += line + "\n"
+    return secs
 
 def report(errors, warnings):
     for line in ["error: " + e for e in errors] + ["warning: " + w for w in warnings]:

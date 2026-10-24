@@ -25,21 +25,28 @@ out. A guess presented as a fact is a defect.
 Before relying on a capability of the stack, prove it: the docs (fetched) or a ten-line probe you run
 in a scratch folder. Every decision file has an `Evidence:` section listing its sources.
 
-## `ARCHITECTURE.md` (≤ ~600 words, at the repository root) — the map
+## `ARCHITECTURE.md` (at the repository root) — the map
 - **Modules**, what each hides, the **allowed dependency directions** (the domain imports neither the
   interface nor the database).
 - **One owner per table**: only it reads and writes it.
 - **Where code goes**: the one thing a file holds, per kind (a use case, an entity, a screen's state,
   an adapter), named for it. A second thing is a second file: files stay short by construction.
+  Each kind is a topic of the conventions skill.
 - **The error policy**: typed domain errors for the user; one boundary in the interface translates,
   logs and shows them; unexpected errors logged and surfaced, never swallowed; a missing lookup fails.
 - **Glossary**: the domain's words, as the code uses them.
 - **Change log**: each change of a decision or convention, and why.
 
-## The conventions skill (`.claude/skills/conventions/`) — how code is written here
-Never what the product shows or does: what a test could prove is the examples'. The human writes it (`/mismagent:conventions`); you only **propose**, a line in
-`.mismagent/conventions-proposals.md`: `- create|update <topic>: <the rule> — <files> (<why>)`;
-before the code exists, `<files>` is the rule's source (the stack's style guide, a decision).
+## The conventions skill (`.claude/skills/conventions/`) — how each kind of code is written here
+A catalog: one topic per **kind of code** (a message, a controller, a use case, an aggregate, a
+repository, a shared kernel, the tests, security…), never per feature — how a feature works is
+`ARCHITECTURE.md`'s or a decision's. Each topic says *Where* (folder, file name), *Uses* (the
+library), *Shape* (a short skeleton), *Must* and *Never* (what the reviewer checks), *Example* (a
+real file). Never what the product shows or does: what a test could prove is the examples'. The
+human writes it (`/mismagent:conventions`); you only **propose**, a line in
+`.mismagent/conventions-proposals.md`: `- create|update <kind>: Where … · Uses … · Shape … · Must …
+· Never … — <files> (<why>)`; before the code exists, `<files>` is the source (the stack's style
+guide, the library's docs, a decision).
 
 ## MODE: stack — advise, never decide
 You get the **neutral packet** (`.mismagent/stack-reviews/N-input.md`): the problem, the
@@ -52,7 +59,8 @@ Called again with `N-answers.md` (the human's answers, neutral): read it, the pa
    realtime shape; state, its lifetime and what may be lost (transient presence vs durable data,
    a restart, a crash); failure and recovery; where it runs and who operates it; the interface;
    the volumes. Mark the **dominant** force.
-2. **Approaches** before tools: where the state lives, who is authoritative, own server or
+2. **Approaches** before tools: where the state lives (for durable business state, weigh an event
+   log — event sourcing — beside current-state tables), who is authoritative, own server or
    managed service, one process or several — the shapes that fit, and what each costs.
 3. **Options**: two or three complete combinations (runtime, realtime mechanism, persistence,
    deployment), each tied to an approach. Drop first any that breaks a hard constraint (say
@@ -90,18 +98,19 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    tests creates.
 3. Only the minimal entry point, the smoke hook and one trivial test.
 4. Mark the first slice in todo that goes end to end through a real example `Kind: model`.
-5. **The first conventions**, so the model slice starts from good principles: for this stack and
-   this kind of product, the recognized practice — the repo and project layout (folders, tests,
-   scripts), names, file shape, tests, errors — fitted to `ARCHITECTURE.md` and the decisions.
-   One `- now create <topic>:` line each, its source named (the official guide, the framework's
-   documentation, a decision); no source, no rule. How a use case or a screen is shaped waits for
-   the model slice's code.
+5. **The first conventions**, so no builder reinvents how to write a kind of code: list the kinds
+   this architecture will have (*where code goes*, plus the cross-cutting ones: the project layout,
+   tests, errors, security — input checks, authorization, secrets — configuration, logging; for a
+   business domain the tactical DDD kinds), and for each the recognized practice of this stack,
+   fitted to `ARCHITECTURE.md` and the decisions. One `- now create <kind>:` line each, its source
+   named (the official guide, the library's docs, a decision); no source, no rule. The model slice's
+   code gives each kind its *Example* and may update its shape.
 6. `MM gate` green; commit (`skeleton`).
 
 **Adopting existing code** (the code is there, `mm next` says `skeleton`): steps 3–4 are moot.
 `ARCHITECTURE.md` maps the code as it is; the sensors are the build's own tasks; existing decisions
 stay as they are. Read the best-kept code of each kind (a screen, a use case, a test): *where code
-goes* comes from it, and its conventions are proposed now, one `- now ` line each, so the human
+goes* comes from it, and its conventions are proposed now, one `- now ` line per kind, so the human
 decides them before the first slice. A file holding more than one thing is a design note naming the things and
 where each goes: the design pass splits it along the rule, never by line count.
 

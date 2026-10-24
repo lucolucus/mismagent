@@ -13,4 +13,6 @@ Per acceptance criterion:
    Exit: obstacle removed, tests green, obligations met. No obstacle → no change; another aesthetic preference does not reopen the loop.
 4. Next criterion.
 
-Read a reference only for a problem you see. The project's `ARCHITECTURE.md` (layering, error policy) and its `conventions` skill (how code is written there, the model slice) narrow or override these heuristics: their decisions win. `references/review-table.md` is how the code will be reviewed.
+Always, in every project: SOLID, YAGNI, DRY, test first; in a business domain, tactical DDD (aggregates, value objects, domain events).
+
+Read a reference only for a problem you see. The project's `ARCHITECTURE.md` (layering, error policy) and its `conventions` skill (how each kind of code is written there) specialize these principles and override the references' heuristics: their decisions win, never against the principles above. `references/review-table.md` is how the code will be reviewed.

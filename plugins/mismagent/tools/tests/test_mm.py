@@ -820,12 +820,6 @@ class Check(Repo):
         self.assertEqual(code, 0, out)
         self.assertIn(".mismagent/examples.md is one table for the whole product: split it by capability", out)
 
-    def test_brief_beyond_one_page_warns(self):
-        self.write(".mismagent/brief.md", "word " * 601)
-        self.assertIn("brief.md: 601 words > 600: rewrite it as one page", self.check()[1])
-        self.write(".mismagent/brief.md", "word " * 600)
-        self.assertNotIn("brief.md", self.check()[1])
-
     def test_bad_slice_headers(self):
         self.slice("01-cart", kind="epic")
         self.assertError("Kind 'epic'")
@@ -898,13 +892,38 @@ class Check(Repo):
         self.commit()
         self.assertEqual(self.check()[0], 0)
 
-    def test_long_convention_topic_warns(self):
-        self.write(".claude/skills/conventions/references/tests.md", "word " * 301)
+    def test_convention_topic_required_sections(self):
+        topic = ".claude/skills/conventions/references/message.md"
+        self.write(".claude/skills/conventions/references/tabs.md", "# tabs\n\nA feature rule.\n")
+        self.write(topic, "# message\n\n## Where\nsrc/<m>/Contracts/\n\n## Shape\n```\n## Uses\n```\n"
+                          "##\nMust is prose\n## Never-ever\nx\n")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)  # an old feature-named skill warns, never fails
+        self.assertIn("2 convention topic(s) missing sections", out)
+        self.assertIn("message.md (Uses, Must, Never, Example)", out)
+        self.assertIn("tabs.md (Where, Uses, Shape, Must, Never, Example)", out)
+        self.write(topic, "".join("  ## %s ##\nx\n" % s for s in ("Where", "Uses", "Shape", "Must", "Never", "Example")))
+        os.remove(os.path.join(self.dir, ".claude/skills/conventions/references/tabs.md"))
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
-        self.assertIn("references/tests.md: 301 words > 300", out)
-        self.write(".claude/skills/conventions/references/tests.md", "word " * 300)
-        self.assertNotIn("words >", self.check()[1])
+        self.assertNotIn("missing sections", out)
+
+    def test_convention_topic_where_names_folders_to_come(self):
+        topic = ".claude/skills/conventions/references/message.md"
+        body = ("## Where\n`src/contracts/` — one file per message\n## Uses\nnone\n## Shape\n" + "word " * 500 +
+                "\n## Must\n- a CorrelationId\n## Never\n- logic\n## Example\n%s\n")
+        self.write(topic, body % "none yet: the library's docs")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)  # a folder to come, and no word cap
+        self.assertNotIn("words", out)
+        self.write(topic, body % "`src/contracts/order_placed.py`")
+        self.assertError("message.md: cites src/contracts/order_placed.py, which does not exist")
+
+    def test_long_brief_passes(self):
+        self.write(".mismagent/brief.md", "word " * 5000)
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("brief.md", out)
 
     def test_max_file_lines(self):
         self.write("CLAUDE.md", CLAUDE.replace("400", "3"))

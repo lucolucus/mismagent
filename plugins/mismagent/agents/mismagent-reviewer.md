@@ -13,7 +13,8 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 **Serena.** If its MCP tools are available, `activate_project`, then read the diff's symbols and their callers; never edit with it. Confirm empty references with grep.
 
 `MM` below = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`. Read `ARCHITECTURE.md`, the
-`conventions` skill (the topics the diff touches), the review table
+`conventions` skill (the topic of each kind of code the diff touches, and the cross-cutting ones
+that apply: security, errors, tests…), the review table
 (`${CLAUDE_PLUGIN_ROOT}/skills/craft/references/review-table.md`) and the rows of
 `.mismagent/examples/` in scope.
 
@@ -30,14 +31,16 @@ evidence you produce: tests you run, lines you cite. You write only your review 
    spacing, colour, radius, font, a component, an element missing or added — is blocking, with the
    pair and what differs, unless an `## Answer` or a decision accepts it.
 4. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
-   diff against `ARCHITECTURE.md` and the skill; what it does first of its kind is proposed in
-   `.mismagent/conventions-proposals.md`, and each proposal matches the diff and is no behavior
-   (what a test could prove is the examples').
+   diff against `ARCHITECTURE.md` and the skill: each file of the diff is of a kind, and its
+   topic's *Where*, *Uses*, *Shape*, *Must* and *Never*, and those of the cross-cutting topics that
+   apply, are rules you check line by line. A kind with no
+   topic is proposed in `.mismagent/conventions-proposals.md`, and each proposal is a kind of code
+   (never a feature), matches the diff and is no behavior (what a test could prove is the examples').
 5. **Verdict:**
    - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
      allows) without a test pinning it and a `Behavior change:` line in the slice file, a look
-     difference (step 3), a second
+     difference (step 3), a broken *Must* or *Never* of an approved topic that applies, a second
      way of doing what the skill decides, something new not proposed, a proposal that is behavior, a **wrong result** (input the
      program should refuse is accepted, a success it did not prove is reported: fail-open), or the
      diff scores < 4 on a dimension it touches. Every blocking
@@ -53,7 +56,8 @@ You are a fresh pair of eyes on the whole code: do not read the slice reviews.
 2. Score the **whole code** on the table, all seven dimensions, with evidence. `MM shot <release>`
    renders every artboard of the release beside its screen now: each pair that differs is a
    finding (the human sees the pairs at confirm).
-3. `HEALTHY` if every dimension is ≥ 4, the app runs, the suite is green; else `DESIGN-PASS`, naming
+3. `HEALTHY` if every dimension is ≥ 4, the app runs, the suite is green, and no code breaks a *Must*
+   or *Never* of the conventions as decided now; else `DESIGN-PASS`, naming
    the dimensions below 4 and the three worst places.
 
 ## Output

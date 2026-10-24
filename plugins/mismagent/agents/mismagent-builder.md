@@ -16,8 +16,10 @@ rework: fix every blocking finding in it, nothing else.
 
 ## Read first, in this order
 1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.
-2. The `conventions` skill, if it exists — how code is written here: the topics your slice
-   touches, **the model slice** first. It wins over your habits.
+2. The `conventions` skill, if it exists — how each kind of code is written here: the topic of
+   every kind you will write or touch (a message, a controller…) and the cross-cutting topics that
+   apply (security, errors, tests…). Follow their *Where*, *Uses*, *Shape*, *Must* and *Never*, copy
+   their *Example*; they win over your habits.
 3. The `## Progress` of the last three slices in `.mismagent/slices/done/` — what they learned.
 4. Your slice file (path in the dispatch) and the rows of `.mismagent/examples/` it names.
 5. The code you will touch and its tests. Existing code is the first place to look for what you need.
@@ -32,11 +34,12 @@ Load the `craft` skill and follow its loop. For this slice:
 3. **Refactor** — always, before returning: your diff against Beck's four rules and the conventions
    of the skill; the code you touched is left cleaner than you found it, within the slice.
    A problem beyond the slice goes to `.mismagent/design-notes.md` (one line `- where: what, why`).
-4. **Something new** — the first of its kind the skill does not describe (a model slice: all of
-   it): do it well, then propose it in `.mismagent/conventions-proposals.md`: `- create|update
-   <topic>: <the rule> — <your files> (<why>)`. A rule is what no test sees: where code goes, its
-   names, its shape. What a test could prove (the product shows, does, refuses) is behavior: its
-   examples', never a rule. The human decides after the slice.
+4. **Something new** — a kind of code the skill has no topic for, or a topic with no *Example*
+   yet (a model slice: all of them): do it well, then propose it in
+   `.mismagent/conventions-proposals.md`: `- create|update <kind>: Where … · Uses … · Shape … ·
+   Must … · Never … — <your files> (<why>)`. A topic is a kind of code, never a feature. A rule is
+   what no acceptance test sees: where code goes, its names, its shape. What a test could prove (the product
+   shows, does, refuses) is behavior: its examples', never a rule. The human decides after the slice.
 5. **A slice with `Design:`** — its screens look like those artboards. Read each image before
    building: sizes, spacing, colours, radii, fonts and components are the artboard's, never the
    toolkit's default. `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" shot <slice>` renders your

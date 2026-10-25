@@ -43,6 +43,7 @@ the review at HEAD):
 | action | you do |
 |---|---|
 | `skeleton` | dispatch **mismagent-architect** with `MODE: skeleton` |
+| `catalog` | dispatch **mismagent-architect** with `MODE: catalog` and mm's reason |
 | `start` | `MM start <slice>` (it prints the new path), then dispatch **mismagent-builder** with that file; with `proposals`, add `FOR-HUMAN: /mismagent:conventions — <n> proposal(s); the flow goes on, the release waits for them` |
 | `build` · `resume` | dispatch **mismagent-builder** with the slice file (`resume`: say its work was interrupted; it continues from the tree) |
 | `review` | dispatch **mismagent-reviewer** with `MODE: slice` and the slice file |

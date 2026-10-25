@@ -28,8 +28,9 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
     (`idle`): the stack is in question until specify's review and its handoff are finished
   .claude/skills/conventions/**.md: the project's conventions skill, written with the human in
-    /mismagent:conventions; every `path` it cites must exist; a references/ topic is one kind of
-    code, with ## Where, Uses, Shape, Must, Never, Example (a warning when one is missing)
+    /mismagent:conventions; every `path` it cites must exist (a topic's: those under ## Example);
+    a references/ topic is one kind of code, with ## Where, Uses, Shape, Must, Never, Example; a
+    references/practices/ topic is how the work is done, with ## Must, Never
 Design choices:
 - Dirty tree = `git status` (which honours .gitignore) minus .mismagent/reviews/ and
   .mismagent/design-notes.md (the reviewer writes them after the HEAD it reviewed; `mm land` commits
@@ -58,6 +59,10 @@ Design choices:
 - Look is proven like behavior: a slice with Design: is built only with a screen per artboard,
   rendered by the project's `shot` command at that commit (`mm built` runs it and commits them), so
   the reviewer judges the pair, never the diff alone; a release's pairs are rendered by `mm shot`.
+- The conventions skill is a catalog of kinds of code and practices. A topic that is neither (its
+  sections missing), or a done model slice with no skill and no proposal -> `catalog` (the architect
+  proposes the whole catalog as `- now ` lines) before anything else, even a slice in doing: the gate
+  stays red until it lands; once proposed -> `conventions`.
 - Agents only propose conventions. A done model slice and no skill yet -> `conventions` before the
   next slice starts, and so does a `- now ` proposal (a stack migration's transition); the others
   ride on `start` (`proposals`: the human is told, the flow
@@ -80,6 +85,7 @@ DESIGN, SHOTS = M + "/design", M + "/shots"
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 NOTES, REVIEWS = M + "/design-notes.md", M + "/reviews"
 TOPIC_SECTIONS = ("Where", "Uses", "Shape", "Must", "Never", "Example")  # a topic is one kind of code
+PRACTICE_SECTIONS = ("Must", "Never")  # references/practices/: how the work is done here
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
 CITED = re.compile(r"`([\w.\-/]+)`")
@@ -362,6 +368,21 @@ def decide():
     if not os.path.isfile(os.path.join(ROOT, "ARCHITECTURE.md")) or missing:
         return act("skeleton", "CLAUDE.md ## mismagent lacks " + " and ".join(missing) if missing
                    else "no ARCHITECTURE.md at the root")
+    proposals = count_items(PROPOSALS)
+    urgent = sum(1 for line in read(PROPOSALS).splitlines() if line.lstrip().startswith("- now "))
+
+    def decide_them():
+        return act("conventions", "%d proposal(s) in %s: the human decides them" % (proposals, PROPOSALS),
+                   proposals=proposals)
+    has_skill = os.path.isfile(os.path.join(ROOT, SKILL, "SKILL.md"))
+    model_done = any(s["kind"] == "model" and s["state"] == "done" for s in sls)
+    old = old_topics()
+    if old or (model_done and not has_skill and not proposals):  # the gate is red until the catalog lands
+        if urgent:
+            return decide_them()
+        return act("catalog", "%d convention topic(s) are not a kind of code or a practice (%s)"
+                   % (len(old), ", ".join(os.path.basename(r) for r in old[:5]) + (", …" if len(old) > 5 else ""))
+                   if old else "the model slice is done, no conventions skill and no proposal for it")
     for s in [s for s in sls if s["state"] == "doing"][:1]:
         one = dict(slice=s["stem"], path=s["path"])
         if s["blocked"]:
@@ -397,14 +418,7 @@ def decide():
         return act("review", "%d file(s) changed since mm start, built (round %d), no review at HEAD"
                    % (len(work), s["built"]), **one)
 
-    proposals = count_items(PROPOSALS)
-    urgent = sum(1 for line in read(PROPOSALS).splitlines() if line.lstrip().startswith("- now "))
-
-    def decide_them():
-        return act("conventions", "%d proposal(s) in %s: the human decides them" % (proposals, PROPOSALS),
-                   proposals=proposals)
-    if any(s["kind"] == "model" and s["state"] == "done" for s in sls) and not os.path.isfile(
-            os.path.join(ROOT, SKILL, "SKILL.md")):
+    if model_done and not has_skill:
         return act("conventions", "the model slice is done and there is no conventions skill yet")
     if urgent:
         return decide_them()
@@ -581,24 +595,29 @@ def run_check(base=None):
             if any(guarded(x) for x in paths) and not by_the_human(paths, base):
                 errors.append("%s: changed since %s (the human's file: specify or conventions changes it)"
                               % (paths[-1], base))
-    incomplete = []
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
-        text = read(rel)
+        text, practice = read(rel), "/references/practices/" in "/" + rel
         if "/references/" in "/" + rel:
-            secs = sections(text)
-            missing = [s for s in TOPIC_SECTIONS if s not in secs]
+            missing, need = topic_missing(rel), PRACTICE_SECTIONS if practice else TOPIC_SECTIONS
             if missing:
-                incomplete.append("%s (%s)" % (os.path.basename(rel), ", ".join(missing)))
-            if "Where" in secs:  # Where names folders to come: only Example cites files that must exist
-                text = secs.get("Example", "")
+                errors.append("%s: no ## %s (a %s has ## %s)" % (rel, ", ## ".join(missing),
+                              "practice" if practice else "kind of code", ", ## ".join(need)))
+            if not practice:  # Where names folders to come: only Example cites files that must exist
+                text = sections(text).get("Example", "")
         for cited in set(CITED.findall(text)):
             if ("/" in cited or os.path.splitext(cited)[1] in SOURCE_EXT) and not any(
                     os.path.exists(os.path.join(ROOT, d, cited)) for d in ("", SKILL)):
                 errors.append("%s: cites %s, which does not exist (update the skill)" % (rel, cited))
-    if incomplete:  # one line, however many: an old feature-named skill has dozens
-        warnings.append("%d convention topic(s) missing sections (a topic is one kind of code: ## %s): %s"
-                        % (len(incomplete), ", ## ".join(TOPIC_SECTIONS), "; ".join(incomplete)))
     return errors, warnings
+
+def topic_missing(rel):
+    """The sections a topic of the conventions skill lacks: a kind of code, or a practice."""
+    secs = sections(read(rel))
+    need = PRACTICE_SECTIONS if "/references/practices/" in "/" + rel else TOPIC_SECTIONS
+    return [s for s in need if s not in secs]
+
+def old_topics():
+    return [r for r in walk(SKILL) if r.endswith(".md") and "/references/" in "/" + r and topic_missing(r)]
 
 def sections(text):
     """{title: body} of the `## ` headings of a Markdown text, outside fenced code."""

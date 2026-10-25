@@ -378,8 +378,24 @@ class Next(Repo):
         self.slice("02-more", examples="EX-2")
         self.commit()
         d = self.next()
+        self.assertEqual(d["action"], "catalog")
+        self.assertIn("no conventions skill and no proposal", d["reason"])
+        self.write(".mismagent/conventions-proposals.md", "- create errors: Where src/ · Must typed\n")
+        self.commit()
+        d = self.next()
         self.assertEqual(d["action"], "conventions")
         self.assertIn("no conventions skill", d["reason"])
+
+    def test_catalog_before_a_slice_in_doing(self):
+        self.write(".claude/skills/conventions/references/tabs.md", "# tabs\n\nA feature rule.\n")
+        self.slice("01-cart", state="doing", examples="EX-1", extra="Base: abc1234\n")
+        self.commit()
+        d = self.next()
+        self.assertEqual(d["action"], "catalog")
+        self.assertIn("1 convention topic(s) are not a kind of code or a practice (tabs.md)", d["reason"])
+        self.write(".mismagent/conventions-proposals.md", "- now create swift-tab-model: Where Sources/ · Must x\n")
+        self.commit()
+        self.assertEqual(self.next()["action"], "conventions")
 
     def test_second_question_blocks_again(self):
         path = ".mismagent/slices/doing/01-cart.md"
@@ -894,19 +910,19 @@ class Check(Repo):
 
     def test_convention_topic_required_sections(self):
         topic = ".claude/skills/conventions/references/message.md"
-        self.write(".claude/skills/conventions/references/tabs.md", "# tabs\n\nA feature rule.\n")
         self.write(topic, "# message\n\n## Where\nsrc/<m>/Contracts/\n\n## Shape\n```\n## Uses\n```\n"
                           "##\nMust is prose\n## Never-ever\nx\n")
-        code, out, _ = self.check()
-        self.assertEqual(code, 0, out)  # an old feature-named skill warns, never fails
-        self.assertIn("2 convention topic(s) missing sections", out)
-        self.assertIn("message.md (Uses, Must, Never, Example)", out)
-        self.assertIn("tabs.md (Where, Uses, Shape, Must, Never, Example)", out)
+        self.assertError("message.md: no ## Uses, ## Must, ## Never, ## Example (a kind of code has")
         self.write(topic, "".join("  ## %s ##\nx\n" % s for s in ("Where", "Uses", "Shape", "Must", "Never", "Example")))
-        os.remove(os.path.join(self.dir, ".claude/skills/conventions/references/tabs.md"))
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
-        self.assertNotIn("missing sections", out)
+
+    def test_convention_practice_needs_must_and_never(self):
+        practice = ".claude/skills/conventions/references/practices/doubts.md"
+        self.write(practice, "# doubts\n\n## Must\n- a design doubt goes to a second model first\n")
+        self.assertError("practices/doubts.md: no ## Never (a practice has ## Must, ## Never)")
+        self.write(practice, "# doubts\n\n## Must\n- ask\n## Never\n- guess\n")
+        self.assertEqual(self.check()[0], 0)
 
     def test_convention_topic_where_names_folders_to_come(self):
         topic = ".claude/skills/conventions/references/message.md"
@@ -1082,15 +1098,15 @@ class Check(Repo):
     def test_skill_cites_missing_file(self):
         self.write("src/cart.py", "x = 1\n")
         self.write(".claude/skills/conventions/SKILL.md",
-                   "Errors: `references/errors.md`. Model: `src/cart.py`, not `x.y`.\n")
-        self.write(".claude/skills/conventions/references/errors.md",
-                   "See `src/errors.py` and `tests/acceptance/`.\n")
+                   "Errors: `references/practices/errors.md`. Model: `src/cart.py`, not `x.y`.\n")
+        self.write(".claude/skills/conventions/references/practices/errors.md",
+                   "## Must\nSee `src/errors.py` and `tests/acceptance/`.\n## Never\nx\n")
         code, out, _ = self.check()
         self.assertEqual(code, 1, out)
         self.assertIn("cites src/errors.py", out)
         self.assertIn("cites tests/acceptance/", out)
         self.assertNotIn("cart.py", out)
-        self.assertNotIn("references/errors.md,", out)
+        self.assertNotIn("practices/errors.md,", out)
         self.write("src/errors.py", "y = 2\n")
         os.makedirs(os.path.join(self.dir, "tests/acceptance"), exist_ok=True)
         self.assertEqual(self.check()[0], 0)

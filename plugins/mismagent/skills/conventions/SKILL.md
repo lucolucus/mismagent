@@ -17,9 +17,9 @@ No source → it is an **assumption**, said as one.
 ## 1. Read
 The proposals, the skill if it exists, `ARCHITECTURE.md`, and for each proposal the files it cites
 and the last review of its slice. No skill yet: the first version comes from the skeleton's proposals (good principles for this
-stack, each with its source); the model slice's code updates it. A skill written per feature (topics
-without the six sections): its rules stay valid; propose to the human to regroup them by kind, one
-kind at a time, a feature's knowledge moved to `ARCHITECTURE.md` or a decision.
+stack, each with its source); the model slice's code updates it. A **catalog** (the architect's,
+ending `- now replace the skill`): decide it kind by kind; once every line is decided, the skill is
+the decided catalog alone — every old topic removed (git keeps them).
 
 ## 2. One proposal at a time
 Show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
@@ -29,19 +29,23 @@ acceptance test prove it (the product shows, does or refuses something)? Then it
 convention: say so; recommend reject (its examples keep it, a case they miss is for
 `/mismagent:specify`) or a reword to only how the code does it (one seam, one module), citing the `EX-<n>`.
 Then: is it a kind of code? A proposal named after a feature (export, tabs) → reword it into the
-kind it shows (an adapter, a screen's model), or recommend it goes to `ARCHITECTURE.md` or a
-decision. Ask: create,
+kind it shows (an adapter, a screen's model): its rules become that kind's *Must* and *Never*, what
+it tells of the feature goes to the modules of `ARCHITECTURE.md`. How the work is done (doubts to a
+second model, parallel worktrees) is a **practice**. Ask: create,
 update, reject, or reword. The human decides, one question at a time.
 
 ## 3. Write
 - `SKILL.md`: frontmatter `name: conventions`, `description: How code is written in this
-  repository — load before writing or reviewing code here.`; then one line per kind →
-  `references/<kind>.md`: its *Where* in a few words.
-- A reference, one kind (`mm check` warns when a section is missing):
+  repository — load before writing or reviewing code here.`; then `## Kinds`, one line per kind →
+  `references/<kind>.md` (its *Where* in a few words), and `## Practices`, one line each →
+  `references/practices/<practice>.md`. A kind in more than one stack is one topic per stack,
+  `<stack>-<kind>` (`rust-errors`, `swift-errors`).
+- A kind (`mm check` fails when a section is missing):
   `## Where` (folder, file name) · `## Uses` (library, or none) · `## Shape` (a short skeleton) ·
   `## Must` · `## Never` (one checkable rule per point) · `## Example` (backticked paths, `mm check`
   fails on a missing one; until the code exists, the source). An update rewrites the topic, never
   appends a clause; a topic holding two kinds is two topics.
+- A practice: `## Must` · `## Never`, one checkable rule per point (`mm check` fails without them).
 - A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.
 - A slice's `## Question` waiting on a proposal: write its `## Answer` (what was decided).
@@ -49,4 +53,4 @@ update, reject, or reword. The human decides, one question at a time.
 - `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" check` green; commit (`conventions`).
 
 ## 4. End
-Three lines: kinds created, updated, rejected. Next: `/mismagent:build`.
+Three lines: kinds and practices created, updated, rejected. Next: `/mismagent:build`.

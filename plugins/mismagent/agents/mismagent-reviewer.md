@@ -32,8 +32,8 @@ that apply: security, errors, tests…), the review table
    pair and what differs, unless an `## Answer` or a decision accepts it.
 4. **The table**, on the diff: score each dimension the diff touches, with `file:line`. Check the
    diff against `ARCHITECTURE.md` and the skill: each file of the diff is of a kind, and its
-   topic's *Where*, *Uses*, *Shape*, *Must* and *Never*, and those of the cross-cutting topics that
-   apply, are rules you check line by line. A kind with no
+   topic's *Where*, *Uses*, *Shape*, *Must* and *Never*, those of the cross-cutting topics that
+   apply and of the practices, are rules you check line by line. A kind with no
    topic is proposed in `.mismagent/conventions-proposals.md`, and each proposal is a kind of code
    (never a feature), matches the diff and is no behavior (what a test could prove is the examples').
 5. **Verdict:**

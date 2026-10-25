@@ -18,7 +18,7 @@ rework: fix every blocking finding in it, nothing else.
 1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.
 2. The `conventions` skill, if it exists — how each kind of code is written here: the topic of
    every kind you will write or touch (a message, a controller…) and the cross-cutting topics that
-   apply (security, errors, tests…). Follow their *Where*, *Uses*, *Shape*, *Must* and *Never*, copy
+   apply (security, errors, tests…), and the practices. Follow their *Where*, *Uses*, *Shape*, *Must* and *Never*, copy
    their *Example*; they win over your habits.
 3. The `## Progress` of the last three slices in `.mismagent/slices/done/` — what they learned.
 4. Your slice file (path in the dispatch) and the rows of `.mismagent/examples/` it names.

@@ -106,8 +106,8 @@ class Repo(unittest.TestCase):
     def done_release(self, release="R0"):
         """All slices of a release done (with acceptance markers), committed."""
         self.write(".mismagent/slices/done/01-cart.md",
-                   slice_text(release=release, examples="EX-1").replace("Examples", "Base: abc1234\nExamples"))
-        self.acceptance("test_cart.py", "def test_ex1():  # EX-1\n    pass\n")
+                   slice_text(release=release, examples="EX-1, EX-2").replace("Examples", "Base: abc1234\nExamples"))
+        self.acceptance("test_cart.py", "def test_ex1():  # EX-1\n    pass\n\ndef test_ex2():  # EX-2\n    pass\n")
         self.commit("done")
 
     def check(self, *args):
@@ -311,6 +311,21 @@ class Next(Repo):
         self.assertEqual(self.next()["slice"], "02-a")
         self.slice("07-r", kind="refactor", examples="")
         self.assertEqual(self.next()["slice"], "07-r")
+
+    def test_a_fix_starts_first(self):
+        self.slice("02-a")
+        self.slice("07-r", kind="refactor", examples="")
+        self.slice("09-bug", kind="fix", examples="EX-2")
+        self.assertEqual(self.next()["slice"], "09-bug")
+
+    def test_an_example_in_no_slice_holds_the_release(self):
+        self.done_release()
+        self.write(".mismagent/examples/pay.md", "| id | given | when | then | rule | req | release |\n"
+                   "| EX-4 | a cart | pay | paid | R | Q3 | R0 |\n")
+        self.commit()
+        d = self.next()
+        self.assertEqual((d["action"], d["release"]), ("idle", "R0"))
+        self.assertIn("EX-4 in no slice", d["reason"])
 
     def test_skeleton_first(self):
         os.remove(os.path.join(self.dir, "ARCHITECTURE.md"))
@@ -789,6 +804,17 @@ class Tag(Repo):
         self.assertEqual(self.git("status", "--porcelain"), "")
         self.assertEqual(self.mm("tag", "R0")[0], 1)
 
+    def test_tag_refuses_an_example_in_no_slice(self):
+        self.done_release()
+        self.write(".mismagent/examples/pay.md", "| id | given | when | then | rule | req | release |\n"
+                   "| EX-4 | a cart | pay | paid | R | Q3 | R0 |\n")
+        self.review("R0-1", "HEALTHY")
+        self.commit()
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("EX-4 in no slice", err)
+        self.assertEqual(self.git("tag", "-l"), "")
+
     def test_tag_refuses_red_gate(self):
         self.done_release()
         self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: false"))
@@ -807,6 +833,60 @@ class Check(Repo):
     def test_ok(self):
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)
+
+    def release_file(self, rel="R0", questions=""):
+        self.write(".mismagent/releases/%s.md" % rel, "# %s\n\nGoal.\n\n## Open questions\n%s" % (rel, questions))
+
+    def test_release_spec_holds_together(self):
+        self.slice("01-cart", examples="EX-1, EX-2")
+        self.release_file(questions="none\n")
+        code, out, _ = self.check("--release", "R0")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("R0:", out)
+
+    def test_release_spec_problems_are_errors_for_that_release_only(self):
+        self.slice("01-cart", examples="EX-1")
+        self.slice("02-pay", examples="")
+        self.release_file(questions="- what if the card is refused?\n")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)  # a warning, one line a release
+        warned = [l for l in out.splitlines() if l.startswith("warning: R0:")]
+        self.assertEqual(len(warned), 1, out)
+        for fragment in ("EX-2 is in no slice", "02-pay.md: a feature slice names no example",
+                         "1 open question line(s)"):
+            self.assertIn(fragment, warned[0])
+        self.assertIn("warning: R1: EX-3 is in no slice", out)
+        code, out, _ = self.check("--release", "R0")
+        self.assertEqual(code, 1, out)
+        self.assertIn("error: R0: EX-2 is in no slice", out)
+        self.assertNotIn("error: R1", out)
+
+    def test_release_spec_needs_its_release_file(self):
+        self.slice("01-cart", examples="EX-1, EX-2")
+        self.assertError("no .mismagent/releases/R0.md", "--release", "R0")
+        self.assertError("R7: no example and no slice names this release", "--release", "R7")
+
+    def test_superseded_example_needs_no_slice(self):
+        self.write(".mismagent/examples/cart.md", EXAMPLES.replace("| 0 items|", "| 0 items (superseded by EX-1)|")
+                   .replace("|0 items|", "|0 items (superseded by EX-1)|"))
+        self.slice("01-cart", examples="EX-1")
+        self.release_file()
+        code, out, _ = self.check("--release", "R0")
+        self.assertEqual(code, 0, out)
+
+    def test_a_fix_slice_names_its_example(self):
+        self.slice("01-cart", examples="EX-1, EX-2")
+        self.slice("02-bug", kind="fix", examples="")
+        self.release_file()
+        self.assertError("02-bug.md: a fix slice names no example", "--release", "R0")
+
+    def test_tagged_release_is_not_warned(self):
+        self.slice("01-cart", examples="EX-1")
+        self.commit()
+        self.git("tag", "R0")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("warning: R0", out)
 
     def test_malformed_examples(self):
         self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |\n")
@@ -974,6 +1054,8 @@ class Check(Repo):
         self.assertError("tests/acceptance/test_other.py: acceptance test modified", "--base", base)
         self.write(path, self.read(path).replace("Kind: feature", "Kind: refactor"))
         self.assertEqual(self.check("--base", base)[0], 0)  # refactor slices may modify them
+        self.write(path, self.read(path).replace("Kind: refactor", "Kind: fix"))
+        self.assertError("tests/acceptance/test_other.py: acceptance test modified", "--base", base)  # a fix too
         self.write(path, self.read(path).replace("Kind: refactor", "Kind: feature"))
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
         self.git("mv", "tests/acceptance/test_other.py", "tests/acceptance/test_renamed.py")

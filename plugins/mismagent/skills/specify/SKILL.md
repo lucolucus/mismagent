@@ -1,7 +1,7 @@
 ---
 name: specify
-description: 'mismAgent intent: turns a request (a new product, the next release, a change request, a second feature) into approved examples and vertical slices, through an investigative interview with the human. Usage: /mismagent:specify <request or release>'
-argument-hint: '<request or release>'
+description: 'mismAgent intent: turns a request (a new product, the next release, a change, a bug) into approved examples and vertical slices, through an investigative interview with the human. Usage: /mismagent:specify <request or release> | bug <what happens>'
+argument-hint: '<request or release> | bug <what happens>'
 ---
 
 # /mismagent:specify — from a request to examples and slices
@@ -24,6 +24,8 @@ The interview lives on disk, so it survives a new session. Each thing has its fi
 decision that outlives the release: what, why, what else was considered, `Evidence:` the human's
 words). `brief.md` stays one page about the product: rewritten in place, never appended to. Start
 by reading them and resume where they stop.
+
+A **bug** (`bug <what happens>`, or a request that turns out to be one): only §6, the short way.
 
 ## 1. Intake
 Read the request, the requirements, the repository (code? tests? `ARCHITECTURE.md`?
@@ -130,7 +132,7 @@ Write `.mismagent/slices/todo/NN-<name>.md` (NN continues the highest number any
 examples, never a technical layer. The first slice of a new product is the smallest real example
 end to end. Order: risk first, then value. Each file:
 ```
-Kind: feature
+Kind: feature            (model: the first, set by the architect · fix: a bug, §6)
 Release: <RN>
 Examples: EX-3, EX-4
 Design: <artboards its screens look like, if any>
@@ -147,9 +149,31 @@ the release file; nothing left implicit.
 
 ## 5. Close
 No open question left in `releases/<RN>.md`, the human has approved the examples and the slices →
-commit (`specify <RN>`) and end your last message with the line `SPECIFIED <RN>`. Building is
-`/mismagent:build`.
+`MM check --release <RN>` (`MM` = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`): it refuses an
+example of the release in no slice, a feature or fix slice with no example, a missing release file
+or an open question left in it. Red → it is the spec that does not hold together: settle it with
+the human (a slice for the example, or cut it from the release by superseding it; the question
+answered), never by editing around the check. Green → commit (`specify <RN>`) and end your last
+message with the line `SPECIFIED <RN>`. Building is `/mismagent:build`.
+
+## 6. A bug, the short way
+A bug is behavior the human did not agree, seen in the running program. No intake, no stack, no
+release cut: one example and one slice.
+1. **Reproduce it in words**, with real values: what was done, what happened, what should have
+   happened — the human's words; what you can reproduce yourself (a command, a test you run now),
+   with its output as evidence. Unreproduced and the human unsure → it stays a question, never a slice.
+2. **Find it in the examples**:
+   - an example says what should happen and its acceptance test passes → the test does not prove
+     its `then`: the slice names that example, and its test gets strengthened;
+   - no example says → a missing edge: a new example `EX-<n>`, the failing case with its values;
+   - an example says what happened (the rule itself was wrong) → it is a change, not a bug: the
+     new example supersedes it (`(superseded by EX-<n>)`), and the human confirms the new rule.
+3. **One slice** `Kind: fix`, `Examples:` that example, `Release:` the first untagged release (the
+   one being built); when every release is tagged, the next, agreed with the human, with its
+   release file. Two lines: what the user sees once fixed.
+4. **Close** as §5, the commit named `specify fix <name>`; the next `/mismagent:build` starts the
+   fix before any other slice in todo.
 
 ## Never
-Write code or tests; decide a question the human has not answered; specify more than the next
+Write code or tests (a reproduction you run is evidence, not a test you leave); decide a question the human has not answered; specify more than the next
 release; change a delivered example other than by appending `(superseded by …)`.

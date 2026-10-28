@@ -52,6 +52,11 @@ Load the `craft` skill and follow its loop. For this slice:
    separate command, after `EXIT 0`.
 
 A `Kind: model` slice sets the pattern every later one copies: hold it to the highest bar. A
+`Kind: fix` slice proves the bug before it fixes it: its acceptance test, run on the code as Base
+left it, is red for the reason the example names — that run (the command and its failing line)
+goes in `## Progress` before any code changes; then the smallest fix that turns it green. An
+existing test that passed over the bug is strengthened to the example's `then`, never replaced by
+a weaker one; a cause deeper than the slice goes to `design-notes.md`. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path
 without tests gets a characterization test before it is touched; a change of behavior you cannot
 avoid gets a test that pins it and a line `Behavior change:` in the slice file. A **migration**

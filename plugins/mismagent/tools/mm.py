@@ -14,8 +14,10 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     acceptance marker required). The old single .mismagent/examples.md is still read, with a warning
   .mismagent/brief.md: one page: decisions go to decisions/, a
     release's scope and open questions to releases/<release>.md
+  .mismagent/releases/<release>.md: the release's goal and scope; its `## Open questions` empty
+    (or `none`) once specified
   .mismagent/design/**: the human's approved artboards, as images (png, jpg, webp) beside any source
-  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: Release: Examples: Design: Base: After: Built:,
+  .mismagent/slices/{todo,doing,done}/NN-name.md: Kind: (model|feature|fix|refactor) Release: Examples: Design: Base: After: Built:,
     ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
     must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
     lists the artboards the slice's screens must look like (images under .mismagent/design/)
@@ -53,6 +55,12 @@ Design choices:
 - No word cap on .mismagent/ as a whole: each thing has its file (a capability's examples, a
   decision, a release, a slice and its progress), so agents read the files they need, never the
   history whole; what lasts is kept current in the skill and ARCHITECTURE.md, not compacted.
+- A release's spec holds together: each live example is named by a slice, each feature or fix slice
+  names an example, its release file exists with no open question. `check` warns, one line a
+  release; `check --release` refuses (specify closes on it); with all its slices done an example
+  still in no slice holds the release (`idle`) and `tag` refuses it: promised, never built.
+- A fix slice proves a bug with an example, like a feature; it starts before refactor slices, and
+  both before the others.
 - `park` puts a doing slice back in todo only while it has no work since Base (a stack change
   that must come first): half-done work never leaves doing unreviewed. A todo slice whose After:
   slices are not all done is skipped by `next`; when every todo slice waits -> `idle`.
@@ -77,10 +85,12 @@ import shutil
 import subprocess
 import sys
 
-KINDS = ("model", "feature", "refactor")
+KINDS = ("model", "feature", "fix", "refactor")
+PROVING = ("feature", "fix")  # a slice of these kinds proves examples: it names at least one
 STATES = ("todo", "doing", "done")
 M = ".mismagent"
 EXAMPLES, OLD_EXAMPLES, BRIEF = M + "/examples", M + "/examples.md", M + "/brief.md"
+RELEASES = M + "/releases"
 DESIGN, SHOTS = M + "/design", M + "/shots"
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 NOTES, REVIEWS = M + "/design-notes.md", M + "/reviews"
@@ -348,6 +358,27 @@ def release_order(exs, sls):
     tokens = [e["release"] for e in exs] + [s["release"] for s in sorted(sls, key=lambda s: s["num"])]
     return [r for r in dict.fromkeys(tokens) if r]
 
+def spec_problems(rel, exs, sls):
+    """What does not hold together in a release's spec: its examples, its slices, its release file."""
+    mine = [s for s in sls if s["release"] == rel]
+    out = ["%s is in no slice" % ex for ex in uncovered(rel, exs, sls)]
+    out += ["%s: a %s slice names no example" % (s["path"], s["kind"]) for s in mine
+            if s["kind"] in PROVING and not s["examples"]]
+    path = "%s/%s.md" % (RELEASES, rel)
+    if not os.path.isfile(os.path.join(ROOT, path)):
+        out.append("no %s (the release's goal, scope and open questions)" % path)
+    else:
+        body = next((v for k, v in sections(read(path)).items() if k.strip().lower() == "open questions"), "")
+        left = [l for l in body.splitlines() if l.strip().strip("-*_ ").lower() not in ("", "none", "(none)", "—")]
+        if left:
+            out.append("%s: %d open question line(s) under ## Open questions" % (path, len(left)))
+    return out
+
+def uncovered(rel, exs, sls):
+    """The release's live examples that no slice names: behavior promised and never built."""
+    named = {ex for s in sls for ex in s["examples"]}
+    return [e["id"] for e in exs if e["release"] == rel and not e["superseded"] and e["id"] not in named]
+
 def tags():
     return set(git("tag", "-l").split())
 
@@ -428,6 +459,10 @@ def decide():
         mine = [s for s in sls if s["release"] == rel]
         if rel in tagged or not mine or any(s["state"] != "done" for s in mine):
             continue
+        missing = uncovered(rel, exs, sls)
+        if missing:
+            return act("idle", "release %s: %s in no slice, all its slices done: /mismagent:specify %s"
+                       % (rel, ", ".join(missing), rel), release=rel)
         if proposals:  # a release is reviewed against the conventions as decided
             return decide_them()
         revs = reviews(rel)
@@ -445,7 +480,8 @@ def decide():
         return act("release-review", "review %d at HEAD: no HEALTHY/DESIGN-PASS" % r["k"], release=rel)
 
     todo = sorted((s for s in sls if s["state"] == "todo"),
-                  key=lambda s: (s["kind"] != "refactor", s["num"], s["stem"]))
+                  key=lambda s: (("fix", "refactor").index(s["kind"]) if s["kind"] in ("fix", "refactor") else 2,
+                                 s["num"], s["stem"]))
     notes = count_items(NOTES)
     waiting = {s["stem"]: waits_for(s, sls) for s in todo}
     ready = [s for s in todo if not waiting[s["stem"]]]
@@ -537,8 +573,8 @@ def by_the_human(paths, base):
     shas = git("log", "--full-history", "--format=%H", "%s..HEAD" % base, "--", *paths, check=False).split()
     return bool(shas) and all(human_commit(x) for x in shas)
 
-def run_check(base=None):
-    """-> (errors, warnings)."""
+def run_check(base=None, release=None):
+    """-> (errors, warnings); with a release, what does not hold together in its spec is an error."""
     (exs, errors), warnings, marks = examples(), [], markers()
     known, retired = {e["id"] for e in exs}, {e["id"] for e in exs if e["superseded"]}
     sls = slices()
@@ -555,7 +591,7 @@ def run_check(base=None):
         if not re.fullmatch(r"\d+-.+", s["stem"]):
             errors.append("%s: name is not NN-name.md" % where)
         if s["kind"] not in KINDS:
-            errors.append("%s: Kind %r is not model|feature|refactor" % (where, s["kind"]))
+            errors.append("%s: Kind %r is not %s" % (where, s["kind"], "|".join(KINDS)))
         if not s["release"]:
             errors.append("%s: no Release:" % where)
         errors += ["%s: Examples: %r is not EX-<n>" % (where, t) for t in s["bad_examples"]]
@@ -568,6 +604,15 @@ def run_check(base=None):
                        for ex in unmarked(s, marks, retired) if ex in known]
         if s["state"] != "todo" and not s["base"]:
             errors.append("%s: in %s without Base:" % (where, s["state"]))
+    tagged = tags()
+    for rel in release_order(exs, sls):
+        problems = spec_problems(rel, exs, sls)
+        if rel == release:
+            errors += ["%s: %s" % (rel, p) for p in problems]
+        elif problems and rel not in tagged:  # one line a release: the gate's verdict stays in view
+            warnings.append("%s: %s (mm check --release %s)" % (rel, "; ".join(problems), rel))
+    if release and release not in release_order(exs, sls):
+        errors.append("%s: no example and no slice names this release" % release)
     cfg = config()
     limit, allowed = cfg_int(cfg, "max_file_lines", 400), cfg_int(cfg, "suppressions", 0)
     count = 0
@@ -581,7 +626,7 @@ def run_check(base=None):
     if base:
         git("rev-parse", "--verify", "--quiet", base + "^{commit}")
         doing = [s for s in sls if s["state"] == "doing"][:1]
-        if doing and doing[0]["kind"] == "feature":
+        if doing and doing[0]["kind"] in PROVING:
             allowed_ex = set(doing[0]["examples"]) | retired
             changed = git("diff", "--name-status", "-M", "--diff-filter=MR", base, "--", *acceptance())
             for line in changed.splitlines():
@@ -639,7 +684,7 @@ def report(errors, warnings):
         print(line)
 
 def cmd_check(a):
-    errors, warnings = run_check(a.base)
+    errors, warnings = run_check(a.base, a.release)
     report(errors, warnings)
     need(not errors, "check: %d error(s)" % len(errors))
     print("check: ok")
@@ -854,6 +899,9 @@ def cmd_tag(a):
     need(mine, "no slice has Release: %s" % rel)
     open_ = [s["stem"] for s in mine if s["state"] != "done"]
     need(not open_, "%s has slices not done: %s" % (rel, ", ".join(open_)))
+    exs, _ = examples()
+    missing = uncovered(rel, exs, slices())
+    need(not missing, "%s: %s in no slice: specify gives them a slice, or supersedes them" % (rel, ", ".join(missing)))
     need(not dirty(), "the tree is dirty")
     gate()
     drop_drafts()
@@ -885,7 +933,7 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("target", "slice stem or number, or release token")),
     ("tag", "git tag -a <release> (all its slices done, clean tree, gate green)",
      ("release", "release token, e.g. R0")),
-    ("check", "files well formed, acceptance markers, sensors, guarded files", None))
+    ("check", "files well formed, acceptance markers, sensors, guarded files, the releases' specs", None))
 
 def parser():
     p = argparse.ArgumentParser(prog="mm", description="mismAgent 0.7: slice lifecycle, git, counting.")
@@ -905,6 +953,9 @@ def parser():
                     "(default: .mismagent/reviews/<target>.draft.md, removed once used)")
     sub.choices["check"].add_argument("--base", help="also refuse modified acceptance tests and "
                                       "changed requirement files since this ref")
+    sub.choices["check"].add_argument("--release", help="also refuse what does not hold together in this "
+                                      "release's spec: an example in no slice, a feature or fix slice with no "
+                                      "example, no release file or open questions in it (specify, before closing)")
     return p
 
 def main(argv=None):

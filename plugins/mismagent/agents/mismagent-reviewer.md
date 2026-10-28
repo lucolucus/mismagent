@@ -39,7 +39,9 @@ that apply: security, errors, tests…), the review table
 5. **Verdict:**
    - `REWORK` if an example is unproven or failing, the gate or `MM check --base` is red, a new
      suppression appeared, data can be lost, a refactoring slice changes behavior (even as a policy
-     allows) without a test pinning it and a `Behavior change:` line in the slice file, a look
+     allows) without a test pinning it and a `Behavior change:` line in the slice file, a fix slice
+     whose `## Progress` shows no red run of its acceptance test before the fix (the bug never
+     reproduced), a look
      difference (step 3), a broken *Must* or *Never* of an approved topic that applies, a second
      way of doing what the skill decides, something new not proposed, a proposal that is behavior, a **wrong result** (input the
      program should refuse is accepted, a success it did not prove is reported: fail-open), or the

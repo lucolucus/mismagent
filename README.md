@@ -21,7 +21,7 @@ Claude Code only for now: the Codex and pi packagings are suspended in
 
 Then, for a new product: `/mismagent:explore <idea>`, `/mismagent:specify R0`, and
 `/mismagent:build` until it stops for you. For a change: `/mismagent:specify <request>`, then
-`/mismagent:build`.
+`/mismagent:build`. For a bug: `/mismagent:specify bug <what happens>`, then `/mismagent:build`.
 
 ## Why
 
@@ -41,7 +41,8 @@ both honest. Heir of **BMad** and **Agentheim**.
 | You type | What happens |
 |---|---|
 | `/mismagent:explore <idea>` | For a new product: a dialogue on the problem → a one-page brief; a fresh-context challenger tries to kill it (you decide: stop, reshape, go on); an event storm of the domain — the timeline of events, who does what, what can be undone, the hotspots. |
-| `/mismagent:specify <request>` | An interview, not a transcription: real cases with real values, the edges you would not volunteer, each rule restated for you to confirm. Out: the stack decision (first time), the release file, the examples (one file per capability), vertical slices for **the next release only**. |
+| `/mismagent:specify <request>` | An interview, not a transcription: real cases with real values, the edges you would not volunteer, each rule restated for you to confirm. Out: the stack decision (first time), the release file, the examples (one file per capability), vertical slices for **the next release only**. It closes only when the release holds together (`mm check --release`): every example in a slice, every slice proving an example, no open question. |
+| `/mismagent:specify bug <what happens>` | The short way: the bug reproduced in real values, found in the examples (a test too weak, a missing edge, or a wrong rule — then it is a change), one example and one `fix` slice. The builder proves it red before fixing it; it starts before any other slice. |
 | `/mismagent:build` | **One action per call**, decided by the tool `mm`: build a slice (acceptance tests first, TDD, refactoring), review it on the review table, land it, run a design pass, or stop for you. Run it again, or under `/loop`. |
 | `/mismagent:build --confirm R0` | Your confirmation of a release: the tag. |
 | `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): you and the agent go through the agents' proposals one by one — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |

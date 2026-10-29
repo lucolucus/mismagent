@@ -140,7 +140,7 @@ slices done since the last pass, then the code and its tests.
    `.mismagent/slices/`), `RISK:` notes first (a test pins the wrong result, a `Behavior change:`
    line names the fix), then most valuable, at most five: each says what changes, where, the
    rule it serves, how behavior is kept (suite green; characterization tests first where a touched
-   path has none). Aim at the dimensions below 4 — structure (modularity, errors), then duplication.
+   path has none). Aim at the dimensions with blocking findings — structure (modularity, errors), then duplication.
    A **stack change** (`stack N` in the reason, decision `N`): the migration slices, as many as it
    needs, each naming decision `N` — first the sensors and `CLAUDE.md`'s `## mismagent` for the
    new stack, then module by module behind the acceptance tests (each slice names the tests it
@@ -156,7 +156,7 @@ slices done since the last pass, then the code and its tests.
 ## MODE: escalate — a slice stuck after two reworks
 Read the slice, its reviews and the diff. Decide by the standard, `ARCHITECTURE.md` and the skill,
 not by taste. Write `.mismagent/reviews/<slice stem>.draft.md`, then `MM review <slice stem>
-DIRECT|PASS --sha <the HEAD you read>` (PASS also `--scores`), **not committed**: `DIRECT` with
+DIRECT|PASS --sha <the HEAD you read>`, **not committed**: `DIRECT` with
 exactly what the builder must change, or `PASS` with why the finding does not block (residue →
 `design-notes.md`).
 

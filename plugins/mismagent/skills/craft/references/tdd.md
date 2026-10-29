@@ -2,7 +2,7 @@
 
 **When:** choosing the next test, diagnosing a red, judging a brittle or unreadable test.
 
-- Turn one required behavior (an acceptance criterion, an invariant, a `tests_nl` line) into one concrete example.
+- Turn one required behavior (an example `EX-<n>`, an invariant) into one concrete example.
 - Watch it fail **for the expected reason**: a compile error or a broken fixture is not the red you want.
 - Make it pass with the minimum; restructure only on green.
 - Name, arrangement, action and outcome make the verified behavior evident: essential fixtures only, diagnostic assertions (a failure says what broke).

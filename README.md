@@ -71,12 +71,13 @@ important doubt (`NEEDS-HUMAN`) and each release.
   pass, a commit at every green — green read from the exit code, never through a pipe (`mm gate`
   ends on its verdict, so even a `| tail` shows it); a fresh reviewer blocks a quality defect in the diff exactly like a
   functional one.
-- **Every release:** a fresh reviewer scores the whole code from 1 to 5 on the seven
-  dimensions of the [review table](plugins/mismagent/skills/craft/references/review-table.md)
-  (simple design, naming, modularity, duplication, concision, error handling, test quality); if any
-  is below 4, the architect reads the code and queues refactoring slices before the next request. If
-  one is still below 4 after two design passes, you decide whether to confirm the release, with
-  the reason.
+- **Every release:** a fresh reviewer checks the whole code on the seven dimensions of the
+  [review table](plugins/mismagent/skills/craft/references/review-table.md) (simple design, naming,
+  modularity, duplication, concision, error handling, test quality) — findings with their line, no
+  scores; with a finding, the architect reads the code and queues refactoring slices before the
+  next request. If findings remain after two design passes, you decide whether to confirm the
+  release, with the reason. A wrong result noted outside a diff (`- RISK` in the design notes)
+  holds the release review until a design pass turns it into a slice; left there, you decide.
 - **Tools compute, agents judge:** `mm` owns the state, the git moves and every count. Agents
   signal through it, never by hand: `mm built` closes a builder's round (gate green, `Built:`
   written), `mm review` writes the verdict lines and refuses when HEAD moved during the review.

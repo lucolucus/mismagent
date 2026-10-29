@@ -72,12 +72,9 @@ def commits():
     return [dict(zip(("sha", "date", "subject"), l.split("\t", 2))) for l in out.splitlines() if l.count("\t") >= 2]
 
 def review_body(r):
-    text = mm.read(r["path"])
-    scores = re.search(r"^[\s*_>-]*SCORES[\s*_]*:(.*)$", text, re.M | re.I)
-    body = "\n".join(l for l in text.splitlines()
+    body = "\n".join(l for l in mm.read(r["path"]).splitlines()  # SCORES: an older review's header
                      if not re.match(r"^[\s*_>-]*(VERDICT|SHA|SCORES)[\s*_]*:", l, re.I)).strip()
-    return dict(k=r["k"], verdict=r["verdict"], sha=r["sha"][:7], why=r["why"], body=body,
-                scores=dict(re.findall(r"([\w-]+)\s*=\s*([0-9-])", scores.group(1))) if scores else {})
+    return dict(k=r["k"], verdict=r["verdict"], sha=r["sha"][:7], body=body)
 
 def old_progress():
     """-> {slice stem: [notes]} from the single progress.md of older projects (`## <stem> — date`)."""

@@ -6,12 +6,12 @@ user-invocable: false
 
 # craft
 
-Per acceptance criterion:
-1. **RED** — one failing test from the criterion → `references/tdd.md` when choosing/diagnosing a test.
+Per example of the slice (`EX-<n>`), and per invariant it needs:
+1. **RED** — one failing test from it → `references/tdd.md` when choosing/diagnosing a test.
 2. **GREEN** — the minimum that passes → `references/frugality.md` when choosing reuse/dependency/abstraction.
 3. **REFACTOR** — only the code this change touched, tests green → `references/simple-design.md` to judge; then, for the concrete obstacle: `references/clean-code.md` (names/flow/comments) · `references/solid.md` (responsibilities/dependencies/substitutability) · `references/refactoring.md` (safe transformation).
    Exit: obstacle removed, tests green, obligations met. No obstacle → no change; another aesthetic preference does not reopen the loop.
-4. Next criterion.
+4. The next one.
 
 Always, in every project: SOLID, YAGNI, DRY, test first; in a business domain, tactical DDD (aggregates, value objects, domain events).
 

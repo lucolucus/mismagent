@@ -109,7 +109,7 @@
   <rect class="youbox" x="380" y="512" width="200" height="42" rx="21"/>
   <text class="ink" x="480" y="539" font-size="17" font-weight="600" text-anchor="middle">release R0 · R1 · …</text>
   <circle class="you" cx="580" cy="512" r="6"/>
-  <text class="soft" x="480" y="580" font-size="14" text-anchor="middle">a fresh reviewer scores seven dimensions 1–5; any below 4, a design pass;</text>
+  <text class="soft" x="480" y="580" font-size="14" text-anchor="middle">a fresh reviewer checks seven dimensions; a finding, a design pass;</text>
   <text class="soft" x="480" y="598" font-size="14" text-anchor="middle">still below after two, you decide</text>
 
   <!-- Legend -->

@@ -60,8 +60,10 @@ comes one release at a time, in `/mismagent:specify`.
 
 ## 4. Close
 Ask the human for a first release cut: which part of the timeline, end to end, is the smallest thing
-worth using. Write it in `.mismagent/releases/R0.md` (goal, in scope, out of scope). Commit (`explore`) and end your last
-message with `EXPLORED`. Next: `/mismagent:specify R0`, which turns that part of the timeline into
+worth using. Write it in `.mismagent/releases/<RN>.md` (goal, in scope, out of scope): `R0` for a
+new product; for a new part of an existing one, the first number no file in `releases/` and no tag
+uses — a release file already there is never rewritten. Commit (`explore`) and end your last
+message with `EXPLORED`. Next: `/mismagent:specify <RN>`, which turns that part of the timeline into
 examples and slices, and the hotspots into its first questions.
 
 ## Never

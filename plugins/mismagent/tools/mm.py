@@ -22,9 +22,10 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
     lists the artboards the slice's screens must look like (images under .mismagent/design/)
   .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`
-  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, SCORES: — written by `mm review`
+  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
-  .mismagent/design-notes.md: one note per `- ` line · <acceptance>/**: markers EX-<n> (not E501)
+  .mismagent/design-notes.md: one note per `- ` line, `- RISK` a wrong result outside a diff ·
+    <acceptance>/**: markers EX-<n> (not E501)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic;
     `- now ` = decided before the next slice starts)
   .mismagent/stack-reviews/N-status.md: `state:` open|decided|done — any not done holds `next`
@@ -42,9 +43,11 @@ Design choices:
   no review at HEAD: `review` only if the slice's `Built:` is this round (reviews so far + 1),
   else `resume` — a builder cut before `mm built` has not finished. `mm built` runs the gate first,
   so no builder returns over a red gate.
-- Verdicts are checked against SCORES (`name=<n>`, `-` = not assessed): PASS with a score < 4 counts
-  as REWORK, HEALTHY with a score < 4 as DESIGN-PASS. The architect answers an escalation with
-  VERDICT: DIRECT (-> `rework` following it) or PASS; a REWORK after a DIRECT -> `stuck` (human).
+- The verdict is the reviewer's, made by its blocking findings: no scores. The architect answers an
+  escalation with VERDICT: DIRECT (-> `rework` following it) or PASS; a REWORK after a DIRECT ->
+  `stuck` (human).
+- A release with an open `- RISK` note is not reviewed: `design-pass` first (a risk leaves only as a
+  slice). One still open after the last design pass touched the notes -> `idle`: the human decides.
 - A DESIGN-PASS release review at HEAD asks for a pass unless two DESIGN-PASS reviews of that
   release came before it (two passes ran): then `confirm`.
 - check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
@@ -234,8 +237,6 @@ def find_slice(arg, sls):
     need(len(hits) == 1, "slice %r: %s" % (arg, "not found" if not hits else "ambiguous"))
     return hits[0]
 
-DEMOTE = {"PASS": "REWORK", "HEALTHY": "DESIGN-PASS"}
-
 def dep(ref, sls):
     """The slice an After: reference names (its number or its stem), or None."""
     hits = [s for s in sls if s["stem"] == ref or (ref.isdigit() and s["num"] == int(ref))]
@@ -253,8 +254,7 @@ def open_stack_reviews():
         re.M | re.I)]
 
 def reviews(prefix):
-    """-> [{k, verdict, sha, path, why}] of <prefix>-<k>.md sorted by k; `verdict` is the one that
-    counts: a PASS/HEALTHY with an assessed score < 4 is demoted (REWORK/DESIGN-PASS), `why` says so."""
+    """-> [{k, verdict, sha, path}] of <prefix>-<k>.md sorted by k."""
     out = []
     for name in ls(REVIEWS):
         m = re.fullmatch(re.escape(prefix) + r"-(\d+)\.md", name)
@@ -264,15 +264,8 @@ def reviews(prefix):
         text = read(path)
         v = re.search(r"^[\s*_>-]*VERDICT[\s*_]*:[\s*_]*([A-Za-z-]+)", text, re.M | re.I)
         sha = re.search(r"^[\s*_>-]*SHA[\s*_]*:[\s*_`]*([0-9a-fA-F]+)", text, re.M | re.I)
-        scores = re.search(r"^[\s*_>-]*SCORES[\s*_]*:(.*)$", text, re.M | re.I)
-        low = re.findall(r"([\w-]+)\s*=\s*([0-3])(?!\d)", scores.group(1)) if scores else []
-        r = {"k": int(m.group(1)), "verdict": v.group(1).upper() if v else "", "path": path,
-             "sha": sha.group(1).lower() if sha else "", "why": ""}
-        if low and r["verdict"] in DEMOTE:
-            r["why"] = "%s with %s < 4 counts as %s" % (r["verdict"], " ".join("=".join(x) for x in low),
-                                                       DEMOTE[r["verdict"]])
-            r["verdict"] = DEMOTE[r["verdict"]]
-        out.append(r)
+        out.append({"k": int(m.group(1)), "verdict": v.group(1).upper() if v else "", "path": path,
+                    "sha": sha.group(1).lower() if sha else ""})
     return sorted(out, key=lambda r: r["k"])
 
 def at_head(revs, sha):
@@ -280,7 +273,7 @@ def at_head(revs, sha):
     return hits[-1] if hits else None
 
 def said(r, text):
-    return "review %d %s" % (r["k"], r["why"] or text)
+    return "review %d %s" % (r["k"], text)
 
 def dirty():
     for line in git("status", "--porcelain", "--untracked-files=all").splitlines():
@@ -379,6 +372,15 @@ def uncovered(rel, exs, sls):
     named = {ex for s in sls for ex in s["examples"]}
     return [e["id"] for e in exs if e["release"] == rel and not e["superseded"] and e["id"] not in named]
 
+def passed_since_notes():
+    """True when a design pass committed since the design notes last changed (or was that change)."""
+    last = git("log", "-1", "--format=%H", "--", NOTES, check=False).strip()
+    if not last:
+        return False
+    subjects = git("log", "--format=%s", "%s..HEAD" % last, check=False).splitlines()
+    subjects.append(git("log", "-1", "--format=%s", last, check=False).strip())
+    return any(x.startswith("design pass") for x in subjects)
+
 def tags():
     return set(git("tag", "-l").split())
 
@@ -465,6 +467,14 @@ def decide():
                        % (rel, ", ".join(missing), rel), release=rel)
         if proposals:  # a release is reviewed against the conventions as decided
             return decide_them()
+        risks = [line for line in read(NOTES).splitlines() if line.lstrip().startswith("- RISK")]
+        if risks:  # a known wrong result is fixed or ruled out before the release is judged
+            if passed_since_notes():
+                return act("idle", "release %s: %d RISK note(s) still in %s after the design pass: the human "
+                           "decides — a slice for it, or the note removed with why in .mismagent/decisions/"
+                           % (rel, len(risks), NOTES), release=rel)
+            return act("design-pass", "release %s: %d RISK note(s) in %s: a risk leaves only as a slice"
+                       % (rel, len(risks), NOTES), release=rel)
         revs = reviews(rel)
         r = at_head(revs, sha)
         if not r:
@@ -822,8 +832,6 @@ def cmd_shot(a):
     shoot(target, refs)
     return 0
 
-SCORE_NAMES = ("simple", "naming", "modularity", "duplication", "concision", "errors", "tests")
-
 def cmd_review(a):
     v, sls = a.verdict.upper(), slices()
     try:
@@ -841,13 +849,6 @@ def cmd_review(a):
     need(len(a.sha) >= 7 and sha.startswith(a.sha.lower()),
          "HEAD moved since you read it (%s, now %s): review again what is there now" % (a.sha, sha[:12]))
     need(not dirty(), "the tree is dirty: a review covers committed code only")
-    scores = dict(re.findall(r"([\w-]+)\s*=\s*(\S+)", a.scores or ""))
-    bad = [k for k in scores if k not in SCORE_NAMES] + ["%s=%s" % kv for kv in scores.items()
-                                                       if kv[1] not in ("1", "2", "3", "4", "5", "-")]
-    need(not bad, "scores: %s (names %s, values 1-5 or -)" % (", ".join(bad), " ".join(SCORE_NAMES)))
-    need(v == "DIRECT" or scores, "%s needs --scores" % v)
-    low = ["%s=%s" % kv for kv in scores.items() if kv[1] in ("1", "2", "3")]
-    need(not (low and v in DEMOTE), "%s with %s < 4 is a %s" % (v, " ".join(low), DEMOTE.get(v, "")))
     draft = os.path.join(ROOT, REVIEWS, "%s.draft.md" % target)  # under reviews/: it leaves the tree clean
     src = a.body or draft  # --body is the caller's path, relative to where mm runs
     try:
@@ -855,7 +856,7 @@ def cmd_review(a):
             body = f.read()
     except (OSError, UnicodeDecodeError):
         body = ""
-    need(body.strip(), "%s is missing or empty: the scores table and the findings go there"
+    need(body.strip(), "%s is missing or empty: the checklist and the findings go there"
          % (a.body or os.path.relpath(draft, ROOT)))
     if not a.body:  # a draft left by an earlier, refused attempt is not this review
         need(os.path.getmtime(draft) >= int(git("log", "-1", "--format=%ct").strip()),
@@ -863,9 +864,8 @@ def cmd_review(a):
     k = max((r["k"] for r in reviews(target)), default=0) + 1
     rel = "%s/%s-%d.md" % (REVIEWS, target, k)
     os.makedirs(os.path.join(ROOT, REVIEWS), exist_ok=True)
-    line = " ".join("%s=%s" % (n, scores.get(n, "-")) for n in SCORE_NAMES)
     with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
-        f.write("VERDICT: %s\nSHA: %s\nSCORES: %s\n\n%s\n" % (v, sha, line, body.strip()))
+        f.write("VERDICT: %s\nSHA: %s\n\n%s\n" % (v, sha, body.strip()))
     if not a.body:
         os.remove(draft)
     print(rel)
@@ -875,8 +875,7 @@ def cmd_land(a):
     s = find_slice(a.slice, slices())
     need(s["state"] == "doing", "%s is in %s, not doing" % (s["stem"], s["state"]))
     r = at_head(reviews(s["stem"]), head())
-    need(r and r["verdict"] == "PASS", "no PASS review of %s at HEAD%s"
-         % (s["stem"], " (%s)" % r["why"] if r and r["why"] else ""))
+    need(r and r["verdict"] == "PASS", "no PASS review of %s at HEAD" % s["stem"])
     need(not dirty(), "the tree is dirty: the PASS does not cover uncommitted changes")
     exs, _ = examples()
     missing = unmarked(s, markers(), {e["id"] for e in exs if e["superseded"]})
@@ -923,7 +922,7 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("built", "the builder is done: gate green, write Built: <round>, commit",
      ("slice", "slice stem (NN-name), its number, or its path")),
-    ("review", "write the next review file from its draft (HEAD unchanged since --sha, scores well formed)",
+    ("review", "write the next review file from its draft (HEAD unchanged since --sha)",
      ("target", "slice stem or number, or release token")),
     ("land", "doing -> done, commit (PASS at HEAD, clean tree, gate green)",
      ("slice", "slice stem (NN-name), its number, or its path")),
@@ -948,8 +947,7 @@ def parser():
     rv = sub.choices["review"]
     rv.add_argument("verdict", help="PASS | REWORK | DIRECT (a slice), HEALTHY | DESIGN-PASS (a release)")
     rv.add_argument("--sha", required=True, help="the HEAD you read when the review began")
-    rv.add_argument("--scores", help='"simple=4 naming=5 ..." (- = not assessed)')
-    rv.add_argument("--body", help="file with the scores table and the findings "
+    rv.add_argument("--body", help="file with the checklist and the findings "
                     "(default: .mismagent/reviews/<target>.draft.md, removed once used)")
     sub.choices["check"].add_argument("--base", help="also refuse modified acceptance tests and "
                                       "changed requirement files since this ref")

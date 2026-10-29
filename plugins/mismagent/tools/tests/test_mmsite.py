@@ -83,7 +83,7 @@ class Page(Project):
         s = self.data()["slices"][0]
         self.assertEqual((s["stem"], s["state"], s["examples"]), ("01-open", "done", ["EX-1"]))
         self.assertIn("done it", s["progress"])
-        self.assertEqual(s["reviews"][0]["scores"], {"simple": "5", "naming": "4"})
+        self.assertEqual(s["reviews"][0]["body"], "fine")  # an older review's SCORES line is not shown
         self.assertTrue(s["landed"])
 
     def test_requirements_link_to_examples_slices_and_tests(self):

@@ -79,9 +79,9 @@ class Repo(unittest.TestCase):
     def slice(self, name, state="todo", **kw):
         self.write(".mismagent/slices/%s/%s.md" % (state, name), slice_text(**kw))
 
-    def review(self, name, verdict, sha=None, scores="simple=4 naming=-"):
+    def review(self, name, verdict, sha=None):
         self.write(".mismagent/reviews/%s.md" % name,
-                   "# Review\nVERDICT: %s\nSHA: %s\nSCORES: %s\n" % (verdict, (sha or self.head())[:9], scores))
+                   "# Review\nVERDICT: %s\nSHA: %s\n" % (verdict, (sha or self.head())[:9]))
 
     def work(self, stem="01-cart", code="x = 1\n", msg="code"):
         """Builder work: code plus the progress entry, committed."""
@@ -441,23 +441,36 @@ class Next(Repo):
         self.assertEqual((d["action"], d["path"], d["review"]),
                          ("land", ".mismagent/slices/doing/01-cart.md", ".mismagent/reviews/01-cart-1.md"))
 
-    def test_low_score_demotes_pass(self):
+    def test_an_old_scores_line_is_ignored(self):
         self.started()
-        self.work()
-        self.review("01-cart-1", "PASS", scores="simple=4 naming=3 errors=-")
-        d = self.next()
-        self.assertEqual((d["action"], d["k"]), ("rework", 1))
-        self.assertIn("naming=3 < 4 counts as REWORK", d["reason"])
-        code, _, err = self.mm("land", "01-cart")
-        self.assertEqual(code, 1)
-        self.assertIn("naming=3", err)
+        sha = self.work()
+        self.write(".mismagent/reviews/01-cart-1.md", "VERDICT: PASS\nSHA: %s\nSCORES: naming=3\n" % sha[:9])
+        self.assertEqual(self.next()["action"], "land")
 
-    def test_low_score_demotes_healthy(self):
+    def test_a_risk_holds_the_release_review(self):
         self.done_release()
-        self.review("R0-1", "HEALTHY", scores="simple=5 layering=2")
+        self.review("R0-1", "HEALTHY")
+        self.write(".mismagent/design-notes.md", "- src/x.py: long\n- RISK: src/cart.py:3: a negative total is accepted\n")
+        self.commit("mm land 02-pay")
         d = self.next()
-        self.assertEqual(d["action"], "design-pass")
-        self.assertIn("counts as DESIGN-PASS", d["reason"])
+        self.assertEqual((d["action"], d["release"]), ("design-pass", "R0"))
+        self.assertIn("1 RISK note(s)", d["reason"])
+        self.commit("design pass")  # the architect left the risk where it was
+        d = self.next()
+        self.assertEqual((d["action"], d["release"]), ("idle", "R0"))
+        self.assertIn("the human decides", d["reason"])
+        self.write(".mismagent/design-notes.md", "- src/x.py: long\n")
+        self.commit("design pass")
+        self.review("R0-2", "HEALTHY")
+        self.assertEqual(self.next()["action"], "confirm")
+
+    def test_a_risk_noted_after_a_design_pass_asks_for_another(self):
+        self.done_release()
+        self.write(".mismagent/design-notes.md", "- note\n")
+        self.commit("design pass")
+        self.write(".mismagent/design-notes.md", "- note\n- RISK (slice 52): a total is wrong\n")
+        self.commit("mm land 03-more")
+        self.assertEqual(self.next()["action"], "design-pass")
 
     def test_direct_then_stuck(self):
         self.started()
@@ -483,7 +496,7 @@ class Next(Repo):
         for k in (1, 2, 3):
             self.work(code="x = %d\n" % k)
             self.review("01-cart-%d" % k, "REWORK")
-        self.review("01-cart-4", "PASS", scores="")
+        self.review("01-cart-4", "PASS")
         self.assertEqual(self.next()["action"], "land")
 
     def test_idle(self):
@@ -532,7 +545,7 @@ class StartLand(Repo):
         self.assertIn("EX-1 has no acceptance marker under tests/acceptance/", err)
         self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/01-cart.md")))
 
-    def body(self, text="| dimension | score |\n\nNo blocking finding.\n"):
+    def body(self, text="| dimension | checked |\n\nNo blocking finding.\n"):
         self.write(".mismagent/reviews/01-cart.draft.md", text)
         return os.path.join(self.dir, ".mismagent/reviews/01-cart.draft.md")
 
@@ -540,13 +553,11 @@ class StartLand(Repo):
         self.started()
         sha = self.work()
         self.body()
-        code, out, err = self.mm("review", "01-cart", "pass", "--sha", sha[:9],
-                                 "--scores", "simple=4 naming=5 tests=4")
+        code, out, err = self.mm("review", "01-cart", "pass", "--sha", sha[:9])
         self.assertEqual(code, 0, err)
         self.assertEqual(out.strip(), ".mismagent/reviews/01-cart-1.md")
         text = self.read(".mismagent/reviews/01-cart-1.md")
-        self.assertTrue(text.startswith("VERDICT: PASS\nSHA: %s\nSCORES: simple=4 naming=5 modularity=- "
-                                        "duplication=- concision=- errors=- tests=4\n" % sha), text)
+        self.assertTrue(text.startswith("VERDICT: PASS\nSHA: %s\n\n" % sha), text)
         self.assertIn("No blocking finding.", text)
         self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart.draft.md")))
         self.assertEqual(self.next()["action"], "land")
@@ -556,17 +567,14 @@ class StartLand(Repo):
         sha = self.work()
         def review(*args):
             return self.mm("review", *args, "--body", self.body())
-        self.assertIn("HEAD moved", review("01-cart", "PASS", "--sha", "abcdef1", "--scores", "simple=4")[2])
-        self.assertIn("is a REWORK", review("01-cart", "PASS", "--sha", sha, "--scores", "simple=3")[2])
-        self.assertIn("takes PASS | REWORK | DIRECT", review("01-cart", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
-        self.assertIn("needs --scores", review("01-cart", "REWORK", "--sha", sha)[2])
-        self.assertIn("scores: speed", review("01-cart", "REWORK", "--sha", sha, "--scores", "speed=4")[2])
+        self.assertIn("HEAD moved", review("01-cart", "PASS", "--sha", "abcdef1")[2])
+        self.assertIn("takes PASS | REWORK | DIRECT", review("01-cart", "HEALTHY", "--sha", sha)[2])
         self.assertIn("missing or empty", self.mm("review", "01-cart", "REWORK", "--sha", sha,
-                                                  "--scores", "simple=3", "--body", "nope.md")[2])
-        self.assertEqual(review("01-cart", "DIRECT", "--sha", sha)[0], 0)  # the architect: no scores
+                                                  "--body", "nope.md")[2])
+        self.assertEqual(review("01-cart", "DIRECT", "--sha", sha)[0], 0)
         self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart-2.md")))
-        self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha, "--scores", "simple=4")[2])
-        self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha, "--scores", "simple=3")[0], 0)
+        self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha)[2])
+        self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha)[0], 0)
 
     def test_land_never_commits_a_draft(self):
         self.started()

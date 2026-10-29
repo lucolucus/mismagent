@@ -167,12 +167,8 @@ h3.group { font: 700 16px var(--display); margin: 22px 0 10px; }
 .round summary { padding: 10px 14px; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; list-style: none; }
 .round summary::-webkit-details-marker { display: none; }
 .round summary .k { font-weight: 600; width: 64px; }
-.round summary .low { margin-left: auto; font-size: 12px; color: var(--bad-ink); }
 .round[open] { background: var(--tint); }
 .round > div { padding: 0 14px 12px; }
-.grid-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px 14px; font-size: 12px; font-variant-numeric: tabular-nums; margin: 4px 0 8px; }
-.grid-scores span { display: flex; justify-content: space-between; gap: 8px; color: var(--soft); }
-.grid-scores b { color: var(--ink); } .grid-scores b.low { color: var(--bad-ink); }
 table { border-collapse: collapse; width: 100%; background: var(--surface); }
 th, td { border-bottom: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
 th { font-size: 11px; color: var(--faint); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; position: sticky; top: 0; background: var(--surface); }
@@ -207,7 +203,6 @@ dl.kv dt { color: var(--faint); } dl.kv dd { margin: 0; min-width: 0; }
 details { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
 details summary { padding: 8px 12px; cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 details > div { padding: 0 14px 10px; }
-.scores { display: flex; flex-wrap: wrap; gap: 4px; }
 .gwt { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 4px 10px; margin: 10px 0; }
 .gwt b { color: var(--faint); font-weight: 600; font-size: 12px; }
 .log { font-family: var(--mono); font-size: 12px; }
@@ -495,10 +490,8 @@ function sliceView(stem) {
 }
 function rounds(revs) {
   return `<div class="rounds">` + revs.map((r, i) => {
-    const low = Object.entries(r.scores).filter(([, v]) => v !== "-" && +v < 4).map(([k, v]) => `${k} ${v}`).join(" · ");
-    return `<details class="round" ${i === revs.length - 1 ? "open" : ""}><summary><span class="k">round ${r.k}</span>${verdictChip(r.verdict)}<code style="color:var(--faint)">${esc(r.sha)}</code>${low ? `<span class="low">${esc(low)}</span>` : ""}</summary>
-      <div><div class="grid-scores">${Object.entries(r.scores).map(([k, v]) => `<span>${esc(k)}<b class="${v !== "-" && +v < 4 ? "low" : ""}">${v === "-" ? "–" : esc(v)}</b></span>`).join("")}</div>
-      ${r.why ? `<p class="pill warn">${esc(r.why)}</p>` : ""}${md(r.body)}</div></details>`;
+    return `<details class="round" ${i === revs.length - 1 ? "open" : ""}><summary><span class="k">round ${r.k}</span>${verdictChip(r.verdict)}<code style="color:var(--faint)">${esc(r.sha)}</code></summary>
+      <div>${md(r.body)}</div></details>`;
   }).join("") + `</div>`;
 }
 function parView(s) {

@@ -55,7 +55,7 @@ the review at HEAD):
 | `release-review` | dispatch a **fresh mismagent-reviewer** with `MODE: release` and the release |
 | `design-pass` | dispatch **mismagent-architect** with `MODE: design-pass`, the release and the reason |
 | `conventions` | print `NEEDS-HUMAN: /mismagent:conventions` with mm's reason, and stop |
-| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and scores (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any), and stop |
+| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any), and stop |
 | `idle` | report the reason (e.g. the next release needs `/mismagent:specify`) and stop |
 
 Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`

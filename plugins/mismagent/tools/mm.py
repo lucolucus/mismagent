@@ -24,9 +24,11 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     changes no behavior: one not done that declares `Behavior change:` is refused) Release: Examples: Design: Base: After: Built:,
     ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
     must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
-    lists the artboards the slice's screens must look like (images under .mismagent/design/)
+    lists the artboards the slice's screens must look like (images under .mismagent/design/);
+    Friction: <round>: <category>: <note> — one line per round, written by `mm built`
   .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`
-  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA: — written by `mm review`
+  .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, LOOK: (a release: the
+    artboard pairs that differ), FRICTION: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line (a numbered or paragraph line is warned: it
     escapes the count), `- RISK` a wrong result outside a diff; over NOTES_LIMIT with no refactor
@@ -39,7 +41,10 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   .claude/skills/conventions/**.md: the project's conventions skill, written with the human in
     /mismagent:conventions; every `path` it cites must exist (a topic's: those under ## Example);
     a references/ topic is one kind of code, with ## Where, Uses, Shape, Must, Never, Example; a
-    references/practices/ topic is how the work is done, with ## Must, Never
+    references/practices/ topic is how the work is done, with ## Must, Never. SKILL.md lists each
+    kind under one of `## Kinds — local`, `## Kinds — cross-cutting`, `## Kinds — tests` (what the
+    release review checks: hotspots, one traced path per topic, the gate running the tests); a
+    plain `## Kinds` is warned, not refused
 Design choices:
 - Dirty tree = `git status` (which honours .gitignore) minus .mismagent/reviews/,
   .mismagent/design-notes.md and .mismagent/conventions-proposals.md (the reviewer writes them after
@@ -89,6 +94,12 @@ Design choices:
   sections missing), or a done model slice with no skill and no proposal -> `catalog` (the architect
   proposes the whole catalog as `- now ` lines) before anything else, even a slice in doing: the gate
   stays red until it lands; once proposed -> `conventions`.
+- Friction is the method's, never the code's: `mm built` requires `--friction "<category>: <note>"`
+  or `none` (validated before the gate), `mm review` takes it optionally; `mm log` counts them and
+  reads rounds, doubts and wall-clock of the landed slices from the files and git: no state file.
+- Look is accepted on the record: a release review names the artboard pairs that differ (`--look`,
+  required when a slice of the release has Design:); `tag` needs `--why` for those as for a
+  DESIGN-PASS — a look difference alone is no DESIGN-PASS.
 - Agents only propose conventions. A done model slice and no skill yet -> `conventions` before the
   next slice starts, and so does a `- now ` proposal (a stack migration's transition); the others
   ride on `start` (`proposals`: the human is told, the flow
@@ -118,6 +129,10 @@ TOPIC_SECTIONS = ("Where", "Uses", "Shape", "Must", "Never", "Example")  # a top
 PRACTICE_SECTIONS = ("Must", "Never")  # references/practices/: how the work is done here
 SKILL, PROPOSALS = ".claude/skills/conventions", M + "/conventions-proposals.md"
 STACK_REVIEWS = M + "/stack-reviews"
+KIND_SECTION = re.compile(r"kinds\s*[—–-]+\s*(local|cross-cutting|tests)", re.I)
+TOPIC_LINK = re.compile(r"references/[\w./-]+\.md")
+FRICTION = ("spec", "tool", "conventions", "env", "context", "review")  # the method's, never the code's
+FRICTION_WORDS = 15
 CITED = re.compile(r"`([\w.\-/]+)`")
 IGNORED_DIRTY = (REVIEWS + "/", NOTES, PROPOSALS, SHOTS + "/")
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
@@ -206,7 +221,8 @@ def examples():
 def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
-         "examples": [], "bad_examples": [], "design": [], "base": "", "after": [], "built": 0}
+         "examples": [], "bad_examples": [], "design": [], "base": "", "after": [], "built": 0,
+         "friction": [], "answers": 0}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -215,6 +231,10 @@ def parse_slice(state, name):
         h = re.match(r"^##\s+(.*)$", st)
         if h:
             sections.append([h.group(1).strip().lower(), []])
+            continue
+        fm = re.match(r"^friction\s*:\s*(\d+)\s*:\s*(.+)$", st.lstrip("-* ").replace("**", ""), re.I)
+        if fm and not sections:
+            s["friction"].append((int(fm.group(1)), fm.group(2).strip()))
             continue
         if sections:
             if st:
@@ -239,6 +259,7 @@ def parse_slice(state, name):
     q = max((i for i, (name, _) in enumerate(sections) if name == "question"), default=-1)
     answered = max((i for i, (name, body) in enumerate(sections) if name == "answer" and body), default=-1)
     s["blocked"] = q > answered and bool(sections[q][1])  # an empty ## Answer answers nothing
+    s["answers"] = sum(1 for name, body in sections if name == "answer" and body)
     return s
 
 def ls(rel):
@@ -282,8 +303,11 @@ def reviews(prefix):
         text = read(path)
         v = re.search(r"^[\s*_>-]*VERDICT[\s*_]*:[\s*_]*([A-Za-z-]+)", text, re.M | re.I)
         sha = re.search(r"^[\s*_>-]*SHA[\s*_]*:[\s*_`]*([0-9a-fA-F]+)", text, re.M | re.I)
+        look = re.search(r"^LOOK:\s*(\d+)", text, re.M)
+        fr = re.search(r"^FRICTION:\s*(.+)$", text, re.M)
         out.append({"k": int(m.group(1)), "verdict": v.group(1).upper() if v else "", "path": path,
-                    "sha": sha.group(1).lower() if sha else ""})
+                    "sha": sha.group(1).lower() if sha else "", "look": int(look.group(1)) if look else 0,
+                    "friction": fr.group(1).strip() if fr else ""})
     return sorted(out, key=lambda r: r["k"])
 
 def at_head(revs, sha):
@@ -801,6 +825,9 @@ def run_check(base=None, release=None):
                 if others:
                     errors.append("%s: changed since %s by %s (the human's file: specify or conventions "
                                   "changes it)" % (paths[-1], base, "; ".join(others)))
+    errors_cat, warning_cat = categories()
+    errors += errors_cat
+    warnings += warning_cat
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
         text, practice = read(rel), "/references/practices/" in "/" + rel
         if "/references/" in "/" + rel:
@@ -815,6 +842,29 @@ def run_check(base=None, release=None):
                     os.path.exists(os.path.join(ROOT, d, cited)) for d in ("", SKILL)):
                 errors.append("%s: cites %s, which does not exist (update the skill)" % (rel, cited))
     return errors, warnings
+
+def categories():
+    """-> (errors, warnings): every kind topic of the skill listed under exactly one `## Kinds — <category>`
+    of SKILL.md; a skill with no category yet is one warning (the human splits it in /mismagent:conventions)."""
+    secs = sections(read(SKILL + "/SKILL.md"))
+    kinds = sorted(r for r in walk(SKILL) if r.endswith(".md") and "/references/" in "/" + r
+                   and "/references/practices/" not in "/" + r)
+    listed = {}
+    for title, body in secs.items():
+        m = KIND_SECTION.fullmatch(title.strip())
+        for link in TOPIC_LINK.findall(body) if m else ():
+            listed.setdefault(os.path.normpath(os.path.join(SKILL, link)), set()).add(m.group(1).lower())
+    if not listed:
+        return [], (["%s/SKILL.md: kinds not categorized (local, cross-cutting, tests): /mismagent:conventions "
+                     "splits ## Kinds — the release review checks by category" % SKILL] if kinds else [])
+    errors = ["%s/SKILL.md: a plain ## Kinds beside the categorized ones: each kind goes under one category"
+              % SKILL] if any(t.strip().lower() == "kinds" for t in secs) else []
+    for rel in kinds:
+        cats = listed.get(os.path.normpath(rel), set())
+        if len(cats) != 1:
+            errors.append("%s: listed under %s in SKILL.md (a kind is under exactly one of ## Kinds — local, "
+                          "cross-cutting, tests)" % (rel, " and ".join(sorted(cats)) or "no category"))
+    return errors, []
 
 def topic_missing(rel):
     """The sections a topic of the conventions skill lacks: a kind of code, or a practice."""
@@ -906,19 +956,32 @@ def drop_drafts():
     for rel in [r for r in walk(REVIEWS) if r.endswith(".draft.md")]:
         os.remove(os.path.join(ROOT, rel))
 
-def write_header(rel, key, value):
-    """Sets the header line `<Key>: <value>` of a slice file, after the other header lines."""
+def write_header(rel, key, value, append=False):
+    """Sets the header line `<Key>: <value>` of a slice file, after the other header lines; append adds
+    one more line of that key (Friction: one per round)."""
     lines = read(rel).splitlines()
     top = next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))
-    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built)(?:\*\*)?\s*:",
+    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built|friction)(?:\*\*)?\s*:",
                                                           lines[i], re.I)) for i in range(top)) if m}
     mine = [i for i, k in hdr.items() if k == key.lower()]
-    if mine:
+    if mine and not append:
         lines[mine[0]] = "%s: %s" % (key, value)
     else:
         lines.insert(max(hdr) + 1 if hdr else 0, "%s: %s" % (key, value))
     with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
+
+def friction(value):
+    """-> the friction as written: `none`, or `<category>: <note>` of at most FRICTION_WORDS words."""
+    v = " ".join((value or "").split())
+    if v.lower() == "none":
+        return "none"
+    m = re.fullmatch(r"([\w-]+)\s*:\s*(.+)", v)
+    need(m and m.group(1).lower() in FRICTION, "--friction %r: `none` or `<category>: <note>`, category one of %s"
+         % (value, ", ".join(FRICTION)))
+    words = len(m.group(2).split())
+    need(words <= FRICTION_WORDS, "--friction: %d words, at most %d" % (words, FRICTION_WORDS))
+    return "%s: %s" % (m.group(1).lower(), m.group(2))
 
 def cmd_start(a):
     sls = slices()
@@ -959,6 +1022,7 @@ def cmd_park(a):
     return 0
 
 def cmd_built(a):
+    fr = friction(a.friction)  # cheap first: a refused note is not worth a gate run
     sls = slices()
     s = find_slice(a.slice, sls)
     need(s["state"] == "doing", "%s is in %s, not doing" % (s["stem"], s["state"]))
@@ -979,6 +1043,7 @@ def cmd_built(a):
     shots = [shoot(s["stem"], s["design"])] if s["design"] else []
     rnd = len(revs) + 1
     write_header(s["path"], "Built", rnd)
+    write_header(s["path"], "Friction", "%d: %s" % (rnd, fr), append=True)
     git("add", "-A", "--", s["path"], *shots)
     git("commit", "-q", "--allow-empty", "-m", "%s: built (round %d)" % (s["stem"], rnd))  # again in a round: same header
     print("built %s, round %d: ready for review" % (s["stem"], rnd))
@@ -1001,11 +1066,14 @@ def cmd_shot(a):
 
 def cmd_review(a):
     v, sls = a.verdict.upper(), slices()
+    fr = friction(a.friction) if a.friction else ""
+    need(a.look is None or a.look >= 0, "--look: the number of artboard pairs that differ (0 or more)")
     try:
         mine = find_slice(a.target, sls)
     except Refused:
         mine = None
     if mine:
+        need(a.look is None, "--look is a release review's: a slice's look difference is a REWORK")
         need(mine["state"] == "doing", "%s is in %s, not doing" % (mine["stem"], mine["state"]))
         target, allowed = mine["stem"], ("PASS", "REWORK", "DIRECT")
     else:
@@ -1014,6 +1082,8 @@ def cmd_review(a):
         holds = [h for h in release_ready(a.target, examples()[0], sls, config()) if h[0] not in ("risk", "proposals")]
         need(not holds, "%s: not ready for a release review: %s" % (a.target, holds[0][1] if holds else ""))
         target, allowed = a.target, ("HEALTHY", "DESIGN-PASS")
+        need(a.look is not None or not any(x["design"] for x in sls if x["release"] == a.target),
+             "%s: a slice has Design: — --look <n> names how many artboard pairs differ (0 when all match)" % a.target)
     need(v in allowed, "verdict %s: %s takes %s" % (v, target, " | ".join(allowed)))
     sha = head()
     need(len(a.sha) >= 7 and sha.startswith(a.sha.lower()),
@@ -1035,7 +1105,8 @@ def cmd_review(a):
     rel = "%s/%s-%d.md" % (REVIEWS, target, k)
     os.makedirs(os.path.join(ROOT, REVIEWS), exist_ok=True)
     with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
-        f.write("VERDICT: %s\nSHA: %s\n\n%s\n" % (v, sha, body.strip()))
+        f.write("VERDICT: %s\nSHA: %s\n%s%s\n%s\n" % (v, sha, "LOOK: %d\n" % a.look if a.look is not None else "",
+                                                      "FRICTION: %s\n" % fr if fr else "", body.strip()))
     if not a.body:
         os.remove(draft)
     print(rel)
@@ -1076,10 +1147,12 @@ def cmd_tag(a):
     need(r, "%s: no release review at HEAD %s: the conductor runs one" % (rel, head()[:12]))
     need(r["verdict"] == "HEALTHY" or a.why, "%s: review %d is DESIGN-PASS: `tag %s --why '…'` records why its "
          "findings are accepted" % (rel, r["k"], rel))
+    need(not r["look"] or a.why, "%s: review %d names %d artboard pair(s) that differ: `tag %s --why '…'` records "
+         "why the look is accepted" % (rel, r["k"], r["look"], rel))
     gate()
     drop_drafts()
     kept = [p for p in (REVIEWS, "%s/%s" % (SHOTS, rel)) if os.path.isdir(os.path.join(ROOT, p))]
-    if r["verdict"] != "HEALTHY":
+    if r["verdict"] != "HEALTHY" or r["look"]:
         kept.append(accepted(rel, r, a.why))
     if kept:
         git("add", "-A", "--", *kept)
@@ -1094,9 +1167,64 @@ def accepted(rel, r, why):
     os.makedirs(os.path.join(ROOT, M, "decisions"), exist_ok=True)
     path = "%s/decisions/%04d-confirm-%s.md" % (M, next_number(), rel)
     with open(os.path.join(ROOT, path), "w", encoding="utf-8") as f:
-        f.write("# %s tagged over review %d (%s)\n\nThe human, %s: \"%s\"\n\n## Evidence\n- %s at %s\n"
-                % (rel, r["k"], r["verdict"], time.strftime("%Y-%m-%d"), why, r["path"], r["sha"]))
+        f.write("# %s tagged over review %d (%s%s)\n\nThe human, %s: \"%s\"\n\n## Evidence\n- %s at %s\n"
+                % (rel, r["k"], r["verdict"], ", %d look pair(s) differ" % r["look"] if r["look"] else "",
+                   time.strftime("%Y-%m-%d"), why, r["path"], r["sha"]))
     return path
+
+def ctime(*args):
+    out = git("log", "-1", "--format=%ct", *args, check=False).strip()
+    return int(out) if out.isdigit() else None
+
+def pct(values, q):
+    """Nearest-rank percentile of a non-empty list."""
+    v = sorted(values)
+    return v[max(0, -(-len(v) * q // 100) - 1)]
+
+def cmd_log(a):
+    sls = [s for s in slices() if not a.release or s["release"] == a.release]
+    need(sls or not a.release, "no slice has Release: %s" % a.release)
+    entries, built = [], 0  # (category, who, where, note)
+    for s in sls:
+        for rnd, text in s["friction"]:
+            built += 1
+            if text != "none":
+                cat, note = text.split(":", 1)
+                entries.append((cat, "builder", "%s r%d" % (s["stem"], rnd), note.strip()))
+    for prefix in [s["stem"] for s in sls] + sorted({s["release"] for s in sls}):
+        for r in reviews(prefix):
+            if r["friction"] and r["friction"] != "none":
+                cat, note = r["friction"].split(":", 1)
+                entries.append((cat, "reviewer", "%s-%d" % (prefix, r["k"]), note.strip()))
+    landed, lands = [], {}
+    for line in git("log", "--format=%ct %s", check=False).splitlines():
+        when, _, subject = line.partition(" ")
+        if subject.startswith("mm land ") and when.isdigit():
+            lands.setdefault(subject[len("mm land "):], int(when))  # newest first: the last land
+    for s in (s for s in sls if s["state"] == "done"):
+        start, end = ctime(s["base"]) if s["base"] else None, lands.get(s["stem"])
+        landed.append({"slice": s["stem"], "rounds": len(reviews(s["stem"])),
+                       "doubts": s["answers"],
+                       "minutes": (end - start) // 60 if start and end and end >= start else None})
+    counts = {c: sum(1 for e in entries if e[0] == c) for c in FRICTION}
+    data = {"built_rounds": built, "friction": counts,
+            "entries": [dict(zip(("category", "who", "where", "note"), e)) for e in entries], "landed": landed}
+    if a.json:
+        print(json.dumps(data, indent=2))
+        return 0
+    named = sum(1 for e in entries if e[1] == "builder")
+    print("friction: %d of %d built rounds (%d%%) · %s" % (
+        named, built, 100 * named // built if built else 0,
+        " · ".join("%s %d" % (c, n) for c, n in counts.items() if n) or "none"))
+    if landed:
+        rounds, mins = [x["rounds"] for x in landed], [x["minutes"] for x in landed if x["minutes"] is not None]
+        print("landed %d: rounds median %d p75 %d · doubts %d · wall-clock median %s p75 %s min" % (
+            len(landed), pct(rounds, 50), pct(rounds, 75), sum(x["doubts"] for x in landed),
+            pct(mins, 50) if mins else "-", pct(mins, 75) if mins else "-"))
+    for c in FRICTION:
+        for _, who, where, note in (e for e in entries if e[0] == c):
+            print("%s: %s (%s): %s" % (c, where, who, note))
+    return 0
 
 def next_number():
     """The next four-digit number unused in decisions/ and stack-reviews/ (specify reserves them in both)."""
@@ -1122,7 +1250,9 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("target", "slice stem or number, or release token")),
     ("tag", "git tag -a <release> (ready, clean tree, a review at HEAD — DESIGN-PASS with --why, gate green)",
      ("release", "release token, e.g. R0")),
-    ("check", "files well formed, acceptance markers, sensors, guarded files, the releases' specs", None))
+    ("check", "files well formed, acceptance markers, sensors, guarded files, the releases' specs", None),
+    ("log", "the method's friction per category (built rounds, reviews), and rounds, doubts and wall-clock "
+     "of the landed slices — read-only", "--json"))
 
 def parser():
     p = argparse.ArgumentParser(prog="mm", description="mismAgent 0.7: slice lifecycle, git, counting.")
@@ -1137,6 +1267,14 @@ def parser():
     rv = sub.choices["review"]
     rv.add_argument("verdict", help="PASS | REWORK | DIRECT (a slice), HEALTHY | DESIGN-PASS (a release)")
     rv.add_argument("--sha", required=True, help="the HEAD you read when the review began")
+    rv.add_argument("--look", type=int, help="a release review: the artboard pairs that differ (required when "
+                    "a slice of the release has Design:; tag then needs --why)")
+    rv.add_argument("--friction", help="what in the method (never the code) got in the way: "
+                    "`<category>: <note>` (%s; at most %d words) or none" % (", ".join(FRICTION), FRICTION_WORDS))
+    sub.choices["built"].add_argument("--friction", required=True, help="what in the method (never the code) "
+                                      "slowed this round: `<category>: <note>` (%s; at most %d words) or none"
+                                      % (", ".join(FRICTION), FRICTION_WORDS))
+    sub.choices["log"].add_argument("--release", help="only this release's slices and reviews")
     rv.add_argument("--body", help="file with the checklist and the findings "
                     "(default: .mismagent/reviews/<target>.draft.md, removed once used)")
     sub.choices["tag"].add_argument("--why", help="the human's words accepting a DESIGN-PASS review's findings, "

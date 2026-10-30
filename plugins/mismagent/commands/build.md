@@ -56,7 +56,7 @@ the review at HEAD):
 | `release-review` | dispatch a **fresh mismagent-reviewer** with `MODE: release` and the release |
 | `design-pass` | dispatch **mismagent-architect** with `MODE: design-pass`, the release and the reason |
 | `conventions` | print `NEEDS-HUMAN: /mismagent:conventions` with mm's reason, and stop |
-| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`, with `--why "<their words>"` when they gave one (a DESIGN-PASS review is tagged only with it: mm records the reason as a decision). Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any) — a DESIGN-PASS: "confirm with `--why`, or ask for a design pass" — and stop |
+| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`, with `--why "<their words>"` when they gave one (a DESIGN-PASS review is tagged only with it: mm records the reason as a decision). Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any; a review with `LOOK:` over 0: "the look pairs that differ are yours: confirm with `--why`"), then the first two lines of `MM log --release <release>` (the method's friction, the slices' rounds) — a DESIGN-PASS: "confirm with `--why`, or ask for a design pass" — and stop |
 | `idle` | report the reason (e.g. the next release needs `/mismagent:specify`) and stop |
 
 Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`

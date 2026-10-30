@@ -40,8 +40,9 @@ Load the `craft` skill and follow its loop. For this slice:
    A problem beyond the slice goes to `.mismagent/design-notes.md` (one line `- where: what, why`).
 4. **Something new** — a kind of code the skill has no topic for, or a topic with no *Example*
    yet (a model slice: all of them): do it well, then propose it in
-   `.mismagent/conventions-proposals.md`, one line: `- create|update <kind>: Where … · Shape … ·
-   the Must or Never the code shows — <your files> (<why>)`; *Uses* and *Example* are filled with
+   `.mismagent/conventions-proposals.md`, one line: `- create|update <kind> [local|cross-cutting|tests]:
+   Where … · Shape … · the Must or Never the code shows — <your files> (<why>)` (cross-cutting: its
+   rules concern files of more than one kind); *Uses* and *Example* are filled with
    the human in `/mismagent:conventions`. A topic is a kind of code, never a feature. A rule is
    what no acceptance test sees: where code goes, its names, its shape. What a test could prove (the product
    shows, does, refuses) is behavior: its examples', never a rule. The human decides after the slice.
@@ -99,8 +100,12 @@ NOTES: <one line: what the next slice should know, or none>
 ```
 Before returning DONE (a rework too): end your slice file with `## Progress` (a rework: a
 `Rework <k>:` line under it), at most five lines — what changed, what you learned, what the next
-slice should know — and commit it. Then `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" built <slice>`:
+slice should know — and commit it. Then `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" built <slice> --friction "…"`:
 it runs the gate with your `Base:` — the human's files untouched, your examples' markers, the other
 examples' tests you touched listed for the reviewer — then the suite and lint, writes `Built:` and
-commits. Refused → read the message, fix, run it again;
-never DONE without it, never `Built:` by hand.
+commits. `--friction` is required: what in the *method* slowed this round — an example unclear or
+missing (`spec`), `mm`, the gate or a hook (`tool`), the skill (`conventions`), the SDK, CI or a
+device (`env`), your context (`context`), a REWORK you think wrong (`review`) — as
+`"<category>: <at most 15 words>"`, or `none`, the normal answer. Never the code (that is
+`design-notes.md`). Refused → read the message, fix, run it again;
+never DONE without it, never `Built:` or `Friction:` by hand.

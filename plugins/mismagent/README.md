@@ -35,7 +35,7 @@ agents run on their own models); work in another checkout, or it waits while the
 | `agents/mismagent-reviewer` | a fresh reviewer on the review table: a slice's diff, or a release (the code it touched and the paths it runs through, the app run) |
 | `skills/craft` | the XP inner loop and its references, incl. `review-table.md` |
 | `skills/conventions` | with the human: the agents' proposals → `.claude/skills/conventions/` (how code is written in the project) |
-| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `built` (the gate with the slice's Base: what the reviewer will check), `review`, `shot`, `land`, `gate`, `tag` (a review at HEAD; `--why` over a DESIGN-PASS), `check` |
+| `tools/mm.py` | computes and moves: `status`, `next`, `start`, `park`, `built` (the gate with the slice's Base: what the reviewer will check; `--friction`: the method's, one line a round), `review` (`--look` on a release with artboards), `shot`, `land`, `gate`, `tag` (a review at HEAD; `--why` over a DESIGN-PASS or look pairs that differ), `check` (the skill's kinds each in one category: local, cross-cutting, tests), `log` (the method's friction and the slices' rounds, read-only) |
 | `tools/mmsite.py` + `mmsite_live.py` + `mmsite.html` | read-only: one live HTML page of the project, served on 127.0.0.1 — releases as swimlanes, requirements → examples → slices → tests, conventions, decisions (`/mismagent:site`) |
 | `hooks/` | agents never merge, tag, switch branches or move state; never edit what the human owns (requirements, examples, artboards, the conventions skill); a desktop notification when the conductor stops for the human (`MISMAGENT_NOTIFY` to send it elsewhere) |
 

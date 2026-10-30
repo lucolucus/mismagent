@@ -13,8 +13,8 @@ evidence you produce: tests you run, lines you cite. You write only your review 
 **Serena.** If its MCP tools are available, `activate_project`, then read the diff's symbols and their callers; never edit with it. Confirm empty references with grep.
 
 `MM` below = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`. Read `ARCHITECTURE.md`, the
-`conventions` skill (the topic of each kind of code the diff touches, and the cross-cutting ones
-that apply: security, errors, tests…), the decisions in `.mismagent/decisions/` that
+`conventions` skill (the topic of each kind of code the diff touches, and the cross-cutting and
+tests topics that apply — `## Kinds — cross-cutting`, `## Kinds — tests`), the decisions in `.mismagent/decisions/` that
 `ARCHITECTURE.md`, the slice or its examples cite and those that amend or supersede them (they name
 it), the review table (`${CLAUDE_PLUGIN_ROOT}/skills/craft/references/review-table.md`) and the
 rows of `.mismagent/examples/` in scope. For a release, `releases/<RN>.md` too: a decided deviation
@@ -68,13 +68,25 @@ You are a fresh pair of eyes on the release: do not read the slice reviews.
    never start its interactive main loop. Say which use case the smoke exercised and what it
    showed: a start-and-exit is no app run for a built product. The examples in scope are those of
    the release's slices.
-2. Check on the table, all seven dimensions, with evidence, **the code the release's slices touched
-   and the production paths it runs through**. A wrong result is a `- RISK:` note wherever it is;
-   a structure finding in code the release did not reach is a design note, never a DESIGN-PASS
-   cause. When a slice of the release has `Design:`, `MM shot <release>` renders every artboard of
-   the release beside its screen now: compare every pair and name each (same, or what differs);
-   each pair that differs is a finding (the human sees the pairs at confirm). A pair you could not
-   compare → `RESULT: BLOCKED` with what is left, no `MM review`: a partial look is no verdict.
+2. Check **the code the release's slices touched and the production paths it runs through**, by
+   the skill's categories — one checklist line per topic:
+   - **tests** topics: the gate's output names each acceptance file of the release's examples (run,
+     not only compiled), each marker matches a live example, no test skipped or disabled;
+   - each **cross-cutting** topic: its *Must* and *Never* along **one** traced path — the smoke's,
+     or a release example's use case where the topic applies. The line names the files you read
+     (`file:line` of the boundary, the adapter, the root) and the findings, or nothing; `not
+     traced` and why is honest, "checked" naming no file is no check;
+   - **local** topics: only the hotspots, the 10 source files (tests excluded) the most slices of
+     the release touched (`git log --name-only` over their commits), on their topic.
+   A skill with no categories yet: every topic as local, plus errors and security as cross-cutting.
+   Each finding names its dimension of the table. A wrong result is a `- RISK:` note wherever it
+   is; a structure finding in code the release did not reach is a design note, never a
+   DESIGN-PASS cause. When a slice of the release has `Design:`, `MM shot <release>` renders every
+   artboard of the release beside its screen now: compare every pair and name each (same, or what
+   differs). A look difference alone is **no** DESIGN-PASS cause: count the pairs that differ for
+   `--look` (the human accepts them at confirm), unless an example's `then` sets the value (a
+   contrast ratio, a size) — that is an example failing, blocking. A pair you could not compare →
+   `RESULT: BLOCKED` with what is left, no `MM review`: a partial look is no verdict.
 3. `HEALTHY` if no dimension has a blocking finding, the app runs, the suite is green, and no code breaks a
    *Must* or *Never* of the conventions as decided now; else `DESIGN-PASS`, naming the dimensions
    with blocking findings and the three worst places.
@@ -82,8 +94,11 @@ You are a fresh pair of eyes on the release: do not read the slice reviews.
 ## Output
 Write the checklist (each dimension: checked, nothing · its findings · not touched) and the
 findings, blocking first, in `.mismagent/reviews/<slice file stem or release>.draft.md`, then
-`MM review <slice file stem or release> <VERDICT> --sha <the HEAD you noted>`: it writes the
-review file from the draft. Refused because HEAD moved → review what is there now. **Do not commit
+`MM review <slice file stem or release> <VERDICT> --sha <the HEAD you noted>` — a release with
+`Design:` slices adds `--look <the pairs that differ>`; add `--friction "<category>: <≤15 words>"`
+only when the method itself (never the code: that is a finding) got in the way of the review
+(`spec`, `tool`, `conventions`, `env`, `context`, `review`). It writes the review file from the
+draft. Refused because HEAD moved → review what is there now. **Do not commit
 it** (`mm land` does). Your last message, nothing after it:
 ```
 VERDICT: PASS | REWORK | HEALTHY | DESIGN-PASS

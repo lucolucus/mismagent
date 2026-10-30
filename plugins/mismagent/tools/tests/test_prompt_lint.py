@@ -11,7 +11,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import prompt_lint  # noqa: E402
 
-MM_SUBCOMMANDS = {"status", "next", "start", "park", "built", "review", "land", "gate", "tag", "check", "shot"}
+MM_SUBCOMMANDS = {"status", "next", "start", "park", "built", "review", "land", "gate", "tag", "check", "shot", "log"}
 # `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" <sub>` (may wrap), or the `MM <sub>` shorthand in code
 MM_CALL = re.compile(r'(?:python3\s+"?\$\{CLAUDE_PLUGIN_ROOT\}/tools/mm\.py"?|(?:(?<=`)|(?<=^)|(?<=\n))'
                      r'[ \t]*MM)[ \t]+([A-Za-z][\w-]*)')

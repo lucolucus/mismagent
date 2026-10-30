@@ -20,7 +20,9 @@ conventions as decided.
 
 A slice passes when its diff brings **no blocking finding on a dimension it touches** and breaks no
 rule of `ARCHITECTURE.md`. A release is healthy when the code its slices touched, and the production
-paths it runs through, have no blocking finding of the table; a wrong result anywhere is a risk, a
+paths it runs through, have no blocking finding of the table — checked by the categories of the
+conventions skill: the gate running the tests, each cross-cutting topic along a traced path, the
+local kinds at the hotspots; a look difference alone is the human's at confirm; a wrong result anywhere is a risk, a
 structure finding in code the release did not reach is a design note. Otherwise the architect runs
 a design pass — once by itself; a second DESIGN-PASS is the human's call: confirm with `--why`, or
 ask for another pass.

@@ -107,7 +107,10 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    tests, errors, security — input checks, authorization, secrets — configuration, logging; for a
    business domain the tactical DDD kinds), and for each the recognized practice of this stack,
    fitted to `ARCHITECTURE.md` and the decisions. One `- now create <kind>:` line each, its source
-   named (the official guide, the library's docs, a decision); no source, no rule. The model slice's
+   named (the official guide, the library's docs, a decision); no source, no rule. Each line
+   carries its category, `- now create <kind> [local|cross-cutting|tests]:` — cross-cutting when
+   its rules concern files of more than one kind (errors, security, configuration, logging, the
+   composition root, naming, the layout), tests for the tests, else local. The model slice's
    code gives each kind its *Example* and may update its shape.
 6. `MM gate` green; commit (`skeleton`).
 
@@ -126,8 +129,9 @@ as it is and the code: the best-kept file of each kind. A well-formed topic stay
 catalog covers the listed ones — every kind the code has when the skill is missing.
 1. List the kinds the code has (as in the skeleton's step 5) and the practices the work follows,
    as far as the scope reaches.
-2. One `- now create <kind>:` line per kind, its *Example* the best-kept file, and one `- now
-   create practice <name>:` line per practice. Describe the code as it is: no rule the code does not
+2. One `- now create <kind> [local|cross-cutting|tests]:` line per kind (as in the skeleton's
+   step 5), its *Example* the best-kept file, and one `- now create practice <name>:` line per
+   practice. Describe the code as it is: no rule the code does not
    follow already (a better one is a design note).
 3. Every rule of a listed topic lands somewhere, named in the line that takes it: a kind's or a
    practice's *Must*/*Never*; what it tells of a feature, a line for the modules of
@@ -147,9 +151,10 @@ and the release file cite with those that amend or supersede them (they name it)
    release in the dispatch, `Examples:` empty; `NN` continues the highest number under
    `.mismagent/slices/`), most valuable first, at most five: each says what changes, where, the
    rule it serves, how behavior is kept (suite green; characterization tests first where a touched
-   path has none). A refactor changes **structure only**: a `RISK:` note (a wrong result), a look
-   or a behavior difference you find is never a slice you queue — it is behavior, so it needs an
-   example: one `- ` line under `## Open questions` of the release it affects (the current one if
+   path has none). A refactor changes **structure only**: a look difference the release review
+   counted (`LOOK:`) is the human's at confirm — neither a slice nor a question. A `RISK:` note (a
+   wrong result) or a behavior difference you find is never a slice you queue — it is behavior, so
+   it needs an example: one `- ` line under `## Open questions` of the release it affects (the current one if
    it should hold its confirm, else the next; create `releases/R<n>.md` with its goal line if it
    does not exist), the wrong result and the example you propose, for `/mismagent:specify`; the
    fix slice it specifies removes the note. Aim at the dimensions with blocking findings — structure (modularity, errors), then duplication.

@@ -72,12 +72,16 @@ important doubt (`NEEDS-HUMAN`) and each release.
   ends on its verdict, so even a `| tail` shows it); a fresh reviewer blocks a quality defect in the diff exactly like a
   functional one.
 - **Every release:** a fresh reviewer runs the app and checks the code the release touched, and the
-  paths it runs through, on the seven dimensions of the
+  paths it runs through, by the categories of the conventions skill — the gate really running each
+  acceptance test (**tests**), every **cross-cutting** topic (errors, security, configuration, the
+  composition root…) along one traced path with the files it read, the **local** kinds at the ten
+  most-touched files — each finding on a dimension of the
   [review table](plugins/mismagent/skills/craft/references/review-table.md) (simple design, naming,
-  modularity, duplication, concision, error handling, test quality) — findings with their line, no
-  scores; a decided deviation is not a finding. With a finding, the architect reads the code and
-  queues refactoring slices (structure only: a wrong result or a look difference goes to the
-  release's open questions, for `specify`). After one design pass, you decide: confirm with your
+  modularity, duplication, concision, error handling, test quality), with its line, no scores; a
+  decided deviation is not a finding. A look difference alone is no finding: the review counts the
+  pairs that differ and you accept them at confirm with your reason (one an example quantifies
+  still fails). With a finding, the architect reads the code and queues refactoring slices
+  (structure only: a wrong result goes to the release's open questions, for `specify`). After one design pass, you decide: confirm with your
   reason, or ask for another. A release is reviewed and tagged only with no open question in its
   file and a `smoke:` to run the app. A wrong result noted outside a diff (`- RISK` in the design
   notes) holds the release review until a design pass turns it into a slice; left there, you decide.
@@ -87,6 +91,16 @@ important doubt (`NEEDS-HUMAN`) and each release.
   it touched listed for the reviewer — then `Built:` written; `mm review` writes the verdict lines
   and refuses when HEAD moved during the review; `mm tag` needs a review at HEAD. Every gate command
   runs under a `timeout:`, so a hung simulator never holds the conductor.
+
+## The method's own log
+Every builder round ends with one line on what in the *method* (never the code) slowed it —
+`mm built --friction "<spec|tool|conventions|env|context|review>: <≤15 words>"`, or `none`, the
+normal answer — kept in the slice file; a reviewer may add one to its review. `mm log [--release R]`
+counts them, with the rounds, doubts and wall-clock of the landed slices read from git; the
+conductor shows its totals at each confirm. **Read it at a release, with the counts: change the
+method only for a category that recurs, naming the number the change should lower** — not a to-do
+list of single entries (24 versions in 22 days was that). 0.7.25 is measured the same way
+([plan](docs/rationale/v0.7.25-plan.md)).
 
 ## The design, in three layers
 | file | layer |

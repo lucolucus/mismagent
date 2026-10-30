@@ -22,7 +22,9 @@ ending `- now replace <topics>`): decide it kind by kind; once every line is dec
 names are replaced by the decided catalog (git keeps them) and the others stay as they are.
 
 ## 2. The proposals, as one table, then a question only where it matters
-Show them all first as one table — the rule in a line, the file it shows, your recommendation —
+A skill with a plain `## Kinds` (`mm check` warns): first propose the split, one table of the kinds
+with the category of each, accepted in one answer. Show them all first as one table — the rule in a
+line, the file it shows, its category (the proposal's, default local), your recommendation —
 and let the human accept in one answer those you recommend as they are. One question at a time
 only for the ones you recommend to reject or reword, or that conflict. For each of those:
 show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
@@ -39,9 +41,14 @@ update, reject, or reword. The human decides, one question at a time.
 
 ## 3. Write
 - `SKILL.md`: frontmatter `name: conventions`, `description: How code is written in this
-  repository — load before writing or reviewing code here.`; then `## Kinds`, one line per kind →
-  `references/<kind>.md` (its *Where* in a few words), and `## Practices`, one line each →
-  `references/practices/<practice>.md`. A kind in more than one stack is one topic per stack,
+  repository — load before writing or reviewing code here.`; then each kind, one line →
+  `references/<kind>.md` (its *Where* in a few words), under exactly one of `## Kinds — local` (a
+  kind of file: an entity, a use case, a view, an adapter), `## Kinds — cross-cutting` (rules over
+  files of more than one kind: errors, security, configuration, logging, the composition root,
+  naming, the layout) and `## Kinds — tests`; and `## Practices`, one line each →
+  `references/practices/<practice>.md`. The category is what the release review checks: the
+  hotspots of the local kinds, every cross-cutting topic along a traced path, the gate running the
+  tests (`mm check` fails on a kind in no category or in two). A kind in more than one stack is one topic per stack,
   `<stack>-<kind>` (`rust-errors`, `swift-errors`).
 - A kind (`mm check` fails when a section is missing):
   `## Where` (folder, file name) · `## Uses` (library, or none) · `## Shape` (a short skeleton) ·

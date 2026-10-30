@@ -90,7 +90,7 @@ class Repo(unittest.TestCase):
         self.write("src/cart.py", code)
         sha = self.commit(msg)
         if os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/%s.md" % stem)):
-            code, _, err = self.mm("built", stem)
+            code, _, err = self.mm("built", stem, "--friction", "none")
             self.assertEqual(code, 0, err)
             sha = self.head()
         return sha
@@ -188,7 +188,7 @@ class Next(Repo):
         d = self.next()  # committed work but no progress entry: the builder was cut
         self.assertEqual(d["action"], "resume")
         self.assertIn("no `Built: 1` in .mismagent/slices/doing/01-cart.md", d["reason"])
-        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        self.assertEqual(self.mm("built", "01-cart", "--friction", "none")[0], 0)
         self.assertIn("Built: 1", self.read(".mismagent/slices/doing/01-cart.md"))
         self.assertEqual(self.next()["action"], "review")
         code, out, _ = self.mm("next")
@@ -204,7 +204,7 @@ class Next(Repo):
         d = self.next()
         self.assertEqual(d["action"], "resume")
         self.assertIn("no `Built: 2`", d["reason"])
-        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        self.assertEqual(self.mm("built", "01-cart", "--friction", "none")[0], 0)
         self.assertEqual(self.next()["action"], "review")
 
     def test_built_runs_the_base_check_before_the_suite(self):
@@ -214,7 +214,7 @@ class Next(Repo):
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.write("src/cart.py", "x = 1\n")
         head = self.commit("code")
-        code, out, _ = self.mm("built", "01-cart")
+        code, out, _ = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual(code, 1)
         self.assertIn("error: .mismagent/slices/doing/01-cart.md: doing, but EX-1 has no acceptance marker", out)
         self.assertIn("test: not run (check red)", out)
@@ -224,7 +224,7 @@ class Next(Repo):
         self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
         self.acceptance("test_cart.py", "# EX-1\n")
         self.commit("acc")
-        code, out, err = self.mm("built", "01-cart")
+        code, out, err = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual(code, 0, err)
         self.assertTrue(os.path.exists(os.path.join(self.dir, "suite-ran")))
 
@@ -237,28 +237,28 @@ class Next(Repo):
         self.write(path, re.sub(r"^Base: .*$", "Base: " + side, self.read(path), flags=re.M))
         self.write("src/cart.py", "x = 1\n")
         self.commit("code")
-        self.assertIn("Base %s is not an ancestor of HEAD" % side[:12], self.mm("built", "01-cart")[2])
+        self.assertIn("Base %s is not an ancestor of HEAD" % side[:12], self.mm("built", "01-cart", "--friction", "none")[2])
 
     def test_built_preconditions(self):
         self.slice("01-cart")
         self.acceptance("test_cart.py", "# EX-1\n")
         self.commit("plan")
-        self.assertIn("not doing", self.mm("built", "01-cart")[2])
+        self.assertIn("not doing", self.mm("built", "01-cart", "--friction", "none")[2])
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
-        self.assertIn("nothing built since mm start", self.mm("built", "01-cart")[2])
+        self.assertIn("nothing built since mm start", self.mm("built", "01-cart", "--friction", "none")[2])
         self.write("src/cart.py", "x = 1\n")
-        self.assertIn("dirty", self.mm("built", "01-cart")[2])
+        self.assertIn("dirty", self.mm("built", "01-cart", "--friction", "none")[2])
         self.commit("code")
         self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: false"))
         self.commit("red")
-        code, out, err = self.mm("built", "01-cart")
+        code, out, err = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual((code, out.strip().splitlines()[-1]), (1, "gate: red (test)"))
         self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
         self.write("CLAUDE.md", CLAUDE)
         self.commit("green")
-        self.assertEqual(self.mm("built", "01-cart")[0], 0)
+        self.assertEqual(self.mm("built", "01-cart", "--friction", "none")[0], 0)
         self.review("01-cart-1", "REWORK")
-        self.assertIn("review 1 is at HEAD", self.mm("built", "01-cart")[2])
+        self.assertIn("review 1 is at HEAD", self.mm("built", "01-cart", "--friction", "none")[2])
 
     def test_land_on_pass_at_head(self):
         self.started()
@@ -535,7 +535,7 @@ class Next(Repo):
         d = self.next()
         self.assertEqual(d["action"], "stuck")
         self.assertIn("two slices in doing: 01-cart, 02-pay — one checkout holds one slice", d["reason"])
-        self.assertIn("two slices in doing", self.mm("built", "01-cart")[2])
+        self.assertIn("two slices in doing", self.mm("built", "01-cart", "--friction", "none")[2])
         self.assertIn("two slices in doing", self.mm("land", "01-cart")[2])
 
     def test_debris_is_not_dirty(self):
@@ -1558,7 +1558,7 @@ class Design(Repo):
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.write("src/cart.py", "x = 1\n")
         self.commit("code")
-        code, out, err = self.mm("built", "01-cart")
+        code, out, err = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual(code, 0, err)
         self.assertIn(".mismagent/design/Verde.png  <->  .mismagent/shots/01-cart/Verde.png", out)
         self.assertIn(".mismagent/shots/01-cart/Rosso.png", self.git("show", "--name-only", "HEAD"))
@@ -1570,14 +1570,14 @@ class Design(Repo):
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.write("src/cart.py", "x = 1\n")
         self.commit("code")
-        self.assertIn("no `shot` in CLAUDE.md", self.mm("built", "01-cart")[2])
+        self.assertIn("no `shot` in CLAUDE.md", self.mm("built", "01-cart", "--friction", "none")[2])
         self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", SHOT + "- max_file_lines"))
         self.commit("01-cart: shot command")
         self.write(".mismagent/design/Gone.png", "png")
         self.write(".mismagent/slices/doing/01-cart.md", self.read(".mismagent/slices/doing/01-cart.md")
                    .replace("Design: Verde.png", "Design: Verde.png Gone.png"))
         self.commit("specify R0: Gone")  # the human's: an artboard and the slice, nothing else
-        self.assertIn("shot wrote no Gone.png", self.mm("built", "01-cart")[2])
+        self.assertIn("shot wrote no Gone.png", self.mm("built", "01-cart", "--friction", "none")[2])
         self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
 
     def test_shot_timeout_publishes_no_partial_screens(self):
@@ -1588,7 +1588,7 @@ class Design(Repo):
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.write("src/cart.py", "x = 1\n")
         self.commit("code")
-        code, _, err = self.mm("built", "01-cart")
+        code, _, err = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual(code, 1)
         self.assertIn("shot: red (timed out after 1 s", err)
         self.assertFalse(os.path.isdir(os.path.join(self.dir, ".mismagent/shots/01-cart")))
@@ -1616,6 +1616,147 @@ class Design(Repo):
         self.commit("01-cart: closer to the code")
         code, out, _ = self.check("--base", base)
         self.assertIn(".mismagent/design/Verde.png: changed since", out)
+
+
+TOPIC = "# %s\n\n## Where\nsrc/\n## Uses\nnone\n## Shape\nx\n## Must\n- x\n## Never\n- y\n## Example\nnone yet\n"
+
+
+class Categories(Repo):
+    """Each kind topic of the conventions skill sits under one `## Kinds — <category>` of SKILL.md."""
+
+    def skill(self, body):
+        for kind in ("use-case", "errors", "acceptance-tests"):
+            self.write(".claude/skills/conventions/references/%s.md" % kind, TOPIC % kind)
+        self.write(".claude/skills/conventions/references/practices/pairing.md", "# p\n\n## Must\n- x\n## Never\n- y\n")
+        self.write(".claude/skills/conventions/SKILL.md", "---\nname: conventions\n---\n\n" + body)
+        self.commit("skill")
+        return self.check()
+
+    CATEGORIZED = ("## Kinds — local\n- use-case → `references/use-case.md` (src/app/)\n\n"
+                   "## Kinds - cross-cutting\n- errors → references/errors.md\n\n"
+                   "## Kinds — tests\n- acceptance-tests → `references/acceptance-tests.md`\n\n"
+                   "## Practices\n- pairing → `references/practices/pairing.md`\n")
+
+    def test_categorized_skill_is_green(self):
+        code, out, _ = self.skill(self.CATEGORIZED)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("categor", out)
+
+    def test_a_plain_kinds_section_is_only_warned(self):
+        code, out, _ = self.skill("## Kinds\n- use-case → `references/use-case.md`\n- errors → `references/errors.md`\n"
+                                  "- acceptance-tests → `references/acceptance-tests.md`\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("warning: .claude/skills/conventions/SKILL.md: kinds not categorized", out)
+
+    def test_a_topic_in_no_category_or_in_two_is_refused(self):
+        code, out, _ = self.skill(self.CATEGORIZED.replace("- errors → references/errors.md\n", "")
+                                  .replace("## Practices", "- use-case again → `references/use-case.md`\n\n## Practices"))
+        self.assertEqual(code, 1)
+        self.assertIn("references/errors.md: listed under no category", out)
+        self.assertIn("references/use-case.md: listed under local and tests", out)
+        self.assertNotIn("pairing.md: listed", out)
+
+    def test_a_plain_kinds_beside_categories_is_refused(self):
+        code, out, _ = self.skill(self.CATEGORIZED + "\n## Kinds\n- old\n")
+        self.assertEqual(code, 1)
+        self.assertIn("a plain ## Kinds beside the categorized ones", out)
+
+
+class Friction(Repo):
+    """The method's friction: one line per built round, optionally one per review; mm log counts them."""
+
+    def test_built_requires_friction_checked_before_the_gate(self):
+        self.started()
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        self.assertEqual(self.mm("built", "01-cart")[0], 2)  # usage: --friction is required
+        self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: sleep 5; false"))
+        self.commit("slow red gate")
+        for bad, why in (("mood: meh", "category one of spec"), ("spec: " + "w " * 16, "16 words, at most 15")):
+            t0 = time.time()
+            code, _, err = self.mm("built", "01-cart", "--friction", bad)
+            self.assertEqual(code, 1)
+            self.assertIn(why, err)
+            self.assertLess(time.time() - t0, 4)  # refused before the gate ran
+        self.write("CLAUDE.md", CLAUDE)
+        self.commit("green")
+        code, _, err = self.mm("built", "01-cart", "--friction", "Spec:  EX-1 does not say  what an empty cart shows")
+        self.assertEqual(code, 0, err)
+        text = self.read(".mismagent/slices/doing/01-cart.md")
+        self.assertIn("Built: 1\nFriction: 1: spec: EX-1 does not say what an empty cart shows\n", text)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_rounds_add_lines_and_log_counts(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "REWORK")
+        self.commit("review 1")
+        self.write("src/cart.py", "x = 2\n")
+        self.commit("rework")
+        code, _, err = self.mm("built", "01-cart", "--friction", "tool: gate listed a file I never touched")
+        self.assertEqual(code, 0, err)
+        text = self.read(".mismagent/slices/doing/01-cart.md")
+        self.assertIn("Built: 2\nFriction: 1: none\nFriction: 2: tool: gate listed a file I never touched", text)
+        self.write(".mismagent/reviews/01-cart.draft.md", "all good\n")
+        code, _, err = self.mm("review", "01-cart", "PASS", "--sha", self.head(),
+                               "--friction", "review: the slice file had no Base after a rename")
+        self.assertEqual(code, 0, err)
+        self.assertIn("FRICTION: review: the slice file had no Base after a rename\n",
+                      self.read(".mismagent/reviews/01-cart-2.md"))
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        code, out, err = self.mm("log")
+        self.assertEqual(code, 0, err)
+        self.assertIn("friction: 1 of 2 built rounds (50%) · tool 1 · review 1", out)
+        self.assertIn("landed 1: rounds median 2 p75 2 · doubts 0 · wall-clock median 0 p75 0 min", out)
+        self.assertIn("tool: 01-cart r2 (builder): gate listed a file I never touched", out)
+        self.assertIn("review: 01-cart-2 (reviewer): the slice file had no Base after a rename", out)
+        data = json.loads(self.mm("log", "--json", "--release", "R0")[1])
+        self.assertEqual(data["friction"]["tool"], 1)
+        self.assertEqual(data["landed"][0]["rounds"], 2)
+        self.assertIn("no slice has Release: R9", self.mm("log", "--release", "R9")[2])
+
+    def test_log_of_an_empty_repo(self):
+        code, out, err = self.mm("log")
+        self.assertEqual(code, 0, err)
+        self.assertIn("friction: 0 of 0 built rounds (0%) · none", out)
+
+
+class Look(Repo):
+    """A release review counts the artboard pairs that differ; tag records their acceptance."""
+
+    def designed_release(self):
+        self.write(".mismagent/design/Verde.png", "png")
+        self.write(".mismagent/slices/done/01-cart.md", slice_text(examples="EX-1, EX-2\nDesign: Verde.png")
+                   .replace("Examples", "Base: abc1234\nExamples"))
+        self.acceptance("test_cart.py", "# EX-1 EX-2\n")
+        self.commit("done")
+        self.write(".mismagent/reviews/R0.draft.md", "look: Verde differs in the header\n")
+
+    def test_a_release_with_design_needs_look_and_tag_needs_why(self):
+        self.designed_release()
+        code, _, err = self.mm("review", "R0", "HEALTHY", "--sha", self.head())
+        self.assertEqual(code, 1)
+        self.assertIn("--look <n>", err)
+        self.assertIn("a slice's look difference is a REWORK",
+                      self.mm("review", "01-cart", "PASS", "--sha", self.head(), "--look", "1")[2])
+        code, _, err = self.mm("review", "R0", "HEALTHY", "--sha", self.head(), "--look", "1")
+        self.assertEqual(code, 0, err)
+        self.assertIn("LOOK: 1\n", self.read(".mismagent/reviews/R0-1.md"))
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("names 1 artboard pair(s) that differ", err)
+        code, _, err = self.mm("tag", "R0", "--why", "the header is fine as rendered")
+        self.assertEqual(code, 0, err)
+        self.assertIn("(HEALTHY, 1 look pair(s) differ)", self.read(".mismagent/decisions/0001-confirm-R0.md"))
+
+    def test_no_look_difference_tags_without_why(self):
+        self.designed_release()
+        self.assertEqual(self.mm("review", "R0", "HEALTHY", "--sha", self.head(), "--look", "0")[0], 0)
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 0, err)
+        self.assertFalse(os.path.isdir(os.path.join(self.dir, ".mismagent/decisions")))
 
 if __name__ == "__main__":
     unittest.main()

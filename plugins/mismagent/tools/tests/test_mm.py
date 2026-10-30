@@ -7,11 +7,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 MM = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mm.py")
 
-CLAUDE = "# Project\n\n## mismagent\n- test: true\n-   lint :  `true`\n- max_file_lines: 400\n\n## Other\n- test: false\n"
+CLAUDE = ("# Project\n\n## mismagent\n- test: true\n-   lint :  `true`\n- smoke: true\n- max_file_lines: 400\n\n"
+          "## Other\n- test: false\n")
 EXAMPLES = """# Examples
 
 | id | given | when | then | rule | req | release |
@@ -97,8 +99,9 @@ class Repo(unittest.TestCase):
         self.write("tests/acceptance/" + rel, text)
 
     def started(self, name="01-cart", **kw):
-        """A slice in doing via mm start."""
+        """A slice in doing via mm start, its examples' markers in place (mm built checks them)."""
         self.slice(name, **kw)
+        self.acceptance("test_%s.py" % name, "# %s\n" % kw.get("examples", "EX-1").split("\n")[0])
         self.commit("plan")
         code, _, err = self.mm("start", name)
         self.assertEqual(code, 0, err)
@@ -204,8 +207,41 @@ class Next(Repo):
         self.assertEqual(self.mm("built", "01-cart")[0], 0)
         self.assertEqual(self.next()["action"], "review")
 
+    def test_built_runs_the_base_check_before_the_suite(self):
+        self.slice("01-cart")  # no acceptance marker for EX-1 yet
+        self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: touch suite-ran"))
+        self.commit("plan")
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.write("src/cart.py", "x = 1\n")
+        head = self.commit("code")
+        code, out, _ = self.mm("built", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("error: .mismagent/slices/doing/01-cart.md: doing, but EX-1 has no acceptance marker", out)
+        self.assertIn("test: not run (check red)", out)
+        self.assertEqual(out.strip().splitlines()[-1], "gate: red (check)")
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "suite-ran")))  # a red check is not worth a suite run
+        self.assertEqual(self.head(), head)
+        self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
+        self.acceptance("test_cart.py", "# EX-1\n")
+        self.commit("acc")
+        code, out, err = self.mm("built", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, "suite-ran")))
+
+    def test_built_refuses_a_base_that_is_not_an_ancestor(self):
+        self.started()
+        self.git("checkout", "-q", "-b", "side")
+        side = self.commit("side")
+        self.git("checkout", "-q", "-")
+        path = ".mismagent/slices/doing/01-cart.md"
+        self.write(path, re.sub(r"^Base: .*$", "Base: " + side, self.read(path), flags=re.M))
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        self.assertIn("Base %s is not an ancestor of HEAD" % side[:12], self.mm("built", "01-cart")[2])
+
     def test_built_preconditions(self):
         self.slice("01-cart")
+        self.acceptance("test_cart.py", "# EX-1\n")
         self.commit("plan")
         self.assertIn("not doing", self.mm("built", "01-cart")[2])
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
@@ -258,19 +294,63 @@ class Next(Repo):
         self.review("R0-1", "HEALTHY")
         self.assertEqual(self.next()["action"], "confirm")
 
-    def test_design_pass_then_confirm_after_two(self):
+    def test_one_design_pass_then_confirm(self):
         self.done_release()
         self.review("R0-1", "DESIGN-PASS")
         d = self.next()
         self.assertEqual((d["action"], d["release"]), ("design-pass", "R0"))
         self.commit("pass 1")
         self.review("R0-2", "DESIGN-PASS")
-        self.assertEqual(self.next()["action"], "design-pass")
-        self.commit("pass 2")
-        self.review("R0-3", "DESIGN-PASS")
         d = self.next()
         self.assertEqual((d["action"], d["release"]), ("confirm", "R0"))
-        self.assertIn("2 design passes", d["reason"])
+        self.assertIn("after 1 design pass:", d["reason"])
+        self.assertIn("--why", d["reason"])
+
+    def test_a_release_without_smoke_asks_for_the_skeleton_before_its_review(self):
+        self.done_release()
+        self.write("CLAUDE.md", CLAUDE.replace("- smoke: true\n", ""))
+        self.commit("no smoke")
+        d = self.next()
+        self.assertEqual((d["action"], d["release"]), ("skeleton", "R0"))
+        self.assertIn("release R0: no smoke: in CLAUDE.md ## mismagent", d["reason"])
+        self.assertIn("R0: no smoke:", self.mm("tag", "R0")[2])
+
+    def test_an_open_question_holds_the_release_review(self):
+        self.done_release()
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\n- hide the POIs?\n")
+        self.commit("design pass")
+        d = self.next()
+        self.assertEqual((d["action"], d["release"]), ("idle", "R0"))
+        self.assertIn("1 open question(s) in .mismagent/releases/R0.md: /mismagent:specify R0", d["reason"])
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\nnone\n")
+        self.commit("specify R0: answered")
+        self.assertEqual(self.next()["action"], "release-review")
+
+    def test_a_none_line_with_a_comment_is_none(self):
+        self.done_release()
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\nNone. Answered 2026-10-29: \"ok\" to "
+                   "Q1-Q6, and to\nexamples EX-1..2 and slices 1-2.\n")
+        self.commit("specify R0")
+        self.assertEqual(self.next()["action"], "release-review")
+        self.assertEqual(self.mm("check", "--release", "R0")[0], 0, self.mm("check", "--release", "R0")[1])
+        self.write(".mismagent/releases/R0.md", self.read(".mismagent/releases/R0.md") + "- What about refunds?\n")
+        self.commit("design pass")  # a question appended after the none paragraph still asks
+        d = self.next()
+        self.assertEqual(d["action"], "idle")
+        self.assertIn("1 open question(s)", d["reason"])
+
+    def test_a_question_in_a_later_release_does_not_hold_this_one(self):
+        self.done_release()
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\nnone\n")
+        self.write(".mismagent/releases/R1.md", "# R1\n\n## Open questions\n- the POIs, from R0's review\n")
+        self.commit("specify R0")
+        self.assertEqual(self.next()["action"], "release-review")
+
+    def test_start_is_not_held_by_open_questions(self):
+        self.slice("01-cart")
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\n- hide the POIs?\n")
+        self.commit("plan")
+        self.assertEqual(self.next()["action"], "start")
 
     def test_tagged_release_skipped(self):
         self.done_release()
@@ -290,6 +370,17 @@ class Next(Repo):
         self.assertEqual(self.next(), {"action": "start", "slice": "05-cleanup",
                                        "path": ".mismagent/slices/todo/05-cleanup.md",
                                        "reason": "refactor slice first in todo"})
+
+    def test_a_design_pass_that_leaves_the_backlog_idles_instead_of_looping(self):
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
+        self.slice("01-cart")
+        self.commit("design pass")  # the architect read them and left them
+        d = self.next()
+        self.assertEqual((d["action"], d["notes"], d["release"]), ("idle", 6, "R0"))
+        self.assertIn("6 design notes after the design pass (limit 5): the human decides", d["reason"])
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(7)))
+        self.commit("mm land 02-pay")  # a new note: one more pass, for it
+        self.assertEqual(self.next()["action"], "design-pass")
 
     def test_a_waiting_refactor_slice_does_not_hold_the_design_pass(self):
         self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
@@ -412,6 +503,19 @@ class Next(Repo):
         self.commit()
         self.assertEqual(self.next()["action"], "conventions")
 
+    def test_catalog_lists_every_malformed_topic_path(self):
+        self.write(".claude/skills/conventions/references/tabs.md", "# tabs\n\nA feature rule.\n")
+        self.write(".claude/skills/conventions/references/practices/pairing.md", "# pairing\n\n## Must\n- x\n")
+        self.write(".claude/skills/conventions/references/message.md", "# message\n\n## Where\nx\n## Uses\nx\n"
+                   "## Shape\nx\n## Must\n- x\n## Never\n- y\n## Example\n`CLAUDE.md`\n")
+        self.slice("01-cart")
+        self.commit()
+        d = self.next()
+        self.assertEqual(d["action"], "catalog")
+        self.assertEqual(sorted(d["topics"]), [".claude/skills/conventions/references/practices/pairing.md",
+                                               ".claude/skills/conventions/references/tabs.md"])
+        self.assertIn("the others stay", d["reason"])
+
     def test_second_question_blocks_again(self):
         path = ".mismagent/slices/doing/01-cart.md"
         self.started(extra="\n## Question\nWhich currency?\n\n## Answer\nEUR.\n")
@@ -423,6 +527,16 @@ class Next(Repo):
         self.write(path, self.read(path) + "\n## Question\n\n")  # an empty question does not block
         self.commit("q3")
         self.assertEqual(self.next()["action"], "build")
+
+    def test_two_doing_slices_are_refused_with_the_way_out(self):
+        self.slice("01-cart", state="doing", examples="EX-1", extra="Base: abc1234\n")
+        self.slice("02-pay", state="doing", examples="EX-2", extra="Base: abc1234\n")
+        self.commit("two checkouts met")
+        d = self.next()
+        self.assertEqual(d["action"], "stuck")
+        self.assertIn("two slices in doing: 01-cart, 02-pay — one checkout holds one slice", d["reason"])
+        self.assertIn("two slices in doing", self.mm("built", "01-cart")[2])
+        self.assertIn("two slices in doing", self.mm("land", "01-cart")[2])
 
     def test_debris_is_not_dirty(self):
         self.started()
@@ -538,7 +652,9 @@ class StartLand(Repo):
 
     def test_land_refuses_an_example_without_marker(self):
         self.started()
-        self.work()
+        self.git("rm", "-q", "tests/acceptance/test_01-cart.py")
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("01-cart: code, the marker file lost")  # without mm built, which would refuse first
         self.review("01-cart-1", "PASS")
         code, _, err = self.mm("land", "01-cart")
         self.assertEqual(code, 1)
@@ -574,7 +690,44 @@ class StartLand(Repo):
         self.assertEqual(review("01-cart", "DIRECT", "--sha", sha)[0], 0)
         self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/01-cart-2.md")))
         self.assertIn("neither a slice nor a release", review("R9", "HEALTHY", "--sha", sha)[2])
-        self.assertEqual(review("R0", "DESIGN-PASS", "--sha", sha)[0], 0)
+        self.assertIn("R0: not ready for a release review: slices not done: 01-cart",
+                      review("R0", "DESIGN-PASS", "--sha", sha)[2])
+
+    def test_a_release_review_may_record_the_risk_it_found(self):
+        self.done_release()
+        self.write(".mismagent/design-notes.md", "- RISK: src/cart.py:3: a negative total is accepted\n")
+        self.write(".mismagent/reviews/R0.draft.md", "errors: a wrong result, noted as a risk\n")
+        code, _, err = self.mm("review", "R0", "DESIGN-PASS", "--sha", self.head())
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.next()["action"], "design-pass")  # the risk, then the pass the review asks for
+
+    def test_a_release_review_needs_every_slice_done(self):
+        self.started()
+        sha = self.work()
+        code, _, err = self.mm("review", "R0", "HEALTHY", "--sha", sha, "--body", self.body())
+        self.assertEqual(code, 1)
+        self.assertIn("R0: not ready for a release review: slices not done: 01-cart", err)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/R0-1.md")))
+
+    def test_an_uncommitted_proposal_does_not_dirty_the_tree_for_review(self):
+        self.started()
+        sha = self.work()
+        self.write(".mismagent/conventions-proposals.md", "- create message: Where src/ · Shape … — src/cart.py\n")
+        code, out, err = self.mm("review", "01-cart", "PASS", "--sha", sha, "--body", self.body())
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.next()["action"], "land")
+
+    def test_land_commits_proposals_with_reviews_and_notes(self):
+        self.started()
+        sha = self.work()
+        self.write(".mismagent/conventions-proposals.md", "- create message: Where src/ · Shape … — src/cart.py\n")
+        self.write(".mismagent/design-notes.md", "- src/x.py: long\n")
+        self.review("01-cart-1", "PASS")
+        self.assertEqual(self.mm("land", "01-cart")[0], 0)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        shown = self.git("show", "--name-only", "--format=", "HEAD")
+        self.assertIn(".mismagent/conventions-proposals.md", shown)
+        self.assertIn(".mismagent/design-notes.md", shown)
 
     def test_land_never_commits_a_draft(self):
         self.started()
@@ -600,6 +753,7 @@ class StartLand(Repo):
     def test_headers_never_overwrite_prose(self):
         self.write(".mismagent/slices/todo/01-cart.md", "# Slice\n\nKind: feature\nRelease: R0\nExamples: EX-1\n"
                    "Built on the cart model.\nAfter a tap the cart shows one item.\n\n## Goal\nDo it.\n")
+        self.acceptance("test_cart.py", "# EX-1\n")
         self.commit("plan")
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.work()
@@ -783,6 +937,18 @@ class Gate(Repo):
                            cwd=self.dir, capture_output=True, text=True)
         self.assertEqual(p.stdout.strip().splitlines()[-1], "gate: red (test)")
 
+    def test_gate_times_out_and_kills_the_process_group(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: (trap '' TERM; sleep 3; touch late) >/dev/null 2>&1 & sleep 30\n"
+                   "- lint: true\n- timeout: 1\n")  # the child ignores TERM and holds no pipe: KILL must reach it
+        started = time.time()
+        code, out, err = self.mm("gate")
+        self.assertEqual(code, 1)
+        self.assertLess(time.time() - started, 15)
+        self.assertIn("test: red (timed out after 1 s: `timeout:` in CLAUDE.md ## mismagent)", out)
+        self.assertIn("gate red: test", err)
+        time.sleep(4)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "late")))  # the command's child died with it
+
     def test_gate_red_on_missing_config_or_check(self):
         self.write("CLAUDE.md", "# nothing\n")
         self.assertEqual(self.mm("gate")[0], 1)
@@ -827,11 +993,54 @@ class Tag(Repo):
         self.done_release()
         self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: false"))
         self.commit()
-        self.assertEqual(self.mm("tag", "R0")[0], 1)
+        self.review("R0-1", "HEALTHY")  # a review at HEAD: the gate alone refuses
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("gate red: test", err)
+        self.assertEqual(self.git("tag", "-l"), "")
+
+    def test_tag_refuses_without_a_review_at_head(self):
+        self.done_release()
+        self.review("R0-1", "HEALTHY")
+        self.commit("later")  # HEAD moved past the review
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("R0: no release review at HEAD", err)
+        self.assertEqual(self.git("tag", "-l"), "")
+
+    def test_tag_of_a_design_pass_review_needs_why_and_writes_a_decision(self):
+        self.done_release()
+        self.review("R0-1", "DESIGN-PASS")
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("R0: review 1 is DESIGN-PASS: `tag R0 --why", err)
+        self.assertEqual(self.git("tag", "-l"), "")
+        code, _, err = self.mm("tag", "R0", "--why", "the two findings are cosmetic; R1 takes them")
+        self.assertEqual(code, 0, err)
+        decision = self.read(".mismagent/decisions/0001-confirm-R0.md")
+        self.assertIn("the two findings are cosmetic; R1 takes them", decision)
+        self.assertIn("- .mismagent/reviews/R0-1.md at", decision)
+        self.assertIn(".mismagent/decisions/0001-confirm-R0.md", self.git("show", "--name-only", "--format=", "R0^{commit}"))
+        self.assertIn("review 1 DESIGN-PASS", self.git("tag", "-n1", "-l", "R0"))
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_tag_refuses_open_questions(self):
+        self.done_release()
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\n- hide the POIs?\n")
+        self.commit("design pass")
+        self.review("R0-1", "HEALTHY")
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("R0: 1 open question(s) in .mismagent/releases/R0.md", err)
         self.assertEqual(self.git("tag", "-l"), "")
 
 
 class Check(Repo):
+    def assertWarning(self, fragment, *args):
+        code, out, err = self.check(*args)
+        self.assertEqual(code, 0, err)
+        self.assertIn("warning: " + fragment, out)
+
     def assertError(self, fragment, *args):
         code, out, err = self.check(*args)
         self.assertEqual(code, 1, out)
@@ -881,6 +1090,23 @@ class Check(Repo):
         self.release_file()
         code, out, _ = self.check("--release", "R0")
         self.assertEqual(code, 0, out)
+
+    def refactor(self, state, declared="Behavior change: offline languages come from the copies.\n"):
+        self.write(".mismagent/slices/%s/05-tidy.md" % state, slice_text(kind="refactor", examples="")
+                   .replace("Examples", "Base: abc1234\n" + declared + "Examples"))
+
+    def test_an_unfinished_refactor_cannot_declare_a_behavior_change(self):
+        for state in ("todo", "doing"):
+            self.refactor(state)
+            self.assertError("05-tidy.md: a refactor changes no behavior: the change is a fix or a feature with an "
+                             "example (a ## Question for specify), or is reverted")
+            os.remove(os.path.join(self.dir, ".mismagent/slices/%s/05-tidy.md" % state))
+        self.refactor("doing", declared="")
+        self.assertEqual(self.check()[0], 0, self.check()[1])
+
+    def test_a_done_refactor_with_a_behavior_change_is_history(self):
+        self.refactor("done")
+        self.assertEqual(self.check()[0], 0, self.check()[1])
 
     def test_a_fix_slice_names_its_example(self):
         self.slice("01-cart", examples="EX-1, EX-2")
@@ -976,7 +1202,9 @@ class Check(Repo):
     def test_doing_slice_under_review_needs_its_markers(self):
         self.started()
         base = self.git("rev-parse", "HEAD")
-        self.work()
+        self.git("rm", "-q", "tests/acceptance/test_01-cart.py")
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("01-cart: code, marker dropped")
         self.assertEqual(self.check()[0], 0)  # while building: no marker required yet
         self.assertError("01-cart.md: doing, but EX-1 has no acceptance marker", "--base", base)
         self.acceptance("test_cart.py", "# EX-1\n")
@@ -1044,7 +1272,7 @@ class Check(Repo):
         self.assertNotIn("untracked.py", out)
         self.assertNotIn("test_big.py", out)
 
-    def test_base_acceptance_modified(self):
+    def test_another_examples_test_edited_is_a_warning_naming_the_file(self):
         self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z (superseded by EX-3) | R | Q | R1 |\n")
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
         self.acceptance("test_old.py", "# EX-4\n")
@@ -1054,22 +1282,45 @@ class Check(Repo):
         self.write(path, self.read(path).replace("Examples", "Base: %s\nExamples" % base))
         self.acceptance("test_new.py", "# EX-2\n")
         self.commit("added")
-        self.assertEqual(self.check("--base", base)[0], 0)
+        self.assertNotIn("warning: tests/", self.check("--base", base)[1])
         self.acceptance("test_old.py", "# EX-4 dropped\n")  # a superseded example: allowed
-        self.acceptance("test_other.py", "# EX-3 EX-2 shared\n" + "x = 1\n" * 20)  # names EX-2
-        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+        self.acceptance("test_other.py", "# EX-3 EX-2 shared\n" + "x = 1\n" * 20)  # names EX-2: the slice's own
+        self.assertNotIn("warning: tests/", self.check("--base", base)[1])
         self.acceptance("test_other.py", "# EX-3 weakened\n" + "x = 1\n" * 20)
-        self.assertError("tests/acceptance/test_other.py: acceptance test modified", "--base", base)
+        self.assertWarning("tests/acceptance/test_other.py: acceptance file modified since %s, naming no example "
+                           "of 02-more: the reviewer judges it against `git show %s:tests/acceptance/test_other.py`"
+                           % (base, base[:12]), "--base", base)
         self.write(path, self.read(path).replace("Kind: feature", "Kind: refactor"))
-        self.assertEqual(self.check("--base", base)[0], 0)  # refactor slices may modify them
+        self.assertNotIn("warning: tests/", self.check("--base", base)[1])  # a refactor adapts them by nature
         self.write(path, self.read(path).replace("Kind: refactor", "Kind: fix"))
-        self.assertError("tests/acceptance/test_other.py: acceptance test modified", "--base", base)  # a fix too
-        self.write(path, self.read(path).replace("Kind: refactor", "Kind: feature"))
+        self.assertWarning("tests/acceptance/test_other.py: acceptance file modified", "--base", base)  # a fix too
+        self.write(path, self.read(path).replace("Kind: fix", "Kind: feature"))
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
         self.git("mv", "tests/acceptance/test_other.py", "tests/acceptance/test_renamed.py")
         self.acceptance("test_renamed.py", "# EX-3\n" + "x = 1\n" * 19 + "x = 2\n")
         self.commit("rename and edit")
-        self.assertError("tests/acceptance/test_renamed.py: acceptance test renamed and edited", "--base", base)
+        self.assertWarning("tests/acceptance/test_renamed.py: acceptance file renamed and edited since", "--base", base)
+
+    def test_a_shared_helper_or_fixture_change_is_a_warning(self):
+        self.acceptance("conftest.py", "helper = 1\n")
+        self.write("tests/acceptance/fixtures/doc.bin", "v1")
+        base = self.commit("acc")
+        self.started(name="02-more", examples="EX-2")
+        self.acceptance("conftest.py", "helper = 2\n")
+        self.write("tests/acceptance/fixtures/doc.bin", "v2")
+        self.commit("02-more: helper and fixture")
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 0)
+        self.assertIn("warning: tests/acceptance/conftest.py: acceptance file modified since", out)
+        self.assertIn("warning: tests/acceptance/fixtures/doc.bin: acceptance file modified since", out)
+
+    def test_a_deleted_acceptance_file_is_listed(self):
+        self.acceptance("test_other.py", "# EX-3\n")
+        base = self.commit("acc")
+        self.started(name="02-more", examples="EX-2")
+        self.git("rm", "-q", "tests/acceptance/test_other.py")
+        self.commit("02-more: dropped a test")
+        self.assertWarning("tests/acceptance/test_other.py: acceptance file deleted since", "--base", base)
 
     def test_base_pure_rename_allowed(self):
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
@@ -1078,7 +1329,9 @@ class Check(Repo):
         self.git("mv", "tests/acceptance/test_other.py", "tests/acceptance/test_moved.py")
         self.acceptance("test_new.py", "# EX-2\n")
         self.commit("move")
-        self.assertEqual(self.check("--base", base)[0], 0)
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 0)
+        self.assertNotIn("test_moved.py", out)  # a pure rename is neither an error nor a warning
 
     def test_base_requirements_changed(self):
         self.write("REQUISITI.md", "v1\n")
@@ -1162,8 +1415,80 @@ class Check(Repo):
         self.git("revert", "--no-edit", "HEAD")
         self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
 
+    def test_a_reverted_builder_edit_does_not_taint_a_later_human_change(self):
+        skill = ".claude/skills/conventions/SKILL.md"
+        self.write(skill, "---\nname: conventions\n---\nv1\n")
+        base = self.commit("base")
+        self.write(skill, "---\nname: conventions\n---\nv2\n")
+        self.commit("01-cart: touched the skill")
+        self.git("revert", "--no-edit", "HEAD")
+        self.write(skill, "---\nname: conventions\n---\nv3\n")
+        self.commit("conventions after slice 01")
+        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+
+    def test_a_hand_undone_builder_edit_is_neutral(self):
+        skill = ".claude/skills/conventions/SKILL.md"
+        self.write(skill, "---\nname: conventions\n---\nv1\n")
+        base = self.commit("base")
+        self.write(skill, "---\nname: conventions\n---\nv2\n")
+        self.commit("01-cart: touched the skill")
+        self.write(skill, "---\nname: conventions\n---\nv1\n")
+        self.commit("01-cart: put it back")
+        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+        self.write(skill, "---\nname: conventions\n---\nv3\n")
+        self.commit("conventions after slice 01")
+        self.assertEqual(self.check("--base", base)[0], 0, self.check("--base", base)[1])
+
+    def test_an_edit_under_an_intermediate_name_is_still_the_builders(self):
+        base = self.commit("base")
+        self.git("mv", ".mismagent/examples/cart.md", ".mismagent/examples/basket.md")
+        self.commit("specify R1: basket")
+        self.write(".mismagent/examples/basket.md", EXAMPLES.replace("1 item", "0 items"))
+        edit = self.commit("01-cart: weaken")
+        self.git("mv", ".mismagent/examples/basket.md", ".mismagent/examples/trolley.md")
+        self.commit("specify R1: trolley")
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 1)
+        self.assertIn("trolley.md: changed since %s by %s 01-cart: weaken" % (base, edit[:7]), out)
+
+    def test_a_builder_edit_redone_after_a_revert_is_still_the_builders(self):
+        skill = ".claude/skills/conventions/SKILL.md"
+        self.write(skill, "---\nname: conventions\n---\nv1\n")
+        base = self.commit("base")
+        self.write(skill, "---\nname: conventions\n---\nv2\n")
+        self.commit("01-cart: touched the skill")
+        self.git("revert", "--no-edit", "HEAD")
+        self.write(skill, "---\nname: conventions\n---\nv2\n")
+        again = self.commit("01-cart: again")
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 1)
+        self.assertIn("SKILL.md: changed since %s by %s 01-cart: again (the human's file" % (base, again[:7]), out)
+
     def test_bad_base_ref(self):
         self.assertEqual(self.check("--base", "no-such-ref")[0], 1)
+
+    def test_check_warns_on_notes_that_are_not_notes(self):
+        self.write(".mismagent/design-notes.md", "# Design notes\n- a note\n  that goes on\n\n1. parked\n2. parked too\n"
+                   "Le note in sosta sono elenchi numerati.\n")
+        self.assertWarning(".mismagent/design-notes.md: 3 line(s) that are not notes (a note is one `- ` line; "
+                           "headings, blank and indented lines are fine), from '1. parked'")
+        self.write(".mismagent/design-notes.md", "# Design notes\n- a note\n  that goes on\n\n- RISK: x\n")
+        self.assertNotIn("not notes", self.check()[1])
+
+    def test_proposal_counts_are_untouched(self):
+        self.write(".mismagent/conventions-proposals.md", "# Proposals\n- create errors: typed\n1. not a proposal\n")
+        self.assertIn('"proposals": 1', self.mm("status", "--json")[1])
+
+    def test_check_warns_on_a_missing_smoke(self):
+        self.write("CLAUDE.md", CLAUDE.replace("- smoke: true\n", ""))
+        self.assertWarning("CLAUDE.md ## mismagent: no smoke:")
+
+    def test_a_bad_timeout_value_is_a_check_error(self):
+        for bad in ("0", "soon", "-5"):
+            self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", "- timeout: %s\n- max_file_lines" % bad))
+            self.assertError("CLAUDE.md ## mismagent: timeout: %r is not a positive number of seconds" % bad)
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", "- timeout: 5\n- max_file_lines"))
+        self.assertEqual(self.check()[0], 0, self.check()[1])
 
     def test_decision_without_evidence_warns(self):
         self.write(".mismagent/decisions/0001-stack.md", "# Stack\nPython.\n")
@@ -1214,6 +1539,7 @@ class Design(Repo):
         if shot:
             self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", SHOT + "- max_file_lines"))
         self.slice("01-cart", extra="", examples="EX-1\nDesign: " + design)
+        self.acceptance("test_cart.py", "# EX-1\n")
         self.commit("specify R0")
 
     def test_check_refuses_an_artboard_it_cannot_read(self):
@@ -1245,12 +1571,28 @@ class Design(Repo):
         self.write("src/cart.py", "x = 1\n")
         self.commit("code")
         self.assertIn("no `shot` in CLAUDE.md", self.mm("built", "01-cart")[2])
-        self.write(".mismagent/design/Gone.png", "png")
         self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", SHOT + "- max_file_lines"))
+        self.commit("01-cart: shot command")
+        self.write(".mismagent/design/Gone.png", "png")
         self.write(".mismagent/slices/doing/01-cart.md", self.read(".mismagent/slices/doing/01-cart.md")
                    .replace("Design: Verde.png", "Design: Verde.png Gone.png"))
-        self.commit("specify R0: Gone")
+        self.commit("specify R0: Gone")  # the human's: an artboard and the slice, nothing else
         self.assertIn("shot wrote no Gone.png", self.mm("built", "01-cart")[2])
+        self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
+
+    def test_shot_timeout_publishes_no_partial_screens(self):
+        self.designed("Verde.png Rosso.png")
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", '- shot: printf png > "$MM_SHOTS/Verde.png"; '
+                                               "sleep 30\n- timeout: 1\n- max_file_lines"))
+        self.commit("a slow shot")
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        code, _, err = self.mm("built", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("shot: red (timed out after 1 s", err)
+        self.assertFalse(os.path.isdir(os.path.join(self.dir, ".mismagent/shots/01-cart")))
+        self.assertFalse(os.path.isdir(os.path.join(self.dir, ".mismagent/shots/01-cart.rendering")))
         self.assertNotIn("Built:", self.read(".mismagent/slices/doing/01-cart.md"))
 
     def test_shot_renders_a_release_and_tag_keeps_it(self):

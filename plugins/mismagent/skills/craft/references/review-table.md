@@ -1,6 +1,6 @@
 # The review table
 
-Seven dimensions, a checklist on the code (a slice's diff, or the whole code at a release): each
+Seven dimensions, a checklist on the code (a slice's diff, or the code a release touched): each
 one checked — nothing found, or findings. No scores: a finding carries its evidence, `file:line`. A
 **blocking** finding names the dimension, the rule of the standard it breaks, the line and what
 would fix it; anything else is advice.
@@ -19,5 +19,8 @@ Always, under every dimension: SOLID, YAGNI, DRY, test first (the `craft` skill)
 conventions as decided.
 
 A slice passes when its diff brings **no blocking finding on a dimension it touches** and breaks no
-rule of `ARCHITECTURE.md`. A release is healthy when the whole code has no blocking finding of the
-table; otherwise the architect runs a design pass.
+rule of `ARCHITECTURE.md`. A release is healthy when the code its slices touched, and the production
+paths it runs through, have no blocking finding of the table; a wrong result anywhere is a risk, a
+structure finding in code the release did not reach is a design note. Otherwise the architect runs
+a design pass — once by itself; a second DESIGN-PASS is the human's call: confirm with `--why`, or
+ask for another pass.

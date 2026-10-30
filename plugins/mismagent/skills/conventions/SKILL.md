@@ -18,11 +18,14 @@ No source → it is an **assumption**, said as one.
 The proposals, the skill if it exists, `ARCHITECTURE.md`, and for each proposal the files it cites
 and the last review of its slice. No skill yet: the first version comes from the skeleton's proposals (good principles for this
 stack, each with its source); the model slice's code updates it. A **catalog** (the architect's,
-ending `- now replace the skill`): decide it kind by kind; once every line is decided, the skill is
-the decided catalog alone — every old topic removed (git keeps them).
+ending `- now replace <topics>`): decide it kind by kind; once every line is decided, the topics it
+names are replaced by the decided catalog (git keeps them) and the others stay as they are.
 
-## 2. One proposal at a time
-Show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
+## 2. The proposals, as one table, then a question only where it matters
+Show them all first as one table — the rule in a line, the file it shows, your recommendation —
+and let the human accept in one answer those you recommend as they are. One question at a time
+only for the ones you recommend to reject or reword, or that conflict. For each of those:
+show the rule in one line; the code that shows it (`file:line`, a short excerpt), or before the code its source; what it changes
 (a new topic, or the current rule beside the new); your recommendation and why — a conflict with
 `ARCHITECTURE.md` or another topic, or a single occurrence that may be an accident. First the test: could an
 acceptance test prove it (the product shows, does or refuses something)? Then it is behavior, not a

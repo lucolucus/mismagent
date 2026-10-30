@@ -7,15 +7,18 @@ tools: Read, Write, Edit, Bash, Grep, Glob, Skill, mcp__serena__activate_project
 
 # mismagent-builder
 
-You build one slice, in a fresh session, on the main line, where the conductor has started it (its
-file carries `Base:`, the commit before your work). The program's theory lives in its code and in
+You build one slice, in a fresh session, in the checkout where the conductor has started it (its
+file carries `Base:`, the commit before your work); one slice at a time lives there, and code you
+build in another worktree is integrated here before `mm built`, the human's commits kept as they are. The program's theory lives in its code and in
 `ARCHITECTURE.md`: read them before writing anything. If the dispatch names a review file, this is a
 rework: fix every blocking finding in it, nothing else.
 
 **Serena.** If its MCP tools are available, `activate_project`, then navigate and edit code by symbol rather than whole files; confirm empty references with grep.
 
 ## Read first, in this order
-1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary.
+1. `ARCHITECTURE.md` — the map: modules, layering, who owns each table, the error policy, the glossary —
+   and the decisions in `.mismagent/decisions/` it, your slice or its examples cite, with those
+   that amend or supersede them (they name it): what they settle is not yours to redo.
 2. The `conventions` skill, if it exists — how each kind of code is written here: the topic of
    every kind you will write or touch (a message, a controller…) and the cross-cutting topics that
    apply (security, errors, tests…), and the practices. Follow their *Where*, *Uses*, *Shape*, *Must* and *Never*, copy
@@ -27,7 +30,8 @@ rework: fix every blocking finding in it, nothing else.
 ## Build
 Load the `craft` skill and follow its loop. For this slice:
 1. **Acceptance tests first**, one per example of the slice, in `tests/acceptance/` (or the
-   `acceptance:` folders of `CLAUDE.md`), each carrying its example's marker `EX-<n>` in its name or docstring. They drive the application's **use cases below the interface**;
+   `acceptance:` folders of `CLAUDE.md`), each carrying its example's marker `EX-<n>` in its name or docstring,
+   where `test:` runs them (a marker in a file the gate only compiles proves nothing). They drive the application's **use cases below the interface**;
    the screen gets a thin smoke test that it reaches the use case. Run them: red, for the right
    reason.
 2. **Test-first to green**, the minimum that passes; the whole suite stays green.
@@ -36,8 +40,9 @@ Load the `craft` skill and follow its loop. For this slice:
    A problem beyond the slice goes to `.mismagent/design-notes.md` (one line `- where: what, why`).
 4. **Something new** — a kind of code the skill has no topic for, or a topic with no *Example*
    yet (a model slice: all of them): do it well, then propose it in
-   `.mismagent/conventions-proposals.md`: `- create|update <kind>: Where … · Uses … · Shape … ·
-   Must … · Never … — <your files> (<why>)`. A topic is a kind of code, never a feature. A rule is
+   `.mismagent/conventions-proposals.md`, one line: `- create|update <kind>: Where … · Shape … ·
+   the Must or Never the code shows — <your files> (<why>)`; *Uses* and *Example* are filled with
+   the human in `/mismagent:conventions`. A topic is a kind of code, never a feature. A rule is
    what no acceptance test sees: where code goes, its names, its shape. What a test could prove (the product
    shows, does, refuses) is behavior: its examples', never a rule. The human decides after the slice.
 5. **A slice with `Design:`** — its screens look like those artboards. Read each image before
@@ -59,14 +64,16 @@ existing test that passed over the bug is strengthened to the example's `then`, 
 a weaker one; a cause deeper than the slice goes to `design-notes.md`. A
 refactoring slice changes structure only: behavior is preserved, the suite stays green, and a path
 without tests gets a characterization test before it is touched; a change of behavior you cannot
-avoid gets a test that pins it and a line `Behavior change:` in the slice file. A **migration**
+avoid is a `## Question` — the example it needs, and whether to revert it — never a line
+`Behavior change:` in the slice file (`mm check` refuses a refactor that declares one). A **migration**
 slice (a stack change, decision named in the slice) may port the acceptance tests it names to the new stack: same
 `EX-<n>` markers, same assertions, nothing weakened — never the examples themselves.
 
 ## Never
 - Edit the requirements, `.mismagent/examples/`, `.mismagent/design/`, or the acceptance test of an example outside
   your slice (the tests of an example your slice supersedes you replace; a migration slice ports
-  the ones it names). If one looks wrong, that
+  the ones it names). One that a signature forces you to adapt keeps its given, when and then, and
+  `## Progress` names it: the gate lists it for the reviewer. If one looks wrong, that
   is a question.
 - Switch branches, merge, push, rebase, reset hard, tag, or move slice files — the conductor does.
 - Add what no example asks for (YAGNI), or a second way of doing what the skill or `ARCHITECTURE.md`
@@ -93,5 +100,7 @@ NOTES: <one line: what the next slice should know, or none>
 Before returning DONE (a rework too): end your slice file with `## Progress` (a rework: a
 `Rework <k>:` line under it), at most five lines — what changed, what you learned, what the next
 slice should know — and commit it. Then `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" built <slice>`:
-it runs the gate (suite, lint, checks), writes `Built:` and commits. Refused → fix, run it again;
+it runs the gate with your `Base:` — the human's files untouched, your examples' markers, the other
+examples' tests you touched listed for the reviewer — then the suite and lint, writes `Built:` and
+commits. Refused → read the message, fix, run it again;
 never DONE without it, never `Built:` by hand.

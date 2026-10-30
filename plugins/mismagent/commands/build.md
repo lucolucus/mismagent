@@ -1,6 +1,6 @@
 ---
-description: 'mismAgent: the conductor. One action per call — asks mm what is next, dispatches the builder, reviewer or architect, lands slices, settles doubts, stops for the human. Usage: /mismagent:build [--confirm RN]'
-argument-hint: '[--confirm RN]'
+description: 'mismAgent: the conductor. One action per call — asks mm what is next, dispatches the builder, reviewer or architect, lands slices, settles doubts, stops for the human. Usage: /mismagent:build [--confirm RN [--why "…"]]'
+argument-hint: '[--confirm RN [--why "…"]]'
 ---
 
 # /mismagent:build — the conductor
@@ -22,19 +22,20 @@ tick. After this conversation's third `land`, end the loop with `NEEDS-HUMAN: /c
 (answer that one with `SendMessage` to it; send it your `NEEDS-HUMAN`/`FOR-HUMAN` lines too) →
 answer first, from the files (the slice, its progress and reviews, `MM status`, the examples,
 `ARCHITECTURE.md`, the decisions), briefly. Their answer to a doubt you put to them is the
-slice's `## Answer`: write it in their words and commit. A request that moves no state is this
+slice's `## Answer`: write it in their words and commit — never an example in that commit: an
+example is `/mismagent:specify`'s. A request that moves no state is this
 tick's action, in place of mm's: a **review** (a fresh **mismagent-reviewer**, `MODE: slice` or
 `release`, with `ADVISORY`), a **challenge** (the **mismagent-challenger**, `MODE: doubt` with
 their question inline, or an idea; you write nothing), a **design pass** — only when mm says
-`start` or `idle` (no slice doing), else it waits for that tick: the **mismagent-architect**,
+`start`, `idle` or `confirm` (no slice doing), else it waits for that tick: the **mismagent-architect**,
 `MODE: design-pass`, the first untagged release and their reason. Any other request — a state move,
 a requirement, a convention, a tag — name the command that does it (`/mismagent:specify`,
 `/mismagent:conventions`, `--confirm`).
 
-**After a `land`, look back** before you report: the reviews and reworks of the release so far,
-`design-notes.md`, the proposals. The same rule broken in two slices, a file reworked again,
-proposals that are one rule, a slice that took three rounds → one `FOR-HUMAN:` line each, with the
-files; none → nothing.
+**After a `land`, look back** before you report: the reviews and reworks of the slice just landed
+and of the one landed before it. The same rule broken in both, a file reworked in both, a slice
+that took three rounds → one `FOR-HUMAN:` line each, with the files; none → nothing. The
+release-wide reading is the design pass's.
 
 ## 1. What next
 Run `MM next --json` and do exactly what its action says (`path`: the slice file now; `review`:
@@ -42,7 +43,7 @@ the review at HEAD):
 
 | action | you do |
 |---|---|
-| `skeleton` | dispatch **mismagent-architect** with `MODE: skeleton` |
+| `skeleton` | dispatch **mismagent-architect** with `MODE: skeleton` and mm's reason |
 | `catalog` | dispatch **mismagent-architect** with `MODE: catalog` and mm's reason |
 | `start` | `MM start <slice>` (it prints the new path), then dispatch **mismagent-builder** with that file; with `proposals`, add `FOR-HUMAN: /mismagent:conventions — <n> proposal(s); the flow goes on, the release waits for them` |
 | `build` · `resume` | dispatch **mismagent-builder** with the slice file (`resume`: say its work was interrupted; it continues from the tree) |
@@ -55,7 +56,7 @@ the review at HEAD):
 | `release-review` | dispatch a **fresh mismagent-reviewer** with `MODE: release` and the release |
 | `design-pass` | dispatch **mismagent-architect** with `MODE: design-pass`, the release and the reason |
 | `conventions` | print `NEEDS-HUMAN: /mismagent:conventions` with mm's reason, and stop |
-| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`. Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any), and stop |
+| `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`, with `--why "<their words>"` when they gave one (a DESIGN-PASS review is tagged only with it: mm records the reason as a decision). Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any) — a DESIGN-PASS: "confirm with `--why`, or ask for a design pass" — and stop |
 | `idle` | report the reason (e.g. the next release needs `/mismagent:specify`) and stop |
 
 Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`
@@ -74,7 +75,9 @@ A slice is blocked when its `## Question` has no `## Answer`. You neither guess 
    a structure expensive to reverse, anything outward-facing — or two options stay balanced.
    Otherwise *local*.
 3. **Act.** Local → write the `## Answer` (the choice and why), and if it constrains later work a
-   short file in `.mismagent/decisions/`; commit; the next call resumes the slice. Important →
+   short file in `.mismagent/decisions/`; a product question the answer leaves open (no example
+   settles it) is one `- ` line under `## Open questions` of the release it affects — mm holds that
+   release's review on it; commit; the next call resumes the slice. Important →
    write in the slice file the options, the strongest argument for each and your recommendation;
    dispatch **mismagent-challenger** with `MODE: doubt` and the slice file, and write its verdict
    under your recommendation as `### Challenge` (a RESHAPE that names a better option: put it

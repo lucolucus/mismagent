@@ -113,7 +113,10 @@ For each capability of the release:
 3. **The rule.** Restate it in the human's words and ask for the counter-example ("so a paid sale
    can never change — not even to fix a wrong price?").
 4. The human confirms, corrects or cuts. A point nobody can answer yet stays under
-   `## Open questions` of the release file, never guessed.
+   `## Open questions` of the release file, never guessed; an answered one leaves the file — its
+   answer is scope, an example or a decision; one that waits for a later release is written in
+   that release's file (create `releases/R<n>.md` with its goal line if it does not exist). A
+   release is reviewed and tagged only with none open (`mm` holds it on them).
 
 Ask a few questions at a time, grouped, each with your proposal, so the human can answer "ok".
 
@@ -132,7 +135,7 @@ Write `.mismagent/slices/todo/NN-<name>.md` (NN continues the highest number any
 examples, never a technical layer. The first slice of a new product is the smallest real example
 end to end. Order: risk first, then value. Each file:
 ```
-Kind: feature            (model: the first, set by the architect · fix: a bug, §6)
+Kind: feature            (model: the first, set by the architect · fix: a bug, §6 · refactor: structure only, the architect's)
 Release: <RN>
 Examples: EX-3, EX-4
 Design: <artboards its screens look like, if any>

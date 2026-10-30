@@ -44,8 +44,8 @@ both honest. Heir of **BMad** and **Agentheim**.
 | `/mismagent:specify <request>` | An interview, not a transcription: real cases with real values, the edges you would not volunteer, each rule restated for you to confirm. Out: the stack decision (first time), the release file, the examples (one file per capability), vertical slices for **the next release only**. It closes only when the release holds together (`mm check --release`): every example in a slice, every slice proving an example, no open question. |
 | `/mismagent:specify bug <what happens>` | The short way: the bug reproduced in real values, found in the examples (a test too weak, a missing edge, or a wrong rule — then it is a change), one example and one `fix` slice. The builder proves it red before fixing it; it starts before any other slice. |
 | `/mismagent:build` | **One action per call**, decided by the tool `mm`: build a slice (acceptance tests first, TDD, refactoring), review it on the review table, land it, run a design pass, or stop for you. Run it again, or under `/loop`. |
-| `/mismagent:build --confirm R0` | Your confirmation of a release: the tag. |
-| `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): you and the agent go through the agents' proposals one by one — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |
+| `/mismagent:build --confirm R0` | Your confirmation of a release: the tag. Over a review that still has findings (`DESIGN-PASS`), `--why "…"`: your words are kept as a decision. |
+| `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): the agents' proposals as one table — you accept in one answer the ones recommended as they are, and decide one by one only those to reject, reword or that conflict — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |
 | `/mismagent:site` | The project in the browser, read-only: the releases as swimlanes (to do · doing · done, foldable), each slice with its reviews, progress and commits, a slice built in a parallel worktree or branch among the doing ones; the requirements → examples → slices → acceptance tests; the conventions and decisions. The page is served live from a small local server (Python standard library, `127.0.0.1` only): it follows the project by itself while the builder works, and the conductor makes sure it is up whenever it stops for you. |
 | `/loop /mismagent:build` (in a session of its own) | The always-on conductor: every action as soon as it is ready — build, review, land, design pass; when it needs you it waits and checks back every ten minutes, and resumes by itself once you have answered. |
 
@@ -71,16 +71,22 @@ important doubt (`NEEDS-HUMAN`) and each release.
   pass, a commit at every green — green read from the exit code, never through a pipe (`mm gate`
   ends on its verdict, so even a `| tail` shows it); a fresh reviewer blocks a quality defect in the diff exactly like a
   functional one.
-- **Every release:** a fresh reviewer checks the whole code on the seven dimensions of the
+- **Every release:** a fresh reviewer runs the app and checks the code the release touched, and the
+  paths it runs through, on the seven dimensions of the
   [review table](plugins/mismagent/skills/craft/references/review-table.md) (simple design, naming,
   modularity, duplication, concision, error handling, test quality) — findings with their line, no
-  scores; with a finding, the architect reads the code and queues refactoring slices before the
-  next request. If findings remain after two design passes, you decide whether to confirm the
-  release, with the reason. A wrong result noted outside a diff (`- RISK` in the design notes)
-  holds the release review until a design pass turns it into a slice; left there, you decide.
+  scores; a decided deviation is not a finding. With a finding, the architect reads the code and
+  queues refactoring slices (structure only: a wrong result or a look difference goes to the
+  release's open questions, for `specify`). After one design pass, you decide: confirm with your
+  reason, or ask for another. A release is reviewed and tagged only with no open question in its
+  file and a `smoke:` to run the app. A wrong result noted outside a diff (`- RISK` in the design
+  notes) holds the release review until a design pass turns it into a slice; left there, you decide.
 - **Tools compute, agents judge:** `mm` owns the state, the git moves and every count. Agents
-  signal through it, never by hand: `mm built` closes a builder's round (gate green, `Built:`
-  written), `mm review` writes the verdict lines and refuses when HEAD moved during the review.
+  signal through it, never by hand: `mm built` closes a builder's round with the gate run against
+  the slice's `Base:` — the human's files untouched, the markers in place, the other examples' tests
+  it touched listed for the reviewer — then `Built:` written; `mm review` writes the verdict lines
+  and refuses when HEAD moved during the review; `mm tag` needs a review at HEAD. Every gate command
+  runs under a `timeout:`, so a hung simulator never holds the conductor.
 
 ## The design, in three layers
 | file | layer |

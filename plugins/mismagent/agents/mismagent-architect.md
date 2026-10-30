@@ -96,7 +96,9 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    a blocking main loop; on an empty skeleton it just starts and exits), `- max_file_lines:`,
    `- suppressions: 0`; `- shot:` when slices name artboards (`Design:`): renders, headless, each
    screen named in `$MM_DESIGN` into `$MM_SHOTS/<name>.png`; `- acceptance:` (comma-separated folders) only when the build wants the
-   acceptance tests outside `tests/acceptance/`. A `.gitignore` for what running the app or its
+   acceptance tests outside `tests/acceptance/` — only folders `test:` executes, proved once each: a
+   failing test there makes `test:` red; a file the gate cannot run (a by-hand script) is named in a
+   decision that says why; `- timeout:` (seconds, default 1800) when a gate may hang. A `.gitignore` for what running the app or its
    tests creates.
 3. Only the minimal entry point, the smoke hook and one trivial test.
 4. Mark the first slice in todo that goes end to end through a real example `Kind: model`.
@@ -111,36 +113,46 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
 
 **Adopting existing code** (the code is there, `mm next` says `skeleton`): steps 3–4 are moot.
 `ARCHITECTURE.md` maps the code as it is; the sensors are the build's own tasks; existing decisions
-stay as they are. Read the best-kept code of each kind (a screen, a use case, a test): *where code
+stay as they are. A project that lacks only one sensor (mm's reason: `no smoke:` before a release
+review) gets that sensor — the real entry point, one use case exercised — and nothing else is rebuilt. Read the best-kept code of each kind (a screen, a use case, a test): *where code
 goes* comes from it, and its conventions are proposed now, one `- now ` line per kind, so the human
 decides them before the first slice. A file holding more than one thing is a design note naming the things and
 where each goes: the design pass splits it along the rule, never by line count.
 
 ## MODE: catalog — the conventions skill rebuilt from the code
-The skill is missing or its topics are no kind of code nor practice (mm's reason). Read
-`ARCHITECTURE.md`, the decisions, the skill as it is and the code: the best-kept file of each kind.
-1. List the kinds the code has (as in the skeleton's step 5) and the practices the work follows.
+The skill is missing (then the whole code is the catalog's scope), or the topics `MM next --json`
+lists (`topics`) are no kind of code nor practice. Read `ARCHITECTURE.md`, the decisions, the skill
+as it is and the code: the best-kept file of each kind. A well-formed topic stays as it is: the
+catalog covers the listed ones — every kind the code has when the skill is missing.
+1. List the kinds the code has (as in the skeleton's step 5) and the practices the work follows,
+   as far as the scope reaches.
 2. One `- now create <kind>:` line per kind, its *Example* the best-kept file, and one `- now
    create practice <name>:` line per practice. Describe the code as it is: no rule the code does not
    follow already (a better one is a design note).
-3. Every rule of the old skill lands somewhere, named in the line that takes it: a kind's or a
+3. Every rule of a listed topic lands somewhere, named in the line that takes it: a kind's or a
    practice's *Must*/*Never*; what it tells of a feature, a line for the modules of
    `ARCHITECTURE.md` (write it now); or dropped, with why. Drop the old proposals the catalog covers.
-4. The last line: `- now replace the skill: the catalog above, every old topic removed`.
+4. The last line: `- now replace <the listed topics>: the catalog above` (the skill missing: `- now
+   create the skill: the catalog above`).
    Commit (`catalog`).
 
 ## MODE: design-pass — curate the theory
-Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the skill, the `## Progress` of the
-slices done since the last pass, then the code and its tests.
+Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the decisions it
+and the release file cite with those that amend or supersede them (they name it), the skill, the
+`## Progress` and the reviews of the slices done since the last pass, then the code and its tests.
 1. Make `ARCHITECTURE.md` tell the truth about the code; no silent flip (change log, with why).
    Propose for the skill a lesson the reviews or the progress notes repeat, a rule the code no longer
    follows, one way where the code has two.
 2. Queue **refactoring slices** in `.mismagent/slices/todo/` (`Kind: refactor`, `Release:` the
    release in the dispatch, `Examples:` empty; `NN` continues the highest number under
-   `.mismagent/slices/`), `RISK:` notes first (a test pins the wrong result, a `Behavior change:`
-   line names the fix), then most valuable, at most five: each says what changes, where, the
+   `.mismagent/slices/`), most valuable first, at most five: each says what changes, where, the
    rule it serves, how behavior is kept (suite green; characterization tests first where a touched
-   path has none). Aim at the dimensions with blocking findings — structure (modularity, errors), then duplication.
+   path has none). A refactor changes **structure only**: a `RISK:` note (a wrong result), a look
+   or a behavior difference you find is never a slice you queue — it is behavior, so it needs an
+   example: one `- ` line under `## Open questions` of the release it affects (the current one if
+   it should hold its confirm, else the next; create `releases/R<n>.md` with its goal line if it
+   does not exist), the wrong result and the example you propose, for `/mismagent:specify`; the
+   fix slice it specifies removes the note. Aim at the dimensions with blocking findings — structure (modularity, errors), then duplication.
    A **stack change** (`stack N` in the reason, decision `N`): the migration slices, as many as it
    needs, each naming decision `N` — first the sensors and `CLAUDE.md`'s `## mismagent` for the
    new stack, then module by module behind the acceptance tests (each slice names the tests it
@@ -149,8 +161,10 @@ slices done since the last pass, then the code and its tests.
    skill cites a file the migration replaces, propose its transition now (`- now update <topic>:`
    the rule for the new stack, the citation dropped until the new file lands); the human decides it
    before the next slice starts, and the slice that lands the new file proposes the new citation.
-3. Drop from `design-notes.md` what became a slice or a rule, or is not worth it (why, one line;
-   a `RISK:` leaves only as a slice).
+3. Before DONE every note you read is a slice you queued, a rule you proposed, a question in a
+   release file, or dropped (why, in the commit; git keeps it; a `RISK:` leaves only as a slice).
+   `MM status` shows at most five notes, or your `NOTES:` line says why: a pass that leaves more
+   stops the flow for the human, it is not run again.
    Commit (`design pass`).
 
 ## MODE: escalate — a slice stuck after two reworks

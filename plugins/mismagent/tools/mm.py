@@ -8,6 +8,7 @@ are; two slices in doing -> `stuck`); `start` records Base, the reviewer reviews
 adds commits, nothing reaches done/ without a PASS at HEAD and a green gate. Exit: 0 ok · 1 check/gate failure or refused precondition (one
 line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespace and **bold**):
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
+    max_map_lines (300: the lines of ARCHITECTURE.md past which check warns),
     acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere),
     shot (renders the app's screens: one $MM_SHOTS/<name>.png per name in $MM_DESIGN),
     timeout (1800: the seconds a test, lint or shot command may take; past it the command and its
@@ -25,8 +26,12 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     ## Question/Answer, ## Progress (the builder's notes) — After: lists slices (NN or stem) that
     must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
     lists the artboards the slice's screens must look like (images under .mismagent/design/);
-    Friction: <round>: <category>: <note> — one line per round, written by `mm built`
-  .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`
+    Friction: <round>: <category>: <note> — one line per round, written by `mm built`; Gate:
+    <round>: <seconds> — the gate's wall-clock that round, written by `mm built`
+  .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`;
+    a slice's stay on disk for its reviewer, never committed; a release's are committed by `tag`
+  ARCHITECTURE.md: the map, the present only — check warns on a path it cites that no file has, a
+    `file:line` reference (lines rot: name the symbol) and more than max_map_lines lines
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, LOOK: (a release: the
     artboard pairs that differ), FRICTION: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
@@ -88,15 +93,18 @@ Design choices:
   that must come first): half-done work never leaves doing unreviewed. A todo slice whose After:
   slices are not all done is skipped by `next`; when every todo slice waits -> `idle`.
 - Look is proven like behavior: a slice with Design: is built only with a screen per artboard,
-  rendered by the project's `shot` command at that commit (`mm built` runs it and commits them), so
-  the reviewer judges the pair, never the diff alone; a release's pairs are rendered by `mm shot`.
+  rendered by the project's `shot` command at that commit (`mm built` runs it and leaves them on disk:
+  a set per round in git grew a repository by hundreds of MB), so the reviewer judges the pair, never
+  the diff alone; a release's pairs are rendered by `mm shot` and the set the human confirmed is
+  committed by `tag`, force-added past a .gitignore. Shots of slices still tracked are warned.
 - The conventions skill is a catalog of kinds of code and practices. A topic that is neither (its
   sections missing), or a done model slice with no skill and no proposal -> `catalog` (the architect
   proposes the whole catalog as `- now ` lines) before anything else, even a slice in doing: the gate
   stays red until it lands; once proposed -> `conventions`.
 - Friction is the method's, never the code's: `mm built` requires `--friction "<category>: <note>"`
   or `none` (validated before the gate), `mm review` takes it optionally; `mm log` counts them and
-  reads rounds, doubts and wall-clock of the landed slices from the files and git: no state file.
+  reads rounds, doubts and wall-clock of the landed slices and the gate's seconds of each built round
+  (the measure a faster gate would be decided on) from the files and git: no state file.
 - Look is accepted on the record: a release review names the artboard pairs that differ (`--look`,
   required when a slice of the release has Design:); `tag` needs `--why` for those as for a
   DESIGN-PASS — a look difference alone is no DESIGN-PASS.
@@ -134,6 +142,8 @@ TOPIC_LINK = re.compile(r"references/[\w./-]+\.md")
 FRICTION = ("spec", "tool", "conventions", "env", "context", "review")  # the method's, never the code's
 FRICTION_WORDS = 15
 CITED = re.compile(r"`([\w.\-/]+)`")
+MAP = "ARCHITECTURE.md"
+
 IGNORED_DIRTY = (REVIEWS + "/", NOTES, PROPOSALS, SHOTS + "/")
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
 EX_ID = re.compile(r"^EX-\d+$")
@@ -144,6 +154,9 @@ SUPPRESS = re.compile(r"noqa|pylint:\s*disable|eslint-disable|@SuppressWarnings|
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt",
               ".kts", ".rb", ".cs", ".c", ".h", ".cc", ".cpp", ".hpp", ".swift", ".php", ".scala",
               ".vue", ".svelte", ".dart", ".ex", ".exs", ".lua", ".sh", ".m", ".fs", ".clj"}
+FILE_EXT = SOURCE_EXT | {".yml", ".yaml", ".json", ".toml", ".xml", ".plist", ".md", ".gradle", ".xcconfig",
+                        ".entitlements", ".storyboard", ".cfg", ".ini", ".txt", ".lock", ".html", ".css", ".sql"}
+LINE_REF = re.compile(r"[\w-]+(?:%s):\d+" % "|".join(re.escape(e) for e in sorted(SOURCE_EXT, key=len, reverse=True)))
 MAX_REWORK, MAX_DESIGN_PASSES, NOTES_LIMIT = 2, 1, 5
 ROOT = "."
 
@@ -222,7 +235,7 @@ def parse_slice(state, name):
     rel = "%s/slices/%s/%s" % (M, state, name)
     s = {"state": state, "stem": name[:-3], "path": rel, "kind": "", "release": "",
          "examples": [], "bad_examples": [], "design": [], "base": "", "after": [], "built": 0,
-         "friction": [], "answers": 0}
+         "friction": [], "gate": [], "answers": 0}
     num = re.match(r"(\d+)", name)
     s["num"] = int(num.group(1)) if num else 10 ** 9
     sections = []  # [heading, non-empty lines], in order
@@ -235,6 +248,10 @@ def parse_slice(state, name):
         fm = re.match(r"^friction\s*:\s*(\d+)\s*:\s*(.+)$", st.lstrip("-* ").replace("**", ""), re.I)
         if fm and not sections:
             s["friction"].append((int(fm.group(1)), fm.group(2).strip()))
+            continue
+        gm = re.match(r"^gate\s*:\s*(\d+)\s*:\s*(\d+)", st.lstrip("-* ").replace("**", ""), re.I)
+        if gm and not sections:
+            s["gate"].append((int(gm.group(1)), int(gm.group(2))))
             continue
         if sections:
             if st:
@@ -396,7 +413,7 @@ def run(cmd, env=None):
 def end(p, sig):
     try:
         os.killpg(p.pid, sig)
-    except ProcessLookupError:
+    except (ProcessLookupError, PermissionError):  # the group is gone (macOS: EPERM once its leader is reaped)
         pass
 
 def timed_out(key):
@@ -827,7 +844,7 @@ def run_check(base=None, release=None):
                                   "changes it)" % (paths[-1], base, "; ".join(others)))
     errors_cat, warning_cat = categories()
     errors += errors_cat
-    warnings += warning_cat
+    warnings += warning_cat + map_warnings(cfg) + tracked_shots(sls)
     for rel in (r for r in walk(SKILL) if r.endswith(".md")):
         text, practice = read(rel), "/references/practices/" in "/" + rel
         if "/references/" in "/" + rel:
@@ -842,6 +859,41 @@ def run_check(base=None, release=None):
                     os.path.exists(os.path.join(ROOT, d, cited)) for d in ("", SKILL)):
                 errors.append("%s: cites %s, which does not exist (update the skill)" % (rel, cited))
     return errors, warnings
+
+def map_warnings(cfg):
+    """ARCHITECTURE.md is the map of the code as it is: a cited path no file has, a `file:line`
+    (stale at the next edit) or a map grown past max_map_lines (a chronicle) is warned."""
+    text = read(MAP)
+    if not text:
+        return []
+    tracked = git("ls-files", check=False).splitlines()
+    names, out = {os.path.basename(t) for t in tracked}, []
+    gone = sorted(c for c in set(CITED.findall(text))
+                  if ("/" in c or os.path.splitext(c)[1] in FILE_EXT) and not os.path.exists(os.path.join(ROOT, c)) and ("/" in c or c not in names))
+    if gone:
+        out.append("%s cites %s, which no file has: the map tells the code as it is (a path to come is "
+                   "a slice's, not the map's)" % (MAP, ", ".join(gone)))
+    refs = sorted(set(LINE_REF.findall(text)))
+    if refs:
+        out.append("%s cites line numbers (%s): name the symbol — a line is stale at the next edit"
+                   % (MAP, ", ".join(refs[:5]) + (", …" if len(refs) > 5 else "")))
+    limit, n = cfg_int(cfg, "max_map_lines", 300), len(text.splitlines())
+    if n > limit:
+        out.append("%s: %d lines > max_map_lines %d: the map says what the code is; how it got there is "
+                   "the decisions' and git's" % (MAP, n, limit))
+    return out
+
+def tracked_shots(sls):
+    """Shots of slices still in git (committed by mm before 0.7.26): one warning with the command."""
+    rels = {s["release"] for s in sls}
+    old = sorted({p.split("/")[2] for p in git("ls-files", "--", SHOTS, check=False).splitlines()
+                  if p.count("/") >= 3 and p.split("/")[2] not in rels})
+    if not old:
+        return []
+    return ["%d slice shot set(s) tracked in git (%s): mm keeps a slice's shots on disk only — "
+            "`git rm -r --cached %s` (the history keeps them until it is rewritten)"
+            % (len(old), ", ".join(old[:3]) + (", …" if len(old) > 3 else ""),
+               " ".join("%s/%s" % (SHOTS, o) for o in old))]
 
 def categories():
     """-> (errors, warnings): every kind topic of the skill listed under exactly one `## Kinds — <category>`
@@ -902,9 +954,10 @@ def cmd_check(a):
     return 0
 
 def gate(base=None):
-    """Runs check (with base: the slice's files too), then test and lint, one line each; refuses when
-    any is red. Check first: it is cheap, and a red one is not worth a suite run."""
-    cfg, red, detail = config(), [], []
+    """Runs check (with base: the slice's files too), then test and lint, one line each with its
+    seconds; refuses when any is red; -> the gate's seconds. Check first: it is cheap, and a red one
+    is not worth a suite run."""
+    cfg, red, detail, started = config(), [], [], time.time()
     errors, warnings = run_check(base)
     report(errors, warnings)
     print("check: %s" % ("red" if errors else "green"))
@@ -920,8 +973,10 @@ def gate(base=None):
         if errors:
             print("%s: not run (check red)" % key)
             continue
+        t = time.time()
         code, out, late = run(cmd)
-        print(timed_out(key) if late else "%s: %s (%s)" % (key, "green" if code == 0 else "red", cmd))
+        print(timed_out(key) if late else "%s: %s (%s) %d s" % (key, "green" if code == 0 else "red", cmd,
+                                                                 time.time() - t))
         if code:
             red.append(key)
             tail = ["  %s: %s" % (key, x) for x in out.strip().splitlines()[-15:]]
@@ -939,7 +994,9 @@ def gate(base=None):
         verdict = "gate: red (%s)" % ", ".join(red)
         print(verdict)
         need(False, "\n".join(["gate red: " + ", ".join(red)] + detail + [verdict]))
-    print("gate: green")
+    took = int(time.time() - started)
+    print("gate: green (%d s)" % took)
+    return took
 
 def cmd_gate(a):
     gate(a.base)
@@ -958,16 +1015,16 @@ def drop_drafts():
 
 def write_header(rel, key, value, append=False):
     """Sets the header line `<Key>: <value>` of a slice file, after the other header lines; append adds
-    one more line of that key (Friction: one per round)."""
+    one more line of that key (Friction, Gate: one per round)."""
     lines = read(rel).splitlines()
     top = next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))
-    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built|friction)(?:\*\*)?\s*:",
+    hdr = {i: m.group(1).lower() for i, m in ((i, re.match(r"^[-*\s]*(?:\*\*)?(kind|release|examples|base|after|built|friction|gate)(?:\*\*)?\s*:",
                                                           lines[i], re.I)) for i in range(top)) if m}
     mine = [i for i, k in hdr.items() if k == key.lower()]
     if mine and not append:
         lines[mine[0]] = "%s: %s" % (key, value)
-    else:
-        lines.insert(max(hdr) + 1 if hdr else 0, "%s: %s" % (key, value))
+    else:  # after its own key's lines: a round's Friction and Gate stay in two runs
+        lines.insert(max(mine or hdr) + 1 if hdr else 0, "%s: %s" % (key, value))
     with open(os.path.join(ROOT, rel), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -1037,14 +1094,16 @@ def cmd_built(a):
     revs = reviews(s["stem"])
     r = at_head(revs, head())
     need(not r, "review %d is at HEAD: nothing changed since it" % (r or {"k": 0})["k"])
-    gate(s["base"])  # what the reviewer will check: the builder sees it first
+    took = gate(s["base"])  # what the reviewer will check: the builder sees it first
     errs = design_errors(s)
     need(not errs, "; ".join(errs))
-    shots = [shoot(s["stem"], s["design"])] if s["design"] else []
+    if s["design"]:  # on disk for the reviewer, never committed: a set per round bloats the history
+        shoot(s["stem"], s["design"])
     rnd = len(revs) + 1
     write_header(s["path"], "Built", rnd)
     write_header(s["path"], "Friction", "%d: %s" % (rnd, fr), append=True)
-    git("add", "-A", "--", s["path"], *shots)
+    write_header(s["path"], "Gate", "%d: %d" % (rnd, took), append=True)
+    git("add", "-A", "--", s["path"])
     git("commit", "-q", "--allow-empty", "-m", "%s: built (round %d)" % (s["stem"], rnd))  # again in a round: same header
     print("built %s, round %d: ready for review" % (s["stem"], rnd))
     return 0
@@ -1155,7 +1214,7 @@ def cmd_tag(a):
     if r["verdict"] != "HEALTHY" or r["look"]:
         kept.append(accepted(rel, r, a.why))
     if kept:
-        git("add", "-A", "--", *kept)
+        git("add", "-A", "-f", "--", *kept)  # the release's shots, past a .gitignore of the slices'
         if subprocess.run(["git", "diff", "--cached", "--quiet", "--", *kept], cwd=ROOT).returncode:
             git("commit", "-q", "-m", "review: %s" % rel, "--", *kept)
     git("tag", "-a", rel, "-m", "mismagent release %s — review %d %s" % (rel, r["k"], r["verdict"]))
@@ -1207,7 +1266,8 @@ def cmd_log(a):
                        "doubts": s["answers"],
                        "minutes": (end - start) // 60 if start and end and end >= start else None})
     counts = {c: sum(1 for e in entries if e[0] == c) for c in FRICTION}
-    data = {"built_rounds": built, "friction": counts,
+    secs = [t for s in sls for _, t in s["gate"]]
+    data = {"built_rounds": built, "friction": counts, "gate_seconds": secs,
             "entries": [dict(zip(("category", "who", "where", "note"), e)) for e in entries], "landed": landed}
     if a.json:
         print(json.dumps(data, indent=2))
@@ -1221,6 +1281,9 @@ def cmd_log(a):
         print("landed %d: rounds median %d p75 %d · doubts %d · wall-clock median %s p75 %s min" % (
             len(landed), pct(rounds, 50), pct(rounds, 75), sum(x["doubts"] for x in landed),
             pct(mins, 50) if mins else "-", pct(mins, 75) if mins else "-"))
+    if secs:
+        print("gate: %d run(s) by mm built · median %d s p75 %d s max %d s" % (
+            len(secs), pct(secs, 50), pct(secs, 75), max(secs)))
     for c in FRICTION:
         for _, who, where, note in (e for e in entries if e[0] == c):
             print("%s: %s (%s): %s" % (c, where, who, note))
@@ -1238,7 +1301,7 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("park", "doing -> todo, drop Base:, commit (clean tree, no work since Base)",
      ("slice", "slice stem (NN-name), its number, or its path")),
-    ("built", "the builder is done: gate green, write Built: <round>, commit",
+    ("built", "the builder is done: gate green, screens on disk (Design:), write Built:, Friction:, Gate: <round>, commit",
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("review", "write the next review file from its draft (HEAD unchanged since --sha)",
      ("target", "slice stem or number, or release token")),
@@ -1248,11 +1311,11 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
     ("shot", "render the screens of a slice's or a release's artboards (Design:) with the project's "
      "shot command, into .mismagent/shots/<target>/; prints each pair",
      ("target", "slice stem or number, or release token")),
-    ("tag", "git tag -a <release> (ready, clean tree, a review at HEAD — DESIGN-PASS with --why, gate green)",
+    ("tag", "git tag -a <release> (ready, clean tree, a review at HEAD — DESIGN-PASS with --why, gate green); commits the release's review and shots",
      ("release", "release token, e.g. R0")),
-    ("check", "files well formed, acceptance markers, sensors, guarded files, the releases' specs", None),
+    ("check", "files well formed, acceptance markers, sensors, guarded files, the releases' specs, the map", None),
     ("log", "the method's friction per category (built rounds, reviews), and rounds, doubts and wall-clock "
-     "of the landed slices — read-only", "--json"))
+     "of the landed slices, the gate's seconds per built round — read-only", "--json"))
 
 def parser():
     p = argparse.ArgumentParser(prog="mm", description="mismAgent 0.7: slice lifecycle, git, counting.")

@@ -91,6 +91,13 @@ important doubt (`NEEDS-HUMAN`) and each release.
   it touched listed for the reviewer — then `Built:` written; `mm review` writes the verdict lines
   and refuses when HEAD moved during the review; `mm tag` needs a review at HEAD. Every gate command
   runs under a `timeout:`, so a hung simulator never holds the conductor.
+- **The map stays a map, the sensors prove the real app:** `ARCHITECTURE.md` says the code as it
+  is now, by paths and symbols — a change of decision is a decision file, never a history in the
+  map; `mm check` warns on a path no file has, a `file:line`, more than `max_map_lines` lines, and a
+  slice that makes the map false is reworked. The smoke builds the app from its own composition
+  root; the shot command drives it from outside the production views; a production initializer
+  has no default standing in for a use case. A slice's screens stay on disk, never committed: only
+  the set of a confirmed release goes to git at `mm tag`.
 
 ## The method's own log
 Every builder round ends with one line on what in the *method* (never the code) slowed it —
@@ -100,7 +107,10 @@ counts them, with the rounds, doubts and wall-clock of the landed slices read fr
 conductor shows its totals at each confirm. **Read it at a release, with the counts: change the
 method only for a category that recurs, naming the number the change should lower** — not a to-do
 list of single entries (24 versions in 22 days was that). 0.7.25 is measured the same way
-([plan](docs/rationale/v0.7.25-plan.md)).
+([plan](docs/rationale/v0.7.25-plan.md)). `mm built` also records the gate's seconds each round
+(`Gate:`), which `mm log` reports: a faster gate is decided on that number. 0.7.26 comes from an
+external architecture review of a 10k-line iOS app built with the method
+([plan](docs/rationale/v0.7.26-plan.md)).
 
 ## The design, in three layers
 | file | layer |

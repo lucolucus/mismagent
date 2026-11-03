@@ -23,7 +23,9 @@ ran now, a page you fetched (its URL), or the human's words. No source → it is
 as an **assumption** with how to check it (a question, a hotspot, a probe you can run), or leave it
 out. A guess presented as a fact is a defect.
 Before relying on a capability of the stack, prove it: the docs (fetched) or a ten-line probe you run
-in a scratch folder. Every decision file has an `Evidence:` section listing its sources.
+in a scratch folder. Every decision file has an `Evidence:` section listing its sources. A line
+number is evidence in what is read at one commit (a decision, a review); `ARCHITECTURE.md` lives on,
+so it names paths and symbols, never lines.
 
 ## `ARCHITECTURE.md` (at the repository root) — the map
 - **Modules**, what each hides, the **allowed dependency directions** (the domain imports neither the
@@ -34,8 +36,15 @@ in a scratch folder. Every decision file has an `Evidence:` section listing its 
   Each kind is a topic of the conventions skill.
 - **The error policy**: typed domain errors for the user; one boundary in the interface translates,
   logs and shows them; unexpected errors logged and surfaced, never swallowed; a missing lookup fails.
-- **Glossary**: the domain's words, as the code uses them.
-- **Change log**: each change of a decision or convention, and why.
+- **Packaging**: one criterion for the folders (by concept or by layer), said once — a port or an
+  error sits where that criterion puts its concept.
+- **Glossary**: the domain's words, as the code uses them, and the language of names and comments
+  (its exceptions named: an external API's terms).
+
+The map is the code **as it is now**, by paths and symbols: no history, no slice numbers, no line
+numbers (`mm check` warns on a path no file has, on a `file:line`, past `max_map_lines`). A change of
+a decision or a convention is a decision in `.mismagent/decisions/` (why, what it supersedes); the
+map just says the new state. A slice that changes what the map says updates it in its diff.
 
 ## The conventions skill (`.claude/skills/conventions/`) — how each kind of code is written here
 A catalog: one topic per **kind of code** (a message, a controller, a use case, an aggregate, a
@@ -92,14 +101,19 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
 2. Wire the **sensors** with the stack's standard tools: formatter check, linter at zero warnings
    (with function length and complexity rules), a dependency check of the directions if the stack
    has one. Write the project's `CLAUDE.md` section `## mismagent`:
-   `- test:`, `- lint:`, `- smoke:` (starts the app headless, exercises one use case, exits — never
-   a blocking main loop; on an empty skeleton it just starts and exits), `- max_file_lines:`,
+   `- test:`, `- lint:`, `- smoke:` (starts the app headless **from the composition root the app
+   starts from, with its real configuration** — only what is external, the network or a device,
+   replaced, and named in the command — exercises one use case, exits; never a blocking main loop;
+   on an empty skeleton it just starts and exits), `- max_file_lines:`,
    `- suppressions: 0`; `- shot:` when slices name artboards (`Design:`): renders, headless, each
-   screen named in `$MM_DESIGN` into `$MM_SHOTS/<name>.png`; `- acceptance:` (comma-separated folders) only when the build wants the
+   screen named in `$MM_DESIGN` into `$MM_SHOTS/<name>.png`, driving the app **from outside its
+   production views** — a scenarios target or wrapper beside the app, or the UI test driver; a
+   production view holds no branch for a scenario, at most a neutral identifier or binding; `- acceptance:` (comma-separated folders) only when the build wants the
    acceptance tests outside `tests/acceptance/` — only folders `test:` executes, proved once each: a
    failing test there makes `test:` red; a file the gate cannot run (a by-hand script) is named in a
    decision that says why; `- timeout:` (seconds, default 1800) when a gate may hang. A `.gitignore` for what running the app or its
-   tests creates.
+   tests creates, and `.mismagent/shots/` (a slice's screens stay on disk; `mm tag` commits a
+   release's).
 3. Only the minimal entry point, the smoke hook and one trivial test.
 4. Mark the first slice in todo that goes end to end through a real example `Kind: model`.
 5. **The first conventions**, so no builder reinvents how to write a kind of code: list the kinds
@@ -110,7 +124,11 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    named (the official guide, the library's docs, a decision); no source, no rule. Each line
    carries its category, `- now create <kind> [local|cross-cutting|tests]:` — cross-cutting when
    its rules concern files of more than one kind (errors, security, configuration, logging, the
-   composition root, naming, the layout), tests for the tests, else local. The model slice's
+   composition root, naming, the layout), tests for the tests, else local; the shot harness, when
+   slices have `Design:`, is a tests kind. The composition root's line carries, whatever the stack:
+   every functional dependency (a use case, a port) is a required parameter of a production
+   initializer — no default stands in for one, a forgotten one does not compile; sub-states are
+   built in the root and passed in; fakes live in test factories. The model slice's
    code gives each kind its *Example* and may update its shape.
 6. `MM gate` green; commit (`skeleton`).
 
@@ -144,7 +162,8 @@ catalog covers the listed ones — every kind the code has when the skill is mis
 Read the release review if any, `.mismagent/design-notes.md`, `ARCHITECTURE.md`, the decisions it
 and the release file cite with those that amend or supersede them (they name it), the skill, the
 `## Progress` and the reviews of the slices done since the last pass, then the code and its tests.
-1. Make `ARCHITECTURE.md` tell the truth about the code; no silent flip (change log, with why).
+1. Make `ARCHITECTURE.md` tell the truth about the code as it is now; what in it is history goes
+   (git keeps it); a changed decision is a decision file with `supersedes:`, never a silent flip.
    Propose for the skill a lesson the reviews or the progress notes repeat, a rule the code no longer
    follows, one way where the code has two.
 2. Queue **refactoring slices** in `.mismagent/slices/todo/` (`Kind: refactor`, `Release:` the
@@ -161,8 +180,8 @@ and the release file cite with those that amend or supersede them (they name it)
    A **stack change** (`stack N` in the reason, decision `N`): the migration slices, as many as it
    needs, each naming decision `N` — first the sensors and `CLAUDE.md`'s `## mismagent` for the
    new stack, then module by module behind the acceptance tests (each slice names the tests it
-   ports, or they run from outside the code). Record the target in the change log of
-   `ARCHITECTURE.md` now; each slice updates the map as the code moves. Where the conventions
+   ports, or they run from outside the code). The target is decision `N`'s; each slice updates the
+   map as the code moves. Where the conventions
    skill cites a file the migration replaces, propose its transition now (`- now update <topic>:`
    the rule for the new stack, the citation dropped until the new file lands); the human decides it
    before the next slice starts, and the slice that lands the new file proposes the new citation.

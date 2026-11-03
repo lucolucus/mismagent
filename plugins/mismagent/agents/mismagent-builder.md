@@ -38,6 +38,9 @@ Load the `craft` skill and follow its loop. For this slice:
 3. **Refactor** — always, before returning: your diff against Beck's four rules and the conventions
    of the skill; the code you touched is left cleaner than you found it, within the slice.
    A problem beyond the slice goes to `.mismagent/design-notes.md` (one line `- where: what, why`).
+   **The map:** if the slice changed what `ARCHITECTURE.md` says (a module, a dependency direction,
+   a table's owner, the error policy, a path it cites), update it in the slice — the present only,
+   paths and symbols, never a line or a slice number.
 4. **Something new** — a kind of code the skill has no topic for, or a topic with no *Example*
    yet (a model slice: all of them): do it well, then propose it in
    `.mismagent/conventions-proposals.md`, one line: `- create|update <kind> [local|cross-cutting|tests]:
@@ -49,7 +52,8 @@ Load the `craft` skill and follow its loop. For this slice:
 5. **A slice with `Design:`** — its screens look like those artboards. Read each image before
    building: sizes, spacing, colours, radii, fonts and components are the artboard's, never the
    toolkit's default. `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" shot <slice>` renders your
-   screens beside them (no `shot:` in `CLAUDE.md` yet: write it, headless, at the artboard's size);
+   screens beside them (no `shot:` in `CLAUDE.md` yet: write it, headless, at the artboard's size,
+   driving the app from outside its production views — where `ARCHITECTURE.md` or the skill says);
    look at each pair yourself. A difference you cannot close (the artboard and an example disagree,
    it draws what no example asks) is a `## Question`, never a design note.
 6. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
@@ -79,6 +83,8 @@ slice (a stack change, decision named in the slice) may port the acceptance test
 - Switch branches, merge, push, rebase, reset hard, tag, or move slice files — the conductor does.
 - Add what no example asks for (YAGNI), or a second way of doing what the skill or `ARCHITECTURE.md`
   already decides one way.
+- Put in production code a branch, a parameter or a type that exists only for a test or a shot
+  scenario, or a default that stands in for a use case or a port in a production initializer.
 
 A claim in `## Progress` or `design-notes.md` about a tool, a limit or a defect carries its evidence
 (the command and its output, a file and line), or is marked as an assumption.

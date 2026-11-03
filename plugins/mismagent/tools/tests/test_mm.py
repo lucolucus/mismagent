@@ -920,7 +920,8 @@ class Gate(Repo):
     def test_gate_green(self):
         code, out, _ = self.mm("gate")
         self.assertEqual(code, 0)
-        self.assertIn("gate: green", out)
+        self.assertRegex(out, r"test: green \(true\) \d+ s")
+        self.assertRegex(out, r"gate: green \(\d+ s\)")
 
     def test_gate_red_test_or_lint(self):
         for key in ("test", "lint"):
@@ -1553,7 +1554,7 @@ class Design(Repo):
         self.designed("Verde.png, .mismagent/design/Rosso.png")
         self.assertEqual(self.check()[0], 0, self.check()[1])
 
-    def test_built_commits_a_screen_per_artboard(self):
+    def test_built_renders_a_screen_per_artboard_on_disk_never_committed(self):
         self.designed("Verde.png Rosso.png")
         self.assertEqual(self.mm("start", "01-cart")[0], 0)
         self.write("src/cart.py", "x = 1\n")
@@ -1561,9 +1562,34 @@ class Design(Repo):
         code, out, err = self.mm("built", "01-cart", "--friction", "none")
         self.assertEqual(code, 0, err)
         self.assertIn(".mismagent/design/Verde.png  <->  .mismagent/shots/01-cart/Verde.png", out)
-        self.assertIn(".mismagent/shots/01-cart/Rosso.png", self.git("show", "--name-only", "HEAD"))
-        self.assertEqual(self.git("status", "--porcelain"), "")
-        self.assertEqual(self.next()["action"], "review")
+        self.assertTrue(os.path.isfile(os.path.join(self.dir, ".mismagent/shots/01-cart/Rosso.png")))
+        self.assertEqual(self.git("ls-files", ".mismagent/shots"), "")  # a set per round would bloat the history
+        self.assertEqual(self.next()["action"], "review")  # on disk, not dirty
+
+    def test_tag_commits_the_release_shots_past_a_gitignore(self):
+        self.designed("Verde.png")
+        self.write(".gitignore", ".mismagent/shots/\n")
+        self.write(".mismagent/slices/done/01-cart.md", self.read(".mismagent/slices/todo/01-cart.md")
+                   .replace("Examples", "Base: abc1234\nExamples").replace("EX-1\n", "EX-1, EX-2\n"))
+        os.remove(os.path.join(self.dir, ".mismagent/slices/todo/01-cart.md"))
+        self.acceptance("test_cart.py", "# EX-1 EX-2\n")
+        self.commit("done")
+        self.assertEqual(self.mm("shot", "R0")[0], 0)
+        self.write(".mismagent/reviews/R0.draft.md", "same\n")
+        self.assertEqual(self.mm("review", "R0", "HEALTHY", "--sha", self.head(), "--look", "0")[0], 0)
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 0, err)
+        self.assertIn(".mismagent/shots/R0/Verde.png", self.git("show", "--name-only", "--format=", "R0^{commit}"))
+
+    def test_check_warns_on_slice_shots_still_tracked(self):
+        self.designed("Verde.png")
+        self.write(".mismagent/shots/01-cart/Verde.png", "png")
+        self.write(".mismagent/shots/R0/Verde.png", "png")
+        self.commit("shots committed by an older mm")
+        out = self.check()[1]
+        self.assertIn("1 slice shot set(s) tracked in git (01-cart)", out)
+        self.assertIn("git rm -r --cached .mismagent/shots/01-cart", out)
+        self.assertNotIn("shots/R0", out)  # a release's set is kept
 
     def test_built_refuses_without_the_screens(self):
         self.designed(shot=False)
@@ -1697,6 +1723,7 @@ class Friction(Repo):
         self.assertEqual(code, 0, err)
         text = self.read(".mismagent/slices/doing/01-cart.md")
         self.assertIn("Built: 2\nFriction: 1: none\nFriction: 2: tool: gate listed a file I never touched", text)
+        self.assertRegex(text, r"Friction: 2: [^\n]+\nGate: 1: \d+\nGate: 2: \d+\n")
         self.write(".mismagent/reviews/01-cart.draft.md", "all good\n")
         code, _, err = self.mm("review", "01-cart", "PASS", "--sha", self.head(),
                                "--friction", "review: the slice file had no Base after a rename")
@@ -1712,15 +1739,42 @@ class Friction(Repo):
         self.assertIn("landed 1: rounds median 2 p75 2 · doubts 0 · wall-clock median 0 p75 0 min", out)
         self.assertIn("tool: 01-cart r2 (builder): gate listed a file I never touched", out)
         self.assertIn("review: 01-cart-2 (reviewer): the slice file had no Base after a rename", out)
+        self.assertRegex(out, r"gate: 2 run\(s\) by mm built · median \d+ s p75 \d+ s max \d+ s")
         data = json.loads(self.mm("log", "--json", "--release", "R0")[1])
         self.assertEqual(data["friction"]["tool"], 1)
         self.assertEqual(data["landed"][0]["rounds"], 2)
+        self.assertEqual(len(data["gate_seconds"]), 2)
         self.assertIn("no slice has Release: R9", self.mm("log", "--release", "R9")[2])
 
     def test_log_of_an_empty_repo(self):
         code, out, err = self.mm("log")
         self.assertEqual(code, 0, err)
         self.assertIn("friction: 0 of 0 built rounds (0%) · none", out)
+
+
+class Map(Repo):
+    """ARCHITECTURE.md is the map of the code as it is: check warns on what makes it a chronicle."""
+
+    def test_map_warns_on_missing_paths_line_numbers_and_size(self):
+        self.write("App/Sources/Composizione.swift", "let x = 1\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n- `App/Sources/Composizione.swift` wires the app\n"
+                   "- `Composizione.swift` and `project.yml` and `ResponseCache` (a symbol)\n"
+                   "- the cache, ResponseCache.swift:20-27 and `WikimediaHTTP.swift:9,25`\n")
+        self.commit("map")
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)  # warnings: the reviewer judges the ones a diff caused
+        self.assertIn("ARCHITECTURE.md cites project.yml, which no file has", out)
+        self.assertNotIn("Composizione.swift, which", out)
+        self.assertIn("cites line numbers (ResponseCache.swift:20, WikimediaHTTP.swift:9)", out)
+        self.assertNotIn("max_map_lines", out)
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", "- max_map_lines: 3\n- max_file_lines"))
+        self.assertIn("ARCHITECTURE.md: 4 lines > max_map_lines 3", self.check()[1])
+
+    def test_a_clean_map_is_quiet(self):
+        self.write("src/cart.py", "x = 1\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n- `src/cart.py`: the cart, `Cart.add`\n")
+        self.commit("map")
+        self.assertNotIn("ARCHITECTURE.md", self.check()[1])
 
 
 class Look(Repo):

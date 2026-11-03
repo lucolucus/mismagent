@@ -48,7 +48,7 @@ agents run on their own models); work in another checkout, or it waits while the
 waits for a later release is written in that release's file), `examples/<capability>.md`, `design/` (the approved artboards, as images),
 `decisions/NNNN-<name>.md`,
 `slices/{todo,doing,done}/` (each with its `## Progress`), `reviews/`, `shots/` (the app's screens
-beside their artboards), `design-notes.md`,
+beside their artboards: a slice's on disk only, gitignored; a release's committed at `mm tag`), `design-notes.md`,
 `conventions-proposals.md`.
 
 The v0.26 flow (explore/model/worker-composer) is in `attic/v0.26/`.

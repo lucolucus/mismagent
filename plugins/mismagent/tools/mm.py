@@ -8,7 +8,7 @@ are; two slices in doing -> `stuck`); `start` records Base, the reviewer reviews
 adds commits, nothing reaches done/ without a PASS at HEAD and a green gate. Exit: 0 ok · 1 check/gate failure or refused precondition (one
 line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespace and **bold**):
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
-    max_map_lines (300: the lines of ARCHITECTURE.md past which check warns),
+    max_map_chars (20000: the characters of ARCHITECTURE.md past which check warns),
     acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere),
     shot (renders the app's screens: one $MM_SHOTS/<name>.png per name in $MM_DESIGN),
     timeout (1800: the seconds a test, lint or shot command may take; past it the command and its
@@ -29,9 +29,11 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     Friction: <round>: <category>: <note> — one line per round, written by `mm built`; Gate:
     <round>: <seconds> — the gate's wall-clock that round, written by `mm built`
   .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`;
-    a slice's stay on disk for its reviewer, never committed; a release's are committed by `tag`
-  ARCHITECTURE.md: the map, the present only — check warns on a path it cites that no file has, a
-    `file:line` reference (lines rot: name the symbol) and more than max_map_lines lines
+    a slice's stay on disk for its reviewer, never committed (shots/.gitignore ignores them all, its
+    own line included); a release's are committed by `tag`, past it
+  ARCHITECTURE.md: the map, the present only — check warns on a path it cites that no file or folder
+    has (matched by whole segments: `Formato/` is any folder so named), a `file:line` reference
+    (lines rot: name the symbol), a `slice NN` (history is git's) and more than max_map_chars
   .mismagent/reviews/{<slice-stem>,<release>}-<k>.md: VERDICT:, SHA:, LOOK: (a release: the
     artboard pairs that differ), FRICTION: — written by `mm review`
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
@@ -156,6 +158,7 @@ SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rs",
               ".vue", ".svelte", ".dart", ".ex", ".exs", ".lua", ".sh", ".m", ".fs", ".clj"}
 FILE_EXT = SOURCE_EXT | {".yml", ".yaml", ".json", ".toml", ".xml", ".plist", ".md", ".gradle", ".xcconfig",
                         ".entitlements", ".storyboard", ".cfg", ".ini", ".txt", ".lock", ".html", ".css", ".sql"}
+SLICE_REF = re.compile(r"\bslices?\s+\d+", re.I)
 LINE_REF = re.compile(r"[\w-]+(?:%s):\d+" % "|".join(re.escape(e) for e in sorted(SOURCE_EXT, key=len, reverse=True)))
 MAX_REWORK, MAX_DESIGN_PASSES, NOTES_LIMIT = 2, 1, 5
 ROOT = "."
@@ -430,6 +433,8 @@ def shoot(stem, refs):
     tmp = os.path.join(ROOT, out + ".rendering")
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
+    with open(os.path.join(ROOT, SHOTS, ".gitignore"), "w") as f:
+        f.write("*\n")  # a `git add -A` takes no screen: only `mm tag` commits a release's, with -f
     env = dict(os.environ, MM_SHOTS=tmp, MM_DESIGN=" ".join(names))
     code, output, late = run(cmd, env)
     try:
@@ -861,15 +866,18 @@ def run_check(base=None, release=None):
     return errors, warnings
 
 def map_warnings(cfg):
-    """ARCHITECTURE.md is the map of the code as it is: a cited path no file has, a `file:line`
-    (stale at the next edit) or a map grown past max_map_lines (a chronicle) is warned."""
+    """ARCHITECTURE.md is the map of the code as it is: a cited path no file or folder has, a
+    `file:line` (stale at the next edit), a slice named or a map grown past max_map_chars (a
+    chronicle) is warned."""
     text = read(MAP)
     if not text:
         return []
-    tracked = git("ls-files", check=False).splitlines()
-    names, out = {os.path.basename(t) for t in tracked}, []
+    tracked = ["/%s/" % t for t in git("ls-files", check=False).splitlines()]
+    out = []
     gone = sorted(c for c in set(CITED.findall(text))
-                  if ("/" in c or os.path.splitext(c)[1] in FILE_EXT) and not os.path.exists(os.path.join(ROOT, c)) and ("/" in c or c not in names))
+                  if ("/" in c or os.path.splitext(c)[1] in FILE_EXT) and not c.startswith("/")
+                  and not os.path.exists(os.path.join(ROOT, c))
+                  and not any("/%s/" % c.strip("/") in t for t in tracked))
     if gone:
         out.append("%s cites %s, which no file has: the map tells the code as it is (a path to come is "
                    "a slice's, not the map's)" % (MAP, ", ".join(gone)))
@@ -877,10 +885,13 @@ def map_warnings(cfg):
     if refs:
         out.append("%s cites line numbers (%s): name the symbol — a line is stale at the next edit"
                    % (MAP, ", ".join(refs[:5]) + (", …" if len(refs) > 5 else "")))
-    limit, n = cfg_int(cfg, "max_map_lines", 300), len(text.splitlines())
+    slices_named = sorted(set(m.group(0) for m in SLICE_REF.finditer(text)), key=str.lower)
+    if slices_named:
+        out.append("%s names slices (%s): the map says what the code is; how it got there is the "
+                   "decisions' and git's" % (MAP, ", ".join(slices_named[:5]) + (", …" if len(slices_named) > 5 else "")))
+    limit, n = cfg_int(cfg, "max_map_chars", 20000), len(text)
     if n > limit:
-        out.append("%s: %d lines > max_map_lines %d: the map says what the code is; how it got there is "
-                   "the decisions' and git's" % (MAP, n, limit))
+        out.append("%s: %d characters > max_map_chars %d: a map, not a chronicle" % (MAP, n, limit))
     return out
 
 def tracked_shots(sls):
@@ -1086,6 +1097,9 @@ def cmd_built(a):
     doing = [x for x in sls if x["state"] == "doing"]
     need(len(doing) == 1, two_doing(doing))
     need(not dirty(), "the tree is dirty: commit your work first")
+    staged = git("diff", "--cached", "--name-only", "--", SHOTS, check=False).split()
+    need(not staged, "%d shot(s) staged (%s): a slice's screens are never committed — `git restore --staged %s`"
+         % (len(staged), staged[0] if staged else "", SHOTS))
     work = git("diff", "--name-only", "%s..HEAD" % s["base"], "--", ".", ":(exclude).mismagent",
                check=False).split() if s["base"] else []
     need(work, "nothing built since mm start (no change outside .mismagent/ since Base)")

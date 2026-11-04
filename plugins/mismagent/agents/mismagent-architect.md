@@ -42,9 +42,10 @@ so it names paths and symbols, never lines.
   (its exceptions named: an external API's terms).
 
 The map is the code **as it is now**, by paths and symbols: no history, no slice numbers, no line
-numbers (`mm check` warns on a path no file has, on a `file:line`, past `max_map_lines`). A change of
-a decision or a convention is a decision in `.mismagent/decisions/` (why, what it supersedes); the
-map just says the new state. A slice that changes what the map says updates it in its diff.
+numbers (`mm check` warns on a path no file or folder has, on a `file:line`, on a slice named, past
+`max_map_chars`). A change of a decision or a convention is a decision in `.mismagent/decisions/`
+(why, what it supersedes); the map says the new state and links the decision its reason is in. A
+slice that changes what the map says updates it in its diff.
 
 ## The conventions skill (`.claude/skills/conventions/`) — how each kind of code is written here
 A catalog: one topic per **kind of code** (a message, a controller, a use case, an aggregate, a
@@ -96,13 +97,14 @@ Called again with `N-answers.md` (the human's answers, neutral): read it, the pa
 
 ## MODE: skeleton — structure at birth
 Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo slices, `decisions/`.
-1. Write `ARCHITECTURE.md` as above, for the code to come; record the error policy and the layering as
+1. Write `ARCHITECTURE.md` as above: the first map is the structure the model slice will build, a
+   path to come said as one (`mm check` warns on it until a file has it); record the error policy and the layering as
    `.mismagent/decisions/` files (why, what else was considered).
 2. Wire the **sensors** with the stack's standard tools: formatter check, linter at zero warnings
    (with function length and complexity rules), a dependency check of the directions if the stack
    has one. Write the project's `CLAUDE.md` section `## mismagent`:
-   `- test:`, `- lint:`, `- smoke:` (starts the app headless **from the composition root the app
-   starts from, with its real configuration** — only what is external, the network or a device,
+   `- test:`, `- lint:`, `- smoke:` (starts the app headless **through the wiring function the
+   app's entry calls, with its real configuration** — never a wiring of its own beside it; only what is external, the network or a device,
    replaced, and named in the command — exercises one use case, exits; never a blocking main loop;
    on an empty skeleton it just starts and exits), `- max_file_lines:`,
    `- suppressions: 0`; `- shot:` when slices name artboards (`Design:`): renders, headless, each
@@ -112,8 +114,7 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    acceptance tests outside `tests/acceptance/` — only folders `test:` executes, proved once each: a
    failing test there makes `test:` red; a file the gate cannot run (a by-hand script) is named in a
    decision that says why; `- timeout:` (seconds, default 1800) when a gate may hang. A `.gitignore` for what running the app or its
-   tests creates, and `.mismagent/shots/` (a slice's screens stay on disk; `mm tag` commits a
-   release's).
+   tests creates.
 3. Only the minimal entry point, the smoke hook and one trivial test.
 4. Mark the first slice in todo that goes end to end through a real example `Kind: model`.
 5. **The first conventions**, so no builder reinvents how to write a kind of code: list the kinds
@@ -126,9 +127,9 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    its rules concern files of more than one kind (errors, security, configuration, logging, the
    composition root, naming, the layout), tests for the tests, else local; the shot harness, when
    slices have `Design:`, is a tests kind. The composition root's line carries, whatever the stack:
-   every functional dependency (a use case, a port) is a required parameter of a production
-   initializer — no default stands in for one, a forgotten one does not compile; sub-states are
-   built in the root and passed in; fakes live in test factories. The model slice's
+   a functional dependency (a use case, a port) missing from the wiring is an error at compile
+   time or at startup, never a silent absence — no default that switches a feature off stands in
+   for one; fakes live in test factories. The model slice's
    code gives each kind its *Example* and may update its shape.
 6. `MM gate` green; commit (`skeleton`).
 
@@ -165,7 +166,8 @@ and the release file cite with those that amend or supersede them (they name it)
 1. Make `ARCHITECTURE.md` tell the truth about the code as it is now; what in it is history goes
    (git keeps it); a changed decision is a decision file with `supersedes:`, never a silent flip.
    Propose for the skill a lesson the reviews or the progress notes repeat, a rule the code no longer
-   follows, one way where the code has two.
+   follows, one way where the code has two, and a rule the skill never had that the method's first
+   conventions carry (the composition root's, the shot harness's) when the code breaks it.
 2. Queue **refactoring slices** in `.mismagent/slices/todo/` (`Kind: refactor`, `Release:` the
    release in the dispatch, `Examples:` empty; `NN` continues the highest number under
    `.mismagent/slices/`), most valuable first, at most five: each says what changes, where, the

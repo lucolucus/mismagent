@@ -46,8 +46,9 @@ or an item its scope leaves out is not a finding.
    topic is proposed in `.mismagent/conventions-proposals.md`: each proposal is a kind of code
    (never a feature), matches the diff and is no behavior (what a test could prove is the examples').
    **The map:** a line of `ARCHITECTURE.md` the diff made false (a path moved, a module, a direction
-   or an owner changed), or a map warning of the gate the diff caused, is blocking: the slice
-   updates the map.
+   or an owner changed), or a path warning of the gate the diff caused, is blocking: the slice
+   updates the map. Its size and the slices it names are hints: blocking only where the diff wrote
+   history into the map.
    Something new with no proposal → you append the one-line proposal there yourself (the kind, the
    files) and say so as advice; a proposal that is behavior → `reject: behavior` after it. Neither
    is a block: `mm land` commits the file.
@@ -69,9 +70,10 @@ or an item its scope leaves out is not a finding.
 You are a fresh pair of eyes on the release: do not read the slice reviews.
 1. Run `MM gate` and **the app itself** through its `smoke` command (`CLAUDE.md`, `## mismagent`);
    never start its interactive main loop. Say which use case the smoke exercised, what it showed,
-   and the composition root it built from (`file:line`): a start-and-exit is no app run for a built
-   product, and a smoke assembled apart from the root, or with a configuration the app does not
-   have, is a finding (Modularity) — it proves another app. The examples in scope are those of
+   and the path from the app's entry to the use case it shares with the smoke (`file:line` of the
+   function both call): a start-and-exit is no app run for a built product, and a smoke assembled
+   apart — its own wiring beside the root's, or a configuration the app does not have (a language,
+   a source left out) — is a finding (Modularity): it proves another app. The examples in scope are those of
    the release's slices.
 2. Check **the code the release's slices touched and the production paths it runs through**, by
    the skill's categories — one checklist line per topic:

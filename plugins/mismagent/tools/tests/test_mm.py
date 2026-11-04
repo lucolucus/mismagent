@@ -1565,10 +1565,22 @@ class Design(Repo):
         self.assertTrue(os.path.isfile(os.path.join(self.dir, ".mismagent/shots/01-cart/Rosso.png")))
         self.assertEqual(self.git("ls-files", ".mismagent/shots"), "")  # a set per round would bloat the history
         self.assertEqual(self.next()["action"], "review")  # on disk, not dirty
+        self.git("add", "-A")  # the builder's commit at a green, in a project with no .gitignore for them
+        self.assertEqual(self.git("diff", "--cached", "--name-only"), "")
+
+    def test_built_refuses_a_staged_shot(self):
+        self.designed("Verde.png")
+        self.assertEqual(self.mm("start", "01-cart")[0], 0)
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        self.write(".mismagent/shots/01-cart/Verde.png", "png")
+        self.git("add", "-f", ".mismagent/shots")
+        code, _, err = self.mm("built", "01-cart", "--friction", "none")
+        self.assertEqual(code, 1)
+        self.assertIn("1 shot(s) staged (.mismagent/shots/01-cart/Verde.png)", err)
 
     def test_tag_commits_the_release_shots_past_a_gitignore(self):
         self.designed("Verde.png")
-        self.write(".gitignore", ".mismagent/shots/\n")
         self.write(".mismagent/slices/done/01-cart.md", self.read(".mismagent/slices/todo/01-cart.md")
                    .replace("Examples", "Base: abc1234\nExamples").replace("EX-1\n", "EX-1, EX-2\n"))
         os.remove(os.path.join(self.dir, ".mismagent/slices/todo/01-cart.md"))
@@ -1755,20 +1767,21 @@ class Friction(Repo):
 class Map(Repo):
     """ARCHITECTURE.md is the map of the code as it is: check warns on what makes it a chronicle."""
 
-    def test_map_warns_on_missing_paths_line_numbers_and_size(self):
-        self.write("App/Sources/Composizione.swift", "let x = 1\n")
-        self.write("ARCHITECTURE.md", "# Architecture\n- `App/Sources/Composizione.swift` wires the app\n"
-                   "- `Composizione.swift` and `project.yml` and `ResponseCache` (a symbol)\n"
-                   "- the cache, ResponseCache.swift:20-27 and `WikimediaHTTP.swift:9,25`\n")
+    def test_map_warns_on_missing_paths_line_numbers_slices_and_size(self):
+        self.write("App/Sources/Formato/Composizione.swift", "let x = 1\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n- `App/Sources/Formato/Composizione.swift` wires the app\n"
+                   "- `Composizione.swift`, `Formato/`, `Sources/Formato` and `/usr/bin/swift` (outside)\n"
+                   "- `project.yml`, `Form/` and `ResponseCache` (a symbol)\n"
+                   "- the cache, ResponseCache.swift:20-27 and `WikimediaHTTP.swift:9,25`, since slice 81\n")
         self.commit("map")
         code, out, _ = self.check()
         self.assertEqual(code, 0, out)  # warnings: the reviewer judges the ones a diff caused
-        self.assertIn("ARCHITECTURE.md cites project.yml, which no file has", out)
-        self.assertNotIn("Composizione.swift, which", out)
+        self.assertIn("ARCHITECTURE.md cites Form/, project.yml, which no file", out)  # a segment, not a prefix
         self.assertIn("cites line numbers (ResponseCache.swift:20, WikimediaHTTP.swift:9)", out)
-        self.assertNotIn("max_map_lines", out)
-        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", "- max_map_lines: 3\n- max_file_lines"))
-        self.assertIn("ARCHITECTURE.md: 4 lines > max_map_lines 3", self.check()[1])
+        self.assertIn("ARCHITECTURE.md names slices (slice 81)", out)
+        self.assertNotIn("max_map_chars", out)
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines", "- max_map_chars: 100\n- max_file_lines"))
+        self.assertIn("characters > max_map_chars 100", self.check()[1])
 
     def test_a_clean_map_is_quiet(self):
         self.write("src/cart.py", "x = 1\n")

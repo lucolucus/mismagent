@@ -83,8 +83,9 @@ slice (a stack change, decision named in the slice) may port the acceptance test
 - Switch branches, merge, push, rebase, reset hard, tag, or move slice files — the conductor does.
 - Add what no example asks for (YAGNI), or a second way of doing what the skill or `ARCHITECTURE.md`
   already decides one way.
-- Put in production code a branch, a parameter or a type that exists only for a test or a shot
-  scenario, or a default that stands in for a use case or a port in a production initializer.
+- Put in production code a branch on a test or scenario mode, or a parameter or a type that exists
+  only for a shot scenario (an injected dependency — a clock, a port — is no scenario), or a default
+  that switches a feature off in place of a use case or a port in a production initializer.
 
 A claim in `## Progress` or `design-notes.md` about a tool, a limit or a defect carries its evidence
 (the command and its output, a file and line), or is marked as an assumption.

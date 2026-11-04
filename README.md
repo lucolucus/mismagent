@@ -93,11 +93,12 @@ important doubt (`NEEDS-HUMAN`) and each release.
   runs under a `timeout:`, so a hung simulator never holds the conductor.
 - **The map stays a map, the sensors prove the real app:** `ARCHITECTURE.md` says the code as it
   is now, by paths and symbols — a change of decision is a decision file, never a history in the
-  map; `mm check` warns on a path no file has, a `file:line`, more than `max_map_lines` lines, and a
-  slice that makes the map false is reworked. The smoke builds the app from its own composition
-  root; the shot command drives it from outside the production views; a production initializer
-  has no default standing in for a use case. A slice's screens stay on disk, never committed: only
-  the set of a confirmed release goes to git at `mm tag`.
+  map; `mm check` warns on a path no file or folder has, a `file:line`, a slice named, more than
+  `max_map_chars` characters, and a slice that makes the map false is reworked. The smoke runs
+  through the wiring the app's entry calls; the shot command drives it from outside the production
+  views; a use case missing from the wiring fails at compile time or at startup, never in silence.
+  A slice's screens stay on disk, never committed (`shots/.gitignore`, and `mm built` refuses one
+  staged): only the set of a confirmed release goes to git at `mm tag`.
 
 ## The method's own log
 Every builder round ends with one line on what in the *method* (never the code) slowed it —

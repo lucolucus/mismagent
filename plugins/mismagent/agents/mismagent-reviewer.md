@@ -28,8 +28,8 @@ or an item its scope leaves out is not a finding.
    when and then, not a weaker one — and the gate **ran** it (its output names the test, or
    `test:` reaches the file: compiled, discovered or run by hand is not run by the gate). The
    control or adapter the example names reaches the use case through the production wiring (the
-   real button or binding, the init the app calls): a test on that path, or the smoke — calling the
-   state's method is no proof. The gate's warnings name every acceptance file, helper or fixture of
+   real button or binding, the init the app calls): a test on that path, or the smoke when it builds
+   from the app's composition root — calling the state's method is no proof. The gate's warnings name every acceptance file, helper or fixture of
    another example the slice changed or deleted: compare each with `git show <base>:<path>` — an
    adaptation that proves the same then is advice, a weakened assertion or a rewritten frozen
    fixture is blocking. A **migration** slice (a stack change) ports the tests it names: each
@@ -45,6 +45,10 @@ or an item its scope leaves out is not a finding.
    apply and of the practices, are rules you check line by line. A kind with no
    topic is proposed in `.mismagent/conventions-proposals.md`: each proposal is a kind of code
    (never a feature), matches the diff and is no behavior (what a test could prove is the examples').
+   **The map:** a line of `ARCHITECTURE.md` the diff made false (a path moved, a module, a direction
+   or an owner changed), or a path warning of the gate the diff caused, is blocking: the slice
+   updates the map. Its size and the slices it names are hints: blocking only where the diff wrote
+   history into the map.
    Something new with no proposal → you append the one-line proposal there yourself (the kind, the
    files) and say so as advice; a proposal that is behavior → `reject: behavior` after it. Neither
    is a block: `mm land` commits the file.
@@ -53,7 +57,7 @@ or an item its scope leaves out is not a finding.
      suppression appeared, data can be lost, a refactoring slice changes behavior, a fix slice
      whose `## Progress` shows no red run of its acceptance test before the fix (the bug never
      reproduced), a look
-     difference (step 3), a broken *Must* or *Never* of an approved topic that applies, a second
+     difference (step 3), the map left false (step 4), a broken *Must* or *Never* of an approved topic that applies, a second
      way of doing what the skill decides, a **wrong result** (input the
      program should refuse is accepted, a success it did not prove is reported: fail-open), or a
      finding of the table the diff brings on a dimension it touches. Every blocking
@@ -65,8 +69,11 @@ or an item its scope leaves out is not a finding.
 ## Release review (dispatch: `MODE: release`, the release)
 You are a fresh pair of eyes on the release: do not read the slice reviews.
 1. Run `MM gate` and **the app itself** through its `smoke` command (`CLAUDE.md`, `## mismagent`);
-   never start its interactive main loop. Say which use case the smoke exercised and what it
-   showed: a start-and-exit is no app run for a built product. The examples in scope are those of
+   never start its interactive main loop. Say which use case the smoke exercised, what it showed,
+   and the path from the app's entry to the use case it shares with the smoke (`file:line` of the
+   function both call): a start-and-exit is no app run for a built product, and a smoke assembled
+   apart — its own wiring beside the root's, or a configuration the app does not have (a language,
+   a source left out) — is a finding (Modularity): it proves another app. The examples in scope are those of
    the release's slices.
 2. Check **the code the release's slices touched and the production paths it runs through**, by
    the skill's categories — one checklist line per topic:

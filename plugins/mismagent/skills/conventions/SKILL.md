@@ -56,7 +56,8 @@ update, reject, or reword. The human decides, one question at a time.
   fails on a missing one; until the code exists, the source). An update rewrites the topic, never
   appends a clause; a topic holding two kinds is two topics.
 - A practice: `## Must` · `## Never`, one checkable rule per point (`mm check` fails without them).
-- A changed rule: its reason in the change log of `ARCHITECTURE.md`; code still following the old
+- A changed rule: its reason in a decision in `.mismagent/decisions/` (the next four-digit number
+  unused in both `decisions/` and `stack-reviews/`, why, the rule it supersedes, `## Evidence`), never a history in `ARCHITECTURE.md`; code still following the old
   rule → a line in `.mismagent/design-notes.md`.
 - A slice's `## Question` waiting on a proposal: write its `## Answer` (what was decided).
 - Remove every decided proposal, rejected ones too (a reason that matters later → "not: …" in its topic).

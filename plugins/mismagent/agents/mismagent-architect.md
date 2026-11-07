@@ -93,7 +93,8 @@ Called again with `N-answers.md` (the human's answers, neutral): read it, the pa
    ## Ranking         best first, and the assumptions it hangs on
    ## Questions for the human
    ```
-   Commit (`stack review N`).
+   `MM spec "stack review N"`: your files are spec paths, committed in an index of their own beside
+   whatever else moves in the checkout — never `git add -A` or a commit with no pathspec.
 
 ## MODE: skeleton — structure at birth
 Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo slices, `decisions/`.

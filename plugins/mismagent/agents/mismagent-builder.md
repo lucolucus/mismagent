@@ -56,7 +56,9 @@ Load the `craft` skill and follow its loop. For this slice:
    driving the app from outside its production views — where `ARCHITECTURE.md` or the skill says);
    look at each pair yourself. A difference you cannot close (the artboard and an example disagree,
    it draws what no example asks) is a `## Question`, never a design note.
-6. **Commit at every green step**, message naming the slice; lint clean first (fix, never suppress:
+6. **Commit at every green step**, your files by path (`git add <files>`, never `-A`, `.` or `-a`:
+   `/mismagent:specify` may be writing beside you, and a commit of yours that carries an example is
+   refused by `mm built`), message naming the slice; lint clean first (fix, never suppress:
    a new `noqa`/disable line is a defect). Green is read, never assumed: no pipe after the suite
    (`| tail` reports tail's exit code) — redirect to a file, `echo EXIT $?`, read it; commit in a
    separate command, after `EXIT 0`.
@@ -114,5 +116,6 @@ commits. `--friction` is required: what in the *method* slowed this round — an
 missing (`spec`), `mm`, the gate or a hook (`tool`), the skill (`conventions`), the SDK, CI or a
 device (`env`), your context (`context`), a REWORK you think wrong (`review`) — as
 `"<category>: <at most 15 words>"`, or `none`, the normal answer. Never the code (that is
-`design-notes.md`). Refused → read the message, fix, run it again;
-never DONE without it, never `Built:` or `Friction:` by hand.
+`design-notes.md`). Refused → read the message, fix, run it again — *specify is writing beside
+you*: wait a minute and run it again, never commit or touch its files; never DONE without it,
+never `Built:` or `Friction:` by hand.

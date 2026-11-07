@@ -68,9 +68,9 @@ class Repo(unittest.TestCase):
     def head(self):
         return self.git("rev-parse", "HEAD")
 
-    def mm(self, *args, cwd=None):
+    def mm(self, *args, cwd=None, env=None):
         p = subprocess.run([sys.executable, MM, *args], cwd=cwd or self.dir, capture_output=True,
-                           text=True)
+                           text=True, env=env)
         return p.returncode, p.stdout, p.stderr
 
     def next(self):
@@ -115,6 +115,20 @@ class Repo(unittest.TestCase):
 
     def check(self, *args):
         return self.mm("check", *args)
+
+    def fake_git(self, sub, action, once=True):
+        """A git on PATH that runs `action` (sh) before the first (or every) `git <sub>`; -> the env."""
+        real, mark = shutil.which("git"), os.path.join(self.dir, ".git", "fakebin", "fired")  # under .git/: no dirt
+        guard = ' && [ ! -e "%s" ] && { : > "%s"; true; }' % (mark, mark) if once else ""
+        self.write(".git/fakebin/git", "#!/bin/sh\nsub=\"$1\"; [ \"$sub\" = \"--literal-pathspecs\" ] && sub=\"$2\"\n"
+                   "if [ \"$sub\" = \"%s\" ]%s; then\n  %s\nfi\nexec \"%s\" \"$@\"\n" % (sub, guard, action, real))
+        os.chmod(os.path.join(self.dir, ".git", "fakebin", "git"), 0o755)
+        return dict(os.environ, PATH=os.path.join(self.dir, ".git", "fakebin") + os.pathsep + os.environ["PATH"])
+
+    def beside(self, msg="01-cart: beside", once=True):
+        """A raw commit by someone else while mm builds its tree (at `git write-tree`)."""
+        return self.fake_git("write-tree", 'env -u GIT_INDEX_FILE "%s" commit -q --allow-empty -m "%s"'
+                             % (shutil.which("git"), msg), once)
 
 
 class Parsing(Repo):
@@ -394,19 +408,23 @@ class Next(Repo):
     def test_five_notes_do_not_trigger(self):
         self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(5)))
         self.slice("01-cart")
+        self.commit()  # a slice still being written is specify's: `wait`
         self.assertEqual(self.next()["action"], "start")
 
     def test_start_order(self):
         self.slice("03-b")
         self.slice("02-a")
+        self.commit()
         self.assertEqual(self.next()["slice"], "02-a")
         self.slice("07-r", kind="refactor", examples="")
+        self.commit()
         self.assertEqual(self.next()["slice"], "07-r")
 
     def test_a_fix_starts_first(self):
         self.slice("02-a")
         self.slice("07-r", kind="refactor", examples="")
         self.slice("09-bug", kind="fix", examples="EX-2")
+        self.commit()
         self.assertEqual(self.next()["slice"], "09-bug")
 
     def test_an_example_in_no_slice_holds_the_release(self):
@@ -1824,6 +1842,383 @@ class Look(Repo):
         code, _, err = self.mm("tag", "R0")
         self.assertEqual(code, 0, err)
         self.assertFalse(os.path.isdir(os.path.join(self.dir, ".mismagent/decisions")))
+
+class Spec(Repo):
+    """`mm spec`: the human's commit beside a build — the spec paths only, in an index of its own."""
+
+    def spec(self, note, **kw):
+        code, out, err = self.mm("spec", note, **kw)
+        return code, out + err
+
+    def test_spec_commits_the_spec_paths_only(self):
+        self.write("src/cart.py", "x = 1\n")  # the builder's work, uncommitted
+        self.write("src/more.py", "y = 1\n")
+        self.git("add", "src/more.py")  # and staged
+        self.write("src/more.py", "y = 2\n")  # then changed again: the staged blob must survive
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.write(".mismagent/releases/R1.md", "# R1\n\n## Open questions\nnone\n")
+        self.slice("02-more", release="R1", examples="EX-4")
+        self.write(".mismagent/decisions/0001-x.md", "# x\n\n## Evidence\n- the human\n")
+        self.write(".mismagent/decisions/worker.log", "debris\n")
+        code, out = self.spec("R1: EX-4, slice 02")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "specify R1: EX-4, slice 02")
+        self.assertEqual(sorted(self.git("show", "--name-only", "--format=", "HEAD").split()),
+                         [".mismagent/decisions/0001-x.md", ".mismagent/examples/cart.md",
+                          ".mismagent/releases/R1.md", ".mismagent/slices/todo/02-more.md"])
+        self.assertEqual(sorted(self.git("status", "--porcelain").splitlines()),
+                         ["?? .mismagent/decisions/worker.log", "?? src/cart.py", "AM src/more.py"])
+        self.assertEqual(self.git("show", ":src/more.py"), "y = 1")
+
+    def test_spec_is_the_humans_for_the_gate(self):
+        base = self.commit("base")
+        self.started()
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.assertEqual(self.check("--base", base)[0], 1)  # uncommitted: nobody's yet
+        code, out = self.spec("R1: EX-4")  # the todo folder is empty now: a pathspec git cannot match
+        self.assertEqual(code, 0, out)
+        code, out, err = self.check("--base", base)
+        self.assertEqual(code, 0, out + err)
+
+    def test_spec_with_nothing_to_commit_says_so(self):
+        self.write("src/cart.py", "x = 1\n")
+        code, out = self.spec("R1: nothing")
+        self.assertEqual(code, 0, out)
+        self.assertIn("nothing to commit", out)
+        self.assertEqual(self.git("log", "--format=%s").splitlines(), ["init"])
+        self.write(".mismagent/releases/R1.md", "# R1\n")
+        self.assertEqual(self.spec("  ")[0], 1)  # a note of nothing
+
+    def test_spec_refuses_a_spec_that_does_not_hold_together(self):
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q |\n")  # 6 columns
+        self.write(".mismagent/slices/todo/02-more.md", "# Slice\n\nRelease: R1\nExamples: EX-9\n")  # no Kind, no EX-9
+        head, before = self.head(), self.git("status", "--porcelain")
+        code, out = self.spec("R1: half written")
+        self.assertEqual(code, 1)
+        self.assertIn("6 columns", out)
+        self.assertIn("02-more.md: Kind", out)
+        self.assertIn("EX-9 is not in", out)
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (head, before))  # nothing moved, nothing staged
+        # an error elsewhere in the spec holds it too: the file it names need not be the one written
+        self.write(".mismagent/examples/cart.md", EXAMPLES)
+        self.write(".mismagent/slices/todo/02-more.md", "# Slice\n\nKind: feature\nRelease: R1\nExamples: EX-3\nAfter: 01\n")
+        code, out = self.spec("R1: slice 02")
+        self.assertEqual(code, 1)
+        self.assertIn("After: '01' names no single slice", out)
+
+    def test_spec_ignores_the_builders_errors(self):
+        self.write("src/big.py", "x = 1\n" * 401)
+        self.commit("01-cart: big")
+        self.assertEqual(self.check()[0], 1)  # the code is red, not the spec
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\nnone\n")
+        code, out = self.spec("R0: release file")
+        self.assertEqual(code, 0, out)
+        self.assertIn(".mismagent/releases/R0.md", self.git("show", "--name-only", "--format=", "HEAD"))
+
+    def test_spec_commits_a_cut_slice(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 02")
+        self.git("rm", "-q", ".mismagent/slices/todo/02-more.md")  # staged: gone from the tree and the index
+        code, out = self.spec("R0: slice 02 cut")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("show", "--name-status", "--format=", "HEAD").split(),
+                         ["D", ".mismagent/slices/todo/02-more.md"])
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_spec_takes_a_quoted_name_and_a_rename(self):
+        self.write(".mismagent/examples/caff\u00e8.md", "| id | given | when | then | rule | req | release |\n"
+                   "| EX-4 | a | b | c | R | Q | R1 |\n")
+        self.git("mv", ".mismagent/examples/cart.md", ".mismagent/examples/basket.md")
+        code, out = self.spec("R1: caff\u00e8, basket")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(self.git("-c", "core.quotePath=false", "ls-tree", "--name-only", "HEAD",
+                                         ".mismagent/examples/").split()),
+                         [".mismagent/examples/basket.md", ".mismagent/examples/caff\u00e8.md"])
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_spec_refuses_a_rename_across_the_spec_paths_and_a_staged_divergence(self):
+        self.git("mv", ".mismagent/examples/cart.md", "cart.md")
+        head, before = self.head(), self.git("status", "--porcelain")
+        code, out = self.spec("R1: moved out")
+        self.assertEqual(code, 1)
+        self.assertIn("across the spec paths", out)
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (head, before))
+        self.git("mv", "cart.md", ".mismagent/examples/cart.md")
+        self.write(".mismagent/releases/R1.md", "# R1\nv1\n")
+        self.git("add", ".mismagent/releases/R1.md")
+        self.write(".mismagent/releases/R1.md", "# R1\nv2\n")
+        code, out = self.spec("R1: release")
+        self.assertEqual(code, 1)
+        self.assertIn("staged with other content", out)
+        self.assertEqual(self.git("show", ":.mismagent/releases/R1.md"), "# R1\nv1")
+
+    @unittest.skipIf(not hasattr(os, "fork") or sys.platform.startswith("win"), "flock")
+    def test_the_lock_is_held_for_a_process_life(self):
+        lock, quick = os.path.join(self.dir, ".git/mismagent.lock"), dict(os.environ, MM_LOCK_WAIT="0.2")
+        holder = subprocess.Popen([sys.executable, "-c", "import fcntl, os, sys, time; fd = os.open(sys.argv[1], "
+                                   "os.O_CREAT | os.O_RDWR); fcntl.flock(fd, fcntl.LOCK_EX); print('held', flush=True); "
+                                   "time.sleep(30)", lock], stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), "held")
+            self.write(".mismagent/releases/R1.md", "# R1\n")
+            self.slice("02-more", release="R1", examples="EX-3")
+            code, out = self.spec("R1: release", env=quick)
+            self.assertEqual(code, 1)
+            self.assertIn("another mm", out)
+            self.assertEqual(self.git("log", "--format=%s").splitlines(), ["init"])
+            code, _, err = self.mm("start", "02-more", env=quick)  # a state move waits for the lock too
+            self.assertEqual(code, 1)
+            self.assertIn("another mm", err)
+            self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/todo/02-more.md")))
+        finally:
+            holder.kill()
+            holder.wait()
+        code, out = self.spec("R1: release, slice 02")  # the holder died: the lock went with it
+        self.assertEqual(code, 0, out)
+
+    def test_a_commit_beside_a_state_move_refuses_it_and_puts_the_file_back(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.write(".mismagent/slices/todo/02-more.md", self.read(".mismagent/slices/todo/02-more.md").replace("\n", "\r\n"))
+        os.chmod(os.path.join(self.dir, ".mismagent/slices/todo/02-more.md"), 0o755)
+        self.commit("specify R0: slice 02")
+        with open(os.path.join(self.dir, ".mismagent/slices/todo/02-more.md"), "rb") as f:
+            before = f.read()
+        code, _, err = self.mm("start", "02-more", env=self.beside())
+        self.assertEqual(code, 1)
+        self.assertIn("HEAD moved", err)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "01-cart: beside")  # theirs stands, ours is not on it
+        with open(os.path.join(self.dir, ".mismagent/slices/todo/02-more.md"), "rb") as f:
+            self.assertEqual(f.read(), before)  # byte for byte, mode too
+        self.assertTrue(os.stat(os.path.join(self.dir, ".mismagent/slices/todo/02-more.md")).st_mode & 0o100)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/02-more.md")))
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        code, _, err = self.mm("start", "02-more")  # run again: on the new HEAD
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("log", "--format=%s").splitlines()[:2], ["mm start 02-more", "01-cart: beside"])
+
+    def test_spec_builds_again_on_a_head_that_moved(self):
+        self.write(".mismagent/releases/R1.md", "# R1\n")
+        code, out = self.spec("R1: release", env=self.beside("01-cart: green"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("log", "--format=%s").splitlines(), ["specify R1: release", "01-cart: green", "init"])
+        self.write(".mismagent/releases/R1.md", "# R1\nmore\n")
+        code, out = self.spec("R1: again", env=self.beside("01-cart: busy", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("kept moving", out)
+        self.assertEqual(self.git("status", "--porcelain").split(), ["M", ".mismagent/releases/R1.md"])  # still ours to commit
+
+    def test_a_published_commit_stands_when_the_index_cannot_follow(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 02")
+        code, _, err = self.mm("start", "02-more", env=self.fake_git("reset", "exit 128"))  # once: the retry follows
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.slice("03-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 03")
+        self.assertEqual(self.mm("park", "02-more")[0], 0)
+        code, _, err = self.mm("start", "03-more", env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("published as", err)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "mm start 03-more")  # the commit stands
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/03-more.md")))  # not put back
+        self.git("reset", "-q", "--", ".mismagent/slices")  # by hand, as the message says
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_tag_finishes_after_its_review_commit_stood_alone(self):
+        self.done_release("R0")
+        self.review("R0-1", "HEALTHY")
+        code, _, err = self.mm("tag", "R0", env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("published as", err)
+        self.assertEqual((self.git("tag", "-l"), self.git("log", "-1", "--format=%s")), ("", "review: R0"))
+        code, _, err = self.mm("tag", "R0")  # the index healed under the lock; the review read through its own commit
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("log", "-1", "--format=%s", "R0"), "review: R0")  # the same commit, tagged
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_a_cut_reconciliation_heals_at_the_next_move(self):
+        self.started()
+        self.git("read-tree", "HEAD~1")  # the index as before `mm start`: cut after its ref moved
+        self.assertNotEqual(self.git("status", "--porcelain"), "")
+        code, _, err = self.mm("park", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_land_takes_review_names_literally_and_records_a_review_deleted(self):
+        self.started()
+        self.work()
+        self.write(".mismagent/reviews/old-evidence.md", "old\n")
+        self.commit("review: old evidence")  # a review's own commit: read through
+        self.review("01-cart-1", "PASS")
+        os.remove(os.path.join(self.dir, ".mismagent/reviews/old-evidence.md"))
+        self.write(".mismagent/reviews/*.md", "a name, not a pattern\n")
+        self.write(".mismagent/reviews/unfinished.draft.md", "draft\n")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        shown = self.git("-c", "core.quotePath=false", "show", "--name-status", "--format=", "HEAD")
+        self.assertIn("D\t.mismagent/reviews/old-evidence.md", shown)
+        self.assertIn("A\t.mismagent/reviews/*.md", shown)
+        self.assertNotIn("draft", shown)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_the_recovery_command_quotes_a_path(self):
+        self.write(".mismagent/decisions/one choice.md", "# one\n\n## Evidence\n- the human\n")
+        code, out = self.spec("R0: a choice", env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("git reset -- '.mismagent/decisions/one choice.md'", out)
+
+    def test_land_commits_the_review_files_one_by_one_and_keeps_a_draft_until_then(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "PASS")
+        self.write(".mismagent/reviews/someone.draft.md", "unfinished\n")
+        code, _, err = self.mm("land", "01-cart", env=self.beside("specify R0: beside"))  # refused: the draft stays
+        self.assertEqual(code, 1)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/someone.draft.md")))
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("draft", self.git("show", "--name-only", "--format=", "HEAD"))
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".mismagent/reviews/someone.draft.md")))
+
+    def test_spec_reconciles_a_stale_index_without_an_empty_commit(self):
+        self.write(".mismagent/releases/R1.md", "# R1\n")
+        self.assertEqual(self.spec("R1: release")[0], 0)
+        head = self.head()
+        self.git("read-tree", "HEAD~1")  # the index as before the commit: a spec cut after its ref moved
+        self.assertNotEqual(self.git("status", "--porcelain"), "")
+        code, out = self.spec("R1: again")
+        self.assertEqual(code, 0, out)
+        self.assertIn("as committed", out)
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (head, ""))
+
+    def test_a_specify_commit_that_moves_code_is_a_code_commit(self):
+        self.started()
+        self.work()
+        self.review("01-cart-1", "PASS")
+        self.assertEqual(self.next()["action"], "land")
+        os.makedirs(os.path.join(self.dir, ".mismagent/decisions"), exist_ok=True)
+        self.git("mv", "src/cart.py", ".mismagent/decisions/cart.py")
+        self.commit("specify R0: moved by hand")  # a specify subject on code: not a spec commit
+        self.assertNotEqual(self.next()["action"], "land")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("no PASS review of 01-cart at HEAD", err)
+
+    def test_the_tree_names_specifys_files_among_others(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 02")
+        self.write("src/cart.py", "x = 1\n")
+        self.write(".mismagent/releases/R0.md", "# R0\n")
+        code, _, err = self.mm("start", "02-more")
+        self.assertEqual(code, 1)
+        self.assertIn("among them specify's (.mismagent/releases/R0.md)", err)
+
+    def test_wait_reports_the_minutes_since_the_last_write(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 02")
+        self.write(".mismagent/releases/R0.md", "# R0\n")
+        os.utime(os.path.join(self.dir, ".mismagent/releases/R0.md"), (time.time() - 7300, time.time() - 7300))
+        d = self.next()
+        self.assertEqual(d["action"], "wait")
+        self.assertGreaterEqual(d["minutes"], 121)
+        self.assertIn("min since its last write", d["reason"])
+
+    def test_the_gate_names_specify_on_an_uncommitted_example(self):
+        base = self.commit("base")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 1)
+        self.assertIn("specify is writing beside you", out)
+
+    def test_a_spec_commit_keeps_a_review_at_head(self):
+        self.started()
+        self.work()
+        read = self.head()  # the reviewer reads here
+        self.write(".mismagent/releases/R0.md", "# R0\n\n## Open questions\nnone\n")
+        self.assertEqual(self.spec("R0: release file")[0], 0)
+        self.write(".mismagent/reviews/01-cart.draft.md", "# Review\nfine\n")
+        code, _, err = self.mm("review", "01-cart", "PASS", "--sha", read[:9])  # HEAD moved by specify alone
+        self.assertEqual(code, 0, err)
+        self.write(".mismagent/examples/pay.md", "| id | given | when | then | rule | req | release |\n"
+                   "| EX-4 | a | b | c | R | Q | R1 |\n")
+        self.assertEqual(self.spec("R1: EX-4")[0], 0)
+        self.assertEqual(self.next()["action"], "land")  # not resume: the PASS holds through specify's commits
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+
+    def test_a_slice_added_beside_the_build_starts_in_its_turn(self):
+        self.started()  # 01-cart in doing
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.assertEqual(self.spec("R0: slice 02")[0], 0)
+        self.assertEqual(self.next()["action"], "build")  # the slice in doing first
+        self.work()
+        self.review("01-cart-1", "PASS")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        d = self.next()
+        self.assertEqual((d["action"], d["slice"]), ("start", "02-more"))
+
+    def test_a_release_in_confirm_goes_back_to_the_build_when_a_slice_is_added(self):
+        self.done_release("R0")
+        self.review("R0-1", "HEALTHY")
+        self.assertEqual(self.next()["action"], "confirm")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R0 |\n")
+        self.slice("02-more", release="R0", examples="EX-4")
+        self.assertEqual(self.spec("R0: EX-4, slice 02")[0], 0)
+        d = self.next()
+        self.assertEqual((d["action"], d["slice"]), ("start", "02-more"))
+
+    def test_next_waits_while_specify_writes(self):
+        self.slice("02-more", release="R0", examples="EX-2")
+        self.commit("specify R0: slice 02")
+        self.write(".mismagent/releases/R0.md", "# R0\n")  # being written, not committed
+        d = self.next()
+        self.assertEqual(d["action"], "wait")
+        self.assertIn(".mismagent/releases/R0.md", d["reason"])
+        code, _, err = self.mm("start", "02-more")
+        self.assertEqual(code, 1)
+        self.assertIn("specify is writing beside you", err)
+        self.assertEqual(self.spec("R0: release file")[0], 0)
+        self.assertEqual(self.next()["action"], "start")
+        self.started()
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R0 |\n")
+        self.assertEqual(self.next()["action"], "wait")
+        self.write("src/cart.py", "x = 1\n")  # the builder's own dirt beside it: its work, resumed
+        self.assertEqual(self.next()["action"], "resume")
+
+    def test_built_names_specify_on_its_dirt(self):
+        self.started()
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("01-cart: code")
+        self.write(".mismagent/releases/R0.md", "# R0\n")
+        code, _, err = self.mm("built", "01-cart", "--friction", "none")
+        self.assertEqual(code, 1)
+        self.assertIn("specify is writing beside you (.mismagent/releases/R0.md)", err)
+        self.assertEqual(self.spec("R0: release")[0], 0)
+        self.assertEqual(self.mm("built", "01-cart", "--friction", "none")[0], 0)
+
+    def test_land_checks_again_after_the_gate(self):
+        self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: git commit -q --allow-empty -m '01-cart: during the gate'"))
+        self.started()
+        self.work()  # the gate commits once here too
+        self.review("01-cart-1", "PASS")
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 1)
+        self.assertIn("no PASS review of 01-cart at HEAD", err)
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".mismagent/slices/doing/01-cart.md")))
+
+    def test_tag_checks_again_after_the_gate(self):
+        joins = ("mkdir -p .mismagent/slices/todo && printf 'Kind: feature\\nRelease: R0\\nExamples: EX-2\\n' "
+                 "> .mismagent/slices/todo/02-more.md && git add .mismagent/slices/todo && "
+                 "git commit -q -m 'specify R0: slice 02' -- .mismagent/slices/todo")
+        self.write("CLAUDE.md", CLAUDE.replace("- test: true", "- test: " + joins))
+        self.done_release("R0")
+        self.review("R0-1", "HEALTHY")
+        code, _, err = self.mm("tag", "R0")
+        self.assertEqual(code, 1)
+        self.assertIn("slices not done: 02-more", err)
+        self.assertEqual(self.git("tag", "-l"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

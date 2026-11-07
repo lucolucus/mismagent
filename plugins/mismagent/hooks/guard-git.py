@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """PreToolUse(Bash) guard: the builder, the reviewer and the architect never merge, push, rebase,
 hard-reset, switch branches, delete branches, stash, tag or move slice state — the conductor
-(/mismagent:build) does. Commits are allowed. Main-session calls pass untouched.
+(/mismagent:build) does — nor sweep or drop what is not theirs: `git add -A`/`-u`/`.`, `commit -a`,
+`clean`, `restore` (specify's files sit uncommitted beside them, 0.7.27). Commits by path are
+allowed. Main-session calls pass untouched.
 
 It splits the command on `&&`, `||`, `;`, `|`, `&` and newlines, tokenizes each segment (shlex),
 skips env assignments and git's global options (`-C <path>`, `-c <kv>`, `--no-pager`, …), then
@@ -60,11 +62,32 @@ def git_call(seg):
     return seg[i], seg[i + 1:]
 
 
+COMMIT_TAKES_VALUE = {"-m", "--message", "-F", "--file", "--author", "--date", "-C", "-c", "--fixup",
+                      "--squash", "--trailer"}
+
+
+def flags(args):
+    """The option tokens of a commit, a message's text left out (`-m '-a flag'` is a message)."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a.startswith("-"):
+            out.append(a)
+            skip = a in COMMIT_TAKES_VALUE
+    return out
+
+
 def violation(sub, args):
-    if sub in ("merge", "push", "rebase", "checkout", "switch", "stash", "tag"):
+    if sub in ("merge", "push", "rebase", "checkout", "switch", "stash", "tag", "clean", "restore"):
         return "git " + sub
     if sub == "reset" and "--hard" in args:
         return "git reset --hard"
+    if sub == "add" and any(a in ("-A", "--all", "-u", "--update", ".", ":/", ":/.", "*")
+                            or re.match(r"^-[a-zA-Z]*[Au]", a) for a in args):
+        return "git add of everything (the human's uncommitted files beside you are not yours)"
+    if sub == "commit" and any(a == "--all" or re.match(r"^-[a-zA-Z]*a", a) for a in flags(args)):
+        return "git commit -a (the human's uncommitted files beside you are not yours)"
     if sub == "branch" and any(a in ("-d", "-D", "--delete") or re.match(r"^-[a-zA-Z]*[dD]", a)
                                for a in args):
         return "git branch --delete"

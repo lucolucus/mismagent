@@ -12,10 +12,11 @@ Arguments: $ARGUMENTS
 **One action per call**, then report and stop.
 
 **Under `/loop`** you are the always-on conductor. After an action, come back at once. When the
-flow waits for the human (`NEEDS-HUMAN`, `confirm` without `--confirm`, `idle`), or the tree has
-uncommitted changes you did not make (someone is working), do nothing and come back in ten
-minutes; the next tick resumes by itself once they have answered. Notify once per wait, not every
-tick. After this conversation's third `land`, end the loop with `NEEDS-HUMAN: /clear, then /loop
+flow waits for the human (`NEEDS-HUMAN`, `confirm` without `--confirm`, `idle`), do nothing and
+come back in ten minutes; the next tick resumes by itself once they have answered. `wait` (specify
+is writing beside you: it commits each file as it writes it) → come back in two minutes; the tree
+has other uncommitted changes you did not make (someone works by hand here) → ten. Notify once per
+wait, not every tick. After this conversation's third `land`, end the loop with `NEEDS-HUMAN: /clear, then /loop
 /mismagent:build`: the state is in the repo, and a long conversation slows every tick.
 
 **The human wrote to you** since your last action — here, or as a message from another session
@@ -58,13 +59,18 @@ the review at HEAD):
 | `conventions` | print `NEEDS-HUMAN: /mismagent:conventions` with mm's reason, and stop |
 | `confirm` | if `$ARGUMENTS` holds `--confirm <that release>`: `MM tag <release>`, with `--why "<their words>"` when they gave one (a DESIGN-PASS review is tagged only with it: mm records the reason as a decision). Else print `NEEDS-HUMAN: confirm <release>` with the release review's verdict and its findings (and the screens beside their artboards in `.mismagent/shots/<release>/`, if any; a review with `LOOK:` over 0: "the look pairs that differ are yours: confirm with `--why`"), then the first two lines of `MM log --release <release>` (the method's friction, the slices' rounds) — a DESIGN-PASS: "confirm with `--why`, or ask for a design pass" — and stop |
 | `idle` | report the reason (e.g. the next release needs `/mismagent:specify`) and stop |
+| `wait` | specify is writing beside the build (mm names the files, and `minutes` since its last write): do nothing; under `/loop` come back in two minutes, else report. Past 30 minutes, `FOR-HUMAN:` once — a spec file left uncommitted, with the files |
 
 Each agent runs on the model its definition names; pass none, except `model: opus` for a `rework`
 whose `k` is 2 or more.
 
-Agents commit their own work, `MM` commits state; you commit only an `## Answer` or a proposal you write. An agent's `RESULT: BLOCKED` with a
+Agents commit their own work, `MM` commits state; you commit only an `## Answer` or a proposal you
+write — those files alone (`git add <paths>`, `git commit -- <paths>`: specify may be writing beside
+you). An agent's `RESULT: BLOCKED` with a
 question, or an `MM` command that fails → print `NEEDS-HUMAN:` with the question or mm's message,
-and stop.
+and stop — except a refusal that says specify is writing beside you, HEAD moved, another mm holds
+the lock, or a precondition that moved under it (no PASS at HEAD, a slice not done): a `wait`, then
+`MM next` again — not a stop.
 
 ## 2. Doubts
 A slice is blocked when its `## Question` has no `## Answer`. You neither guess nor forward blindly:

@@ -25,7 +25,8 @@ decision that outlives the release: what, why, what else was considered, `Eviden
 words). `brief.md` stays one page about the product: rewritten in place, never appended to. Start
 by reading them and resume where they stop.
 
-A **bug** (`bug <what happens>`, or a request that turns out to be one): only §6, the short way.
+A **bug** (`bug <what happens>`, or a request that turns out to be one): only §6, the short way
+(*Beside the build* holds there too).
 
 ## 1. Intake
 Read the request, the requirements, the repository (code? tests? `ARCHITECTURE.md`?
@@ -33,14 +34,15 @@ Read the request, the requirements, the repository (code? tests? `ARCHITECTURE.m
 human prefers a one-page brief here. If `event-storm.md` exists, the release is a part of its
 timeline: each slice is one path through it, and its open hotspots are your first questions. Say
 in three lines what you understood, what you will do (examples and slices for
-**one** release — the next — never the whole product), and ask what you must. First time only:
+**one** release — the one in hand, see *Beside the build* — never the whole product), and ask
+what you must. First time only:
 - `.mismagent/brief.md`, if explore did not write it — one page: problem, users, value, scope;
 - the **stack** (language, interface toolkit, persistence, where it runs): the stack review below.
 
 ## The stack review
 Two ways in. **Intake** (first time): run it, then go on to §2. **Standalone** — the human asks
 to change the stack, or `/mismagent:build` sends you here (`/mismagent:specify stack <slice>`): do
-only this section. A fork, never a transcription: never accept a stated preference without the
+only this section (*Beside the build* holds: its files are spec paths, `MM spec "stack N: <step>"`). A fork, never a transcription: never accept a stated preference without the
 review, never argue for your own. `MM` = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`.
 
 Files, in `.mismagent/stack-reviews/`, for review `N` (the next four-digit number unused in both
@@ -80,7 +82,7 @@ stack in question.
 6. **The human decides.** Write `.mismagent/decisions/N-stack.md`: choice · forces · alternatives
    with gives/costs · the human's reason · costs accepted · `Supersedes:` the old decision (whose
    title gets `(superseded by N)`) · `Evidence:` the review files; status `decided`. Commit
-   (`stack N`). An informed
+   (`MM spec "stack N"`). An informed
    choice closes the matter: reopen it only for new material evidence (a hotspot answered later
    that breaks a force), never because you would still choose otherwise.
 7. **The handoff**, in this order, the status updated and committed at each step:
@@ -100,6 +102,37 @@ stack in question.
      migration slices' numbers (`mm` will not start it before they land); commit.
    - Status `done`; commit. Intake → go on to §2. Standalone → end your last message with
      `STACK N`.
+
+## Beside the build
+`/mismagent:build` may be running in this checkout while you work (`/loop`, in a session of its
+own): its builder commits code here, `mm` moves state here, and both read the tree you write.
+These rules hold on every route — the intake, the stack review, a bug. `MM` = `python3
+"${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`.
+- **Commit each file as you write it**: `MM spec "<RN>: <what>"`. It commits the spec paths only —
+  brief, event storm, releases, examples, slices in todo, decisions, artboards, stack reviews — in
+  an index of its own, with the subject `check --base` reads as the human's; the builder's
+  uncommitted or staged code stays where it is, and a review at the commit below yours is still at
+  HEAD. Nothing left to commit: it says so and succeeds. Never `git add -A`, `git commit -a` or a
+  commit with no pathspec: one would carry the builder's code into your commit, and `mm built`
+  would then refuse your example as not the human's. The one file `MM spec` does not take is a
+  doing slice's `## Answer` (the stack handoff): commit it by hand, that file alone
+  (`git commit -m "…" -- <path>`).
+- **Whole files, examples first, the window short.** The tree is shared: a half-written file is on
+  the builder's disk the moment you write it, and `mm` holds the flow while a spec path is
+  uncommitted (`next` says `wait`, `built` and `land` refuse and say so). So: the example rows
+  before the slice that names them; a slice file complete at its first write (Kind, Release,
+  Examples that exist); `MM spec` right after each write. `MM spec` refuses a spec that does not
+  hold together — every `mm check` error under `.mismagent/`, not only in the file you wrote:
+  fix, run it again.
+- **The release in hand**: the one the slice in doing belongs to (`MM status`), else the first
+  untagged one in order — the next when every release is tagged, or the one the human names. A
+  slice you add joins its todo and starts in its turn, after the one in doing; an example you add
+  holds the release's review until a slice names it, an open question in its file holds it too
+  (`mm` says `idle`, with why). A release already under review (`MM next` says `release-review`
+  or `confirm`) goes back to the build when a slice is added: say so to the human, who may prefer
+  the next release.
+- **An example a started slice names** (doing or done) is never rewritten: supersede it (§3) and
+  give the new row a slice. The builder works from the row it was dispatched with.
 
 ## 2. The investigation, rule by rule
 For each capability of the release:
@@ -130,10 +163,12 @@ add the new one and append `(superseded by EX-<n>)` to the old one's `then`. An 
 `examples.md`: split it by capability with the human first (`mm check` warns until you do).
 
 ## 4. Slices
-Write `.mismagent/slices/todo/NN-<name>.md` (NN continues the highest number anywhere under
-`slices/`): a slice is one path from an action to what the user sees, end to end, with 1–3
-examples, never a technical layer. The first slice of a new product is the smallest real example
-end to end. Order: risk first, then value. Each file:
+A slice is one path from an action to what the user sees, end to end, with 1–3 examples, never a
+technical layer. The first slice of a new product is the smallest real example end to end. Order:
+risk first, then value. Propose them to the human as a list first (one line each: name, examples,
+what the user can do) and ask for the release cut; a slice file in `todo/` is runnable the moment
+`MM spec` commits it (`mm next` starts it beside you), so write only the slices agreed, as
+`.mismagent/slices/todo/NN-<name>.md` (NN continues the highest number anywhere under `slices/`):
 ```
 Kind: feature            (model: the first, set by the architect · fix: a bug, §6 · refactor: structure only, the architect's)
 Release: <RN>
@@ -142,8 +177,6 @@ Design: <artboards its screens look like, if any>
 
 <what the user can do after this slice, two lines>
 ```
-Show the human the list (one line per slice) and ask for the release cut.
-
 **Designs.** Artboards the human brings (a canvas, a mockup, screenshots) are spec, like the
 examples: export each one the release uses as an image into `.mismagent/design/` — a link the
 agents cannot open is no spec (`mm check` refuses it) — and commit them with the examples. Walk
@@ -154,10 +187,12 @@ the release file; nothing left implicit.
 No open question left in `releases/<RN>.md`, the human has approved the examples and the slices →
 `MM check --release <RN>` (`MM` = `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py"`): it refuses an
 example of the release in no slice, a feature or fix slice with no example, a missing release file
-or an open question left in it. Red → it is the spec that does not hold together: settle it with
+or an open question left in it. A red line on the spec → it does not hold together: settle it with
 the human (a slice for the example, or cut it from the release by superseding it; the question
-answered), never by editing around the check. Green → commit (`specify <RN>`) and end your last
-message with the line `SPECIFIED <RN>`. Building is `/mismagent:build`.
+answered), never by editing around the check; a red line on code outside `.mismagent/` (a file
+over size, a suppression) is the builder's and does not hold the close. No spec error →
+`MM spec "<RN>"` (nothing left: it says so) and end your last message with the line
+`SPECIFIED <RN>`. Building is `/mismagent:build`.
 
 ## 6. A bug, the short way
 A bug is behavior the human did not agree, seen in the running program. No intake, no stack, no
@@ -171,12 +206,12 @@ release cut: one example and one slice.
    - no example says → a missing edge: a new example `EX-<n>`, the failing case with its values;
    - an example says what happened (the rule itself was wrong) → it is a change, not a bug: the
      new example supersedes it (`(superseded by EX-<n>)`), and the human confirms the new rule.
-3. **One slice** `Kind: fix`, `Examples:` that example, `Release:` the first untagged release (the
-   one being built); when every release is tagged, the next, agreed with the human, with its
-   release file. Two lines: what the user sees once fixed.
-4. **Close** as §5, the commit named `specify fix <name>`; the next `/mismagent:build` starts the
+3. **One slice** `Kind: fix`, `Examples:` that example, `Release:` the release in hand (*Beside the
+   build*); when every release is tagged, the next, agreed with the human, with its release file. Two lines: what the user sees once fixed.
+4. **Close** as §5 (`MM spec "fix <name>"`); the next `/mismagent:build` starts the
    fix before any other slice in todo.
 
 ## Never
-Write code or tests (a reproduction you run is evidence, not a test you leave); decide a question the human has not answered; specify more than the next
-release; change a delivered example other than by appending `(superseded by …)`.
+Write code or tests (a reproduction you run is evidence, not a test you leave); decide a question the human has not answered; specify more than one
+release (the one in hand); change an example a started slice names, or a delivered one, other
+than by appending `(superseded by …)`; commit by hand what `MM spec` commits.

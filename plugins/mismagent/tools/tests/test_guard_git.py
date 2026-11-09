@@ -35,6 +35,13 @@ class GuardGit(unittest.TestCase):
                     "git mv /r/.mismagent/slices/S1.md /r/.mismagent/slices/done/S1.md"):
             self.assertEqual(decide(cmd), "deny", cmd)
 
+    def test_sweeps_of_the_humans_files_denied(self):
+        for cmd in ("git clean -fd", "git clean -n", "git restore .", "git restore --staged src/a.py",
+                    "git add -A", "git add --all", "git add .", "git add -u", "git add -fA src",
+                    "git add :/", "git add *", "git commit -am wip", "git commit -a -m x",
+                    "git commit --all -m x", "git commit -sam x"):
+            self.assertEqual(decide(cmd), "deny", cmd)
+
     def test_global_option_bypasses_denied(self):
         for cmd in ('git -C "/tmp/my repo" merge x', "git --no-pager push",
                     'git -c "user.name=Some Name" rebase x', "git --git-dir=/r/.git -P push",
@@ -53,8 +60,9 @@ class GuardGit(unittest.TestCase):
 
     def test_normal_commands_allowed_for_builder(self):
         for cmd in ("git status", "git diff main...HEAD", "git log --oneline | head",
-                    "git add -A && git status", 'echo "git push" > notes.txt',
-                    "git commit -m 'S1 green'", "git add . && git commit -am wip",
+                    "git add src/a.py tests/test_a.py && git status", 'echo "git push" > notes.txt',
+                    "git commit -m 'S1 green'", "git add -p src/a.py && git commit --amend -m wip",
+                    "git add src/ && git commit -m 'adds under src'", "git commit -m '-a flag'",
                     "git reset --soft HEAD~1", "git mv src/a.py src/b.py", "git branch",
                     "git branch --show-current", "git show HEAD:.mismagent/slices/S1.md"):
             self.assertEqual(decide(cmd), "allow", cmd)

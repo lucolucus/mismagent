@@ -10,6 +10,8 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
   CLAUDE.md `## mismagent`: `- key: value` — test, lint, smoke, max_file_lines (400), suppressions (0),
     max_map_chars (20000: the characters of ARCHITECTURE.md past which check warns),
     acceptance (tests/acceptance; comma-separated folders, for a build that wants tests elsewhere),
+    suppress (the stack's own suppression markers, comma-separated plain text, counted beside the
+    built-in ones; `none`: it has no other), tests (comma-separated folders of tests, beside tests/: no size limit there),
     shot (renders the app's screens: one $MM_SHOTS/<name>.png per name in $MM_DESIGN),
     timeout (1800: the seconds a test, lint or shot command may take; past it the command and its
     children are ended and the gate is red)
@@ -39,7 +41,8 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     (it refuses when HEAD moved since the reviewer read it); "at HEAD" = SHA (>= 7 hex) is a prefix of HEAD
   .mismagent/design-notes.md: one note per `- ` line (a numbered or paragraph line is warned: it
     escapes the count), `- RISK` a wrong result outside a diff; over NOTES_LIMIT with no refactor
-    ready -> `design-pass`, and after a pass that left them -> `idle` (the human decides) ·
+    ready -> `design-pass`, and after a pass that left them -> `idle` (the human decides); a pass is the
+    commit `mm designed` makes (`design pass …`; typed by hand, `Design pass`/`design-pass` too) ·
     <acceptance>/**: markers EX-<n> (not E501)
   .mismagent/conventions-proposals.md: one proposal per `- ` line (create or update a topic;
     `- now ` = decided before the next slice starts)
@@ -70,14 +73,24 @@ Design choices:
 - A DESIGN-PASS release review at HEAD asks for a pass unless a DESIGN-PASS review of that release
   came before it (one pass ran): then `confirm` — the human tags with `--why`, recorded as a
   decision, or asks for another pass. `tag` needs a review at HEAD.
-- check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list),
-  the examples and the conventions skill — a change made only by `specify`/`conventions` commits
-  (touching no code) since Base, an ancestor of HEAD, with nothing uncommitted, is the human's; an
-  edit undone later (a revert, by hand) cancels out. A modified, renamed-and-edited or deleted
-  acceptance file naming none of the doing feature/fix slice's examples (nor a superseded one) is a
-  warning for the reviewer, who judges it against Base. `mm built` runs the gate with the slice's
-  Base, so the builder sees what the reviewer will check.
-- Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/.
+- check --base guards REQUISITI*, requirements*.md (not requirements.txt, a dependency list), the
+  examples and the conventions skill — a change made only by `specify`/`conventions` commits
+  (`mm spec`, `mm conventions`; typed by hand, capitalised too; touching no code) since Base, an
+  ancestor of HEAD, with nothing uncommitted, is the human's; an edit undone later (a revert, by
+  hand) cancels out. A gate setting of CLAUDE.md that differs from Base's (test, lint, smoke,
+  max_file_lines, suppressions, suppress, tests, acceptance, timeout, max_map_chars — not shot, the
+  builder's to write) is a warning a key, never an error: a migration changes them, a builder must
+  not loosen its own gate. A doing slice's `Base:` is mm's: check fails when it is no longer the
+  one its file had in the last commit that moved it from todo/ to doing/ (`mm start`'s). A modified, renamed-and-edited or deleted acceptance file naming none of
+  the doing feature/fix slice's examples (nor a superseded one) is a warning for the reviewer, who
+  judges it against Base. `mm built` runs the gate with the slice's Base, so the builder sees what
+  the reviewer will check.
+- Sensors: suppressions over tracked code files outside .mismagent/; size also skips tests/, the
+  acceptance folders and the `tests:` folders. The built-in markers are Python's, JavaScript's, Go's
+  and Java's and stay as they are (no project turns red on an upgrade); the stack's own are the
+  project's `suppress:` markers, each counted on a line that contains it as written (never a pattern;
+  one under four characters: an error) — absent while a tracked source is in another language: one
+  warning.
 - No word cap on .mismagent/ as a whole: each thing has its file (a capability's examples, a
   decision, a release, a slice and its progress), so agents read the files they need, never the
   history whole; what lasts is kept current in the skill and ARCHITECTURE.md, not compacted.
@@ -119,20 +132,33 @@ Design choices:
   with the subject check --base reads as the human's. It refuses a spec that does not hold together
   (check's errors under .mismagent/, whichever file), a rename across the spec paths, a path staged
   with other content than the tree's; paths as committed already: no commit, the index reconciled.
+  Its siblings, same rules: `conventions` for the conventions session (the skill, proposals and
+  design notes whole; a decision or the map only as a file it names; with --slice the slice it
+  answered; held by check's errors naming the skill or a file it commits) and `designed` for the
+  architect's design pass (design notes and proposals whole; the map, decisions, slices/todo and
+  release files only as files it names) — always a commit, empty when the pass changed nothing: the
+  subject is what `next` reads, so no agent types one by hand. Named, never a folder: specify, a
+  builder and the architect write in the same folders, and a folder says nothing of whose a file is;
+  what stays uncommitted there is listed, not taken.
 - Every commit mm makes goes through `publish`: the tree's state of the named paths, built in an
   index of its own and set on HEAD only if HEAD is still the commit the preconditions were checked
-  on (a commit beside us meanwhile -> refused, the files put back, run again; `spec` selects, checks
-  and builds again, three times). The shared index is never staged, so a builder's commit beside us
-  carries nothing of ours; afterwards the shared index follows HEAD on those paths alone. A tag
-  names the commit it was checked on. One HEAD is read under the lock, checked and published: never
-  one for the check and another for the parent. Published but the shared index could not follow
-  (an index.lock beside us past ten tries): the commit stands, said as such, nothing put back.
-  mm's state moves and `spec` take one lock (.git/mismagent.lock, an OS lock held for the process's
-  life: a crash releases it; waited for up to LOCK_WAIT s; without flock, Windows, the file itself,
-  never taken over: the human removes a dead one), taken before the state is read; `land`
-  and `tag` check their preconditions again after the gate, which takes a while and holds no lock.
-  A refused publish puts the slice file back byte for byte; review drafts are never in a commit
-  (the review files are named one by one) and go only once the commit stands.
+  on (a commit beside us meanwhile -> refused, the files put back, run again; `spec`, `conventions`
+  and `designed` select, check and build again, three times). The shared index is never staged, so a
+  builder's commit beside us carries nothing of ours; afterwards the shared index follows HEAD on
+  those paths alone. A tag names the commit it was checked on. One HEAD is read under the lock,
+  checked and published: never one for the check and another for the parent. Published but the
+  shared index could not follow (an index.lock beside us past ten tries): the commit stands, said as
+  such, nothing put back. Every publish goes on record before the ref moves (.git/mismagent.cut: its
+  commit, the index entries it found, stage by stage) and off it once the index has followed — on
+  the entries still as found, there too; cut in between, the next move under the lock resets the
+  entries still as that publish found them, and no other. A record that cannot be read or written
+  refuses the move, with nothing committed. mm's state moves, `spec`, `conventions` and `designed` take one lock
+  (.git/mismagent.lock, an OS lock held for the process's life: a crash releases it; waited for up
+  to LOCK_WAIT s; without flock, Windows, the file itself, never taken over: the human removes a
+  dead one), taken before the state is read; `land` and `tag` check their preconditions again after
+  the gate, which takes a while and holds no lock. A refused publish puts the slice file back byte
+  for byte; review drafts are never in a commit (the review files are named one by one) and go only
+  once the commit stands.
 - A specify commit of spec paths changes no code, nor does the `review: <release>` commit `tag` makes
   of the review's own files: a review at the commit below either is still at HEAD (`code_heads`:
   single-parent commits whose diff from the parent touches those paths alone, renames undone, a
@@ -188,6 +214,10 @@ FRICTION = ("spec", "tool", "conventions", "env", "context", "review")  # the me
 FRICTION_WORDS = 15
 CITED = re.compile(r"`([\w.\-/]+)`")
 MAP = "ARCHITECTURE.md"
+# `mm conventions` and `mm designed` commit their own paths whole, and of the paths they share with specify, a
+# builder or each other only the files the caller names: a folder says nothing of whose its files are
+DECIDED, DECIDED_NAMED = (SKILL, PROPOSALS, NOTES), (M + "/decisions", MAP)  # the conventions session's
+PASSED, PASSED_NAMED = (NOTES, PROPOSALS), (MAP, M + "/decisions", M + "/slices/todo", RELEASES)  # a design pass's
 
 IGNORED_DIRTY = (REVIEWS + "/", NOTES, PROPOSALS, SHOTS + "/")
 DEBRIS = re.compile(r"(^|/)(__pycache__|\.pytest_cache)/|\.pyc$|\.db$|\.sqlite[^/]*$|\.log$")
@@ -196,6 +226,11 @@ EX_MARK = re.compile(r"(?<![\w-])EX-\d+(?!\d)")
 SUPERSEDED = re.compile(r"\(\s*superseded\s+by\s+EX-\d+\s*\)", re.I)
 BEHAVIOR_CHANGE = re.compile(r"^[-*\s]*(?:\*\*)?behaviou?r change(?:\*\*)?\s*:", re.M | re.I)
 SUPPRESS = re.compile(r"noqa|pylint:\s*disable|eslint-disable|@SuppressWarnings|type:\s*ignore|nolint")
+SUPPRESS_COVERS = {".py", ".js", ".mjs", ".cjs", ".jsx", ".go", ".java"}  # the languages SUPPRESS speaks; a source
+# in any other (a shell script's `shellcheck disable` too) is warned until `suppress:` names the stack's markers
+MARKER_MIN = 4  # a marker of `suppress:` shorter than this (`#`, `//`) would count ordinary lines
+GATE_KEYS = ("test", "lint", "smoke", "max_file_lines", "suppressions", "suppress", "tests", "acceptance", "timeout",
+             "max_map_chars")  # the gate's own settings: changed since Base, the reviewer judges it (`shot` is the builder's)
 SOURCE_EXT = {".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".kt",
               ".kts", ".rb", ".cs", ".c", ".h", ".cc", ".cpp", ".hpp", ".swift", ".php", ".scala",
               ".vue", ".svelte", ".dart", ".ex", ".exs", ".lua", ".sh", ".m", ".fs", ".clj"}
@@ -276,29 +311,82 @@ class locked:
             except FileNotFoundError:
                 pass
 
-MINE = (M + "/slices", REVIEWS, NOTES, PROPOSALS, M + "/decisions", SHOTS)  # what mm publishes, with SPEC
+CUT = "mismagent.cut"  # in .git: a JSON line per publish under way — its commit, and each path's entry in the shared index before it
 
-def blob_at_head(p):
-    return git("rev-parse", "-q", "--verify", "HEAD:%s" % p, check=False).strip()
+def index_entries(paths):
+    """{path: its entries in the shared index under these paths, `<mode> <blob> <stage>` each, `;` between
+    the stages of a conflict}."""
+    out = {}
+    for rec in git("--literal-pathspecs", "ls-files", "-s", "-z", "--", *paths, check=False).split("\0") if paths else []:
+        if rec:
+            meta, path = rec.split("\t", 1)
+            out[path] = (out[path] + ";" if path in out else "") + meta
+    return out
 
-def blob_on_disk(p):
-    return git("hash-object", "--", p, check=False).strip() if os.path.isfile(os.path.join(ROOT, p)) else ""
+def cuts(keep=None):
+    """The publishes on record; with keep, the record replaced by those in one move (none: removed). A
+    record mm cannot read or write refuses the move: it is the only trace of what an interrupted
+    publish left in the index."""
+    path = os.path.join(git_dir(), CUT)
+    rel = os.path.relpath(path, ROOT)
+    try:
+        if keep is None:
+            recs = []
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    recs = [json.loads(line) for line in f if line.strip()]
+            if all(isinstance(r, dict) and isinstance(r.get("commit"), str) and isinstance(r.get("entries"), dict)
+                   for r in recs):
+                return recs
+            raise ValueError("not a publish record")
+        if keep:
+            with open(path + ".new", "w", encoding="utf-8") as f:
+                f.write("".join(json.dumps(rec) + "\n" for rec in keep))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(path + ".new", path)
+        elif os.path.exists(path):
+            os.remove(path)
+        return keep
+    except (OSError, ValueError) as e:
+        raise Refused("%s: %s (%s) — it records what an interrupted mm commit left in the index: `git status` "
+                      "shows it (`git reset -- <path>` puts a path of mm's back on HEAD), then remove the file"
+                      % (rel, "cannot be read" if keep is None else "cannot be written", e))
+
+def follow(entries):
+    """The shared index follows HEAD on each of these paths still holding the entries on record — what a
+    publish found there. Entries changed since (a version someone staged, a merge's conflict stages) are
+    theirs. -> git's last error line, or "" once it has."""
+    now = index_entries(list(entries))
+    stale = [x for x, was in entries.items() if now.get(x, "") == was]
+    p = subprocess.run(["git", "--literal-pathspecs", "reset", "-q", "--", *stale], cwd=ROOT, capture_output=True,
+                       text=True, env=plain_env()) if stale else None
+    return (p.stderr.strip().splitlines() or ["git reset failed"])[-1] if p and p.returncode else ""
 
 def heal():
-    """mm's own leftover, under the lock: a path mm publishes whose index entry differs from HEAD while the
-    tree agrees with HEAD — a reconciliation cut after the ref moved — follows HEAD again. Nothing else."""
-    staged = [p for p in git("--literal-pathspecs", "diff", "--cached", "--no-renames", "--name-only", "-z", "--", *MINE, *SPEC,
-                             check=False).split("\0") if p]
-    agreed = [p for p in staged if blob_at_head(p) == blob_on_disk(p)]  # `git diff HEAD` skips a path the index lacks
-    if agreed:
-        git("--literal-pathspecs", "reset", "-q", "--", *agreed, check=False)
+    """mm's own leftover, under the lock: a publish on record (cut after the ref moved — a crash, an
+    index.lock beside it) whose commit is in HEAD's history has the shared index follow HEAD on each of
+    its paths still holding the entries that publish found there. A publish whose commit never landed
+    left nothing; one git cannot place (an error, not an answer) and a path that cannot be reset yet stay
+    on record."""
+    recs, keep = cuts(), []
+    for rec in recs:
+        landed = subprocess.run(["git", "merge-base", "--is-ancestor", rec["commit"], "HEAD"], cwd=ROOT,
+                                capture_output=True, env=plain_env()).returncode
+        if landed not in (0, 1) or (not landed and follow(rec["entries"])):  # 1 alone says "never landed"
+            keep.append(rec)
+    if keep != recs:
+        cuts(keep)
 
-def publish(paths, message, expect, force=False):
+def publish(paths, message, expect, force=False, allow_empty=False):
     """Commits the tree's state of these paths on top of expect, in an index of its own: the shared index
     is never staged, and whatever else is staged or dirty stays as it is. HEAD must still be expect when
     the ref moves (a commit beside us meanwhile -> Refused: the caller puts its files back and is run
-    again). Paths as committed already: no commit. -> (HEAD, committed); then the shared index follows
-    HEAD on these paths alone (an index.lock beside us: ten tries, then Unreconciled: the commit stands)."""
+    again). Paths as committed already: no commit — unless allow_empty (the subject is the record: no path
+    is fine then). -> (HEAD, committed); then the shared index follows HEAD on these paths alone (an
+    index.lock beside us: ten tries, then Unreconciled: the commit stands). Before the ref moves, the
+    commit and the shared index's entries under the paths go on record (`cuts`), off it once the index has
+    followed: cut in between, the next move under the lock heals exactly those."""
     for leftover in glob.glob(os.path.join(git_dir(), "mismagent-*.index*")):  # a crashed mm's
         if time.time() - os.path.getmtime(leftover) > LOCK_STALE:
             os.remove(leftover)
@@ -306,28 +394,52 @@ def publish(paths, message, expect, force=False):
     env = dict(plain_env(), GIT_INDEX_FILE=index)
     try:
         git("read-tree", expect, env=env)
-        git("--literal-pathspecs", "add", "-A", *(["-f"] if force else []), "--", *paths, env=env)
+        if paths:  # none: `git add -A --` would take the whole tree
+            git("--literal-pathspecs", "add", "-A", *(["-f"] if force else []), "--", *paths, env=env)
         tree = git("write-tree", env=env).strip()
-        if tree == git("rev-parse", expect + "^{tree}").strip():
+        if tree == git("rev-parse", expect + "^{tree}").strip() and not allow_empty:
             new, committed = expect, False
         else:
             new, committed = git("commit-tree", tree, "-p", expect, "-m", message, env=env).strip(), True
+            if paths:  # on record before the ref moves; a record that cannot be written: Refused, nothing moved
+                was = index_entries(paths)
+                entries = {x: was.get(x, "") for x in set(was) | set(
+                    git("--literal-pathspecs", "ls-files", "-z", "--", *paths, env=env).split("\0")) if x}
+                cuts(cuts() + [{"commit": new, "entries": entries}])
             moved = subprocess.run(["git", "update-ref", "-m", message, "HEAD", new, expect], cwd=ROOT,
                                    capture_output=True, env=plain_env()).returncode
+            if moved:
+                off_record(new)
             need(not moved, "HEAD moved while committing (%s): run it again" % message)
     finally:
         for leftover in (index, index + ".lock"):
             if os.path.exists(leftover):
                 os.remove(leftover)
+    if not paths:  # nothing of the shared index is ours (`git reset --` would take it whole)
+        return new, committed
     for _ in range(10):  # the shared index follows HEAD on these paths; the rest of it is not ours
-        p = subprocess.run(["git", "--literal-pathspecs", "reset", "-q", "--", *paths], cwd=ROOT,
-                           capture_output=True, text=True, env=plain_env())
-        if not p.returncode:
+        if committed:  # the entries on record, those still as found: one staged since is its stager's
+            failed = follow(entries)
+        else:
+            p = subprocess.run(["git", "--literal-pathspecs", "reset", "-q", "--", *paths], cwd=ROOT,
+                               capture_output=True, text=True, env=plain_env())
+            failed = (p.stderr.strip().splitlines() or ["?"])[-1] if p.returncode else ""
+        if not failed:
+            off_record(new)
             return new, committed
         time.sleep(0.2)
     raise Unreconciled("%s published as %s, but the index could not follow (%s): `%s`, or the next mm move heals it"
-                       % (message, new[:12], (p.stderr.strip().splitlines() or ["?"])[-1],
-                          shlex.join(["git", "reset", "--", *paths])))
+                       % (message, new[:12], failed, shlex.join(["git", "reset", "--", *paths])))
+
+def off_record(commit):
+    """A publish done with, off the record. The commit stands or never landed either way: a record that
+    cannot be rewritten now is the next move's to deal with, never a reason to put files back."""
+    try:
+        recs = cuts()
+        if any(rec["commit"] == commit for rec in recs):
+            cuts([rec for rec in recs if rec["commit"] != commit])
+    except Refused:
+        pass
 
 def snapshot(rel):
     """A file as it is, byte for byte, with its mode: what a refused publish puts back."""
@@ -349,9 +461,10 @@ def read(rel):
     except (OSError, UnicodeDecodeError):
         return ""
 
-def config():
+def config(text=None):
+    """CLAUDE.md `## mismagent` as {key: value}; text: the file as it was at another commit."""
     cfg, inside = {}, False
-    for line in read("CLAUDE.md").splitlines():
+    for line in (read("CLAUDE.md") if text is None else text).splitlines():
         s = line.strip()
         if s.startswith("#"):
             inside = re.fullmatch(r"##\s+mismagent\s*", s, re.I) is not None
@@ -369,11 +482,13 @@ def example_files():
     old = [OLD_EXAMPLES] if os.path.isfile(os.path.join(ROOT, OLD_EXAMPLES)) else []
     return old + sorted(r for r in walk(EXAMPLES) if r.endswith(".md"))
 
-def examples():
-    """-> (rows [{id, release, superseded, file}], errors)."""
+def examples(sources=None):
+    """-> (rows [{id, release, superseded, file}], errors); sources: [(file, its text)] in place of the
+    example files on disk (those of a commit)."""
     rows, errors = [], []
-    for rel, n, line in ((rel, n, line) for rel in example_files()
-                         for n, line in enumerate(read(rel).splitlines(), 1)):
+    for rel, n, line in ((rel, n, line) for rel, text in (sources if sources is not None else
+                                                           [(rel, read(rel)) for rel in example_files()])
+                         for n, line in enumerate(text.splitlines(), 1)):
         s = line.strip()
         if not s.startswith("|") or ("-" in s and re.fullmatch(r"[|:\-\s]+", s)):
             continue
@@ -549,8 +664,11 @@ def dirty_files():
 def dirty():
     return bool(dirty_files())
 
+def under(p, paths):
+    return any(p == s or p.startswith(s + "/") for s in paths)
+
 def in_spec(p):
-    return any(p == s or p.startswith(s + "/") for s in SPEC)
+    return under(p, SPEC)
 
 def spec_dirt():
     """The dirty files when they are spec paths and nothing else: specify is writing beside the build."""
@@ -571,10 +689,24 @@ def walk(top):
         for name in names:
             yield os.path.relpath(os.path.join(dirpath, name), ROOT)
 
+def folders(key):
+    """The folders a key of CLAUDE.md ## mismagent lists, comma-separated."""
+    return [d for d in (d.strip().strip("`").strip().strip("/") for d in config().get(key, "").split(",")) if d]
+
 def acceptance():
     """The acceptance folders: CLAUDE.md `acceptance:` (comma-separated), else tests/acceptance."""
-    folders = (d.strip().strip("`").strip().strip("/") for d in config().get("acceptance", "").split(","))
-    return [d for d in folders if d] or ["tests/acceptance"]
+    return folders("acceptance") or ["tests/acceptance"]
+
+def stack_markers(cfg):
+    """`suppress:` — the stack's own suppression markers, comma-separated, each counted on a line that
+    contains it as written (plain text, never a pattern: nothing to hang on, nothing to match by accident),
+    beside SUPPRESS; `none` or `-`: it has no other. -> (the markers, errors)."""
+    v = cfg.get("suppress", "")
+    own = [] if v.lower() in ("none", "-", "—") else [m for m in (m.strip().strip("`").strip() for m in v.split(",")) if m]
+    short = [m for m in own if len(m) < MARKER_MIN]
+    return ([m for m in own if m not in short],
+            ["CLAUDE.md ## mismagent: suppress: %r is too short for a marker (%d characters at least): it would "
+             "count ordinary lines" % (m, MARKER_MIN) for m in short])
 
 def markers():
     """-> {EX-id: [files]} from the acceptance folders."""
@@ -734,6 +866,8 @@ def uncovered(rel, exs, sls):
     named = {ex for s in sls for ex in s["examples"]}
     return [e["id"] for e in exs if e["release"] == rel and not e["superseded"] and e["id"] not in named]
 
+DESIGN_PASS = re.compile(r"design[ -]pass\b", re.I)  # `mm designed` writes it; typed by hand, in either case
+
 def passed_since_notes():
     """True when a design pass committed since the design notes last changed (or was that change)."""
     last = git("log", "-1", "--format=%H", "--", NOTES, check=False).strip()
@@ -741,7 +875,7 @@ def passed_since_notes():
         return False
     subjects = git("log", "--format=%s", "%s..HEAD" % last, check=False).splitlines()
     subjects.append(git("log", "-1", "--format=%s", last, check=False).strip())
-    return any(x.startswith("design pass") for x in subjects)
+    return any(DESIGN_PASS.match(x) for x in subjects)
 
 def tags():
     return set(git("tag", "-l").split())
@@ -947,8 +1081,9 @@ def guarded(path):
             or path.startswith(SKILL + "/") or fnmatch.fnmatch(base, "REQUISITI*")
             or (fnmatch.fnmatch(base.lower(), "requirements*") and base.lower().endswith(".md")))
 
-# the subjects specify and conventions commit with (a real revert of one too); never a lookalike
-HUMAN_COMMIT = re.compile(r'^(Revert "(?=.*"$))?(specify|conventions)([ :(]|$)')
+# the subjects specify and conventions commit with (a real revert of one too; typed by hand, in either
+# case); never a lookalike
+HUMAN_COMMIT = re.compile(r'^(Revert "(?=.*"$))?(?i:specify|conventions)([ :(]|$)')
 
 def human_commit(sha):
     """A specify/conventions commit that touches only the human's files, .mismagent/ and ARCHITECTURE.md."""
@@ -1000,6 +1135,34 @@ def not_the_humans(paths, base):
     return ["%s %s" % (x[:7], git("log", "-1", "--format=%s", x).strip()) for x in shas
             if x in carriers and not human_commit(x)]
 
+def base_in(text):
+    """The `Base:` of a slice file's header, as parse_slice reads it (the last one, before any section)."""
+    found = ""
+    for line in text.splitlines():
+        st = line.strip()
+        if st.startswith("## "):
+            break
+        m = re.match(r"^base\s*:\s*(\S*)", st.lstrip("-* ").replace("**", ""), re.I)
+        found = m.group(1) if m else found
+    return found
+
+def base_moved(s):
+    """A doing slice whose `Base:` is no longer the one its file had when it was started — in the last
+    commit that moved it from todo/ to doing/, `mm start`'s (a file never in todo: the first commit that
+    added it): everything the gate compares starts at Base, so it is mm's alone. The header is compared,
+    not the history around it: a start commit cherry-picked or rebased keeps its Base; the file deleted
+    and added again in doing/ is no new start. A file never committed in doing/ is not judged. -> errors."""
+    adds = git("log", "--no-renames", "--diff-filter=A", "--format=%H", "--", s["path"], check=False).split()
+    todo = "%s/slices/todo/%s.md" % (M, s["stem"])
+    start = next((a for a in adds if git("show", "--no-renames", "--diff-filter=D", "--name-only", "--format=", a,
+                                         "--", todo, check=False).strip()), adds[-1] if adds else "")
+    was = base_in(git("show", "%s:%s" % (start, s["path"]), check=False)) if start else ""
+    same = was == s["base"] or (was and git("rev-parse", "-q", "--verify", was + "^{commit}", check=False).strip()
+                                == git("rev-parse", "-q", "--verify", s["base"] + "^{commit}", check=False).strip())
+    return [] if not was or same else [
+        "%s: Base: %s is not the one it was started with (%s, in %s): the Base is mm's — put it back"
+        % (s["path"], s["base"][:12], was[:12], start[:7])]
+
 def run_check(base=None, release=None):
     """-> (errors, warnings); with a release, what does not hold together in its spec is an error."""
     (exs, errors), warnings, marks = examples(), [], markers()
@@ -1034,6 +1197,8 @@ def run_check(base=None, release=None):
                        for ex in unmarked(s, marks, retired) if ex in known]
         if s["state"] != "todo" and not s["base"]:
             errors.append("%s: in %s without Base:" % (where, s["state"]))
+        elif s["state"] == "doing":
+            errors += base_moved(s)
     tagged = tags()
     for rel in release_order(exs, sls):
         problems = spec_problems(rel, exs, sls)
@@ -1054,16 +1219,32 @@ def run_check(base=None, release=None):
         warnings.append("%s: %d line(s) that are not notes (a note is one `- ` line; headings, blank and indented "
                         "lines are fine), from %r" % (NOTES, len(prose), prose[0][:40]))
     limit, allowed = cfg_int(cfg, "max_file_lines", 400), cfg_int(cfg, "suppressions", 0)
-    count = 0
+    own, bad = stack_markers(cfg)
+    errors += bad
+    tests = tuple(d + "/" for d in ["tests", *acceptance(), *folders("tests")])  # no size limit on a test file
+    count, foreign = 0, []
     for rel in sources():
         lines = read(rel).splitlines()
-        count, n = count + sum(1 for line in lines if SUPPRESS.search(line)), len(lines)
-        if n > limit and not rel.startswith("tests/"):
+        count, n = count + sum(1 for line in lines if SUPPRESS.search(line) or any(m in line for m in own)), len(lines)
+        if n > limit and not rel.startswith(tests):
             errors.append("%s: %d lines > max_file_lines %d" % (rel, n, limit))
+        if os.path.splitext(rel)[1].lower() not in SUPPRESS_COVERS:
+            foreign.append(rel)
     if count > allowed:
         errors.append("suppression markers: %d > suppressions %d" % (count, allowed))
+    if foreign and not cfg.get("suppress"):  # the sensor is blind there until the project names its markers
+        warnings.append("CLAUDE.md ## mismagent: no suppress: — the built-in suppression markers are those of Python, "
+                        "JavaScript, Go and Java, and %d tracked source file(s) are in other languages (%s): "
+                        "`suppress: <markers>` names this stack's own, comma-separated (e.g. `swiftlint:disable, "
+                        "@ts-ignore`), `suppress: none` says it has none"
+                        % (len(foreign), ", ".join(sorted({os.path.splitext(r)[1].lower() for r in foreign}))))
     if base:
         git("rev-parse", "--verify", "--quiet", base + "^{commit}")
+        was = config(git("show", "%s:CLAUDE.md" % base, check=False))  # no CLAUDE.md there: nothing was set
+        for key in (k for k in GATE_KEYS if (was.get(k) or "") != (cfg.get(k) or "")):  # a migration changes them too
+            warnings.append("CLAUDE.md ## mismagent: `%s:` changed since %s (was %s, now %s) — the gate's own "
+                            "setting: the reviewer judges it against `git show %s:CLAUDE.md`"
+                            % (key, base, was.get(key) or "unset", cfg.get(key) or "unset", base[:12]))
         doing = [s for s in sls if s["state"] == "doing"][:1]
         if doing and doing[0]["kind"] in PROVING:  # another example's test touched: the reviewer judges it
             allowed_ex = set(doing[0]["examples"]) | retired
@@ -1340,38 +1521,131 @@ def cmd_park(a):
     print("parked %s: %s" % (s["stem"], dest))
     return 0
 
-def spec_changes():
-    """The status entries under the spec paths: [(xy, path, old)]; run debris left out."""
+def changes_under(paths, named=()):
+    """The status entries under these paths (run debris left out) and of the files named, exactly:
+    [(xy, path, old)]."""
     return [(xy, p, old) for xy, p, old in status()
-            if any(in_spec(x) for x in (p, old) if x) and not DEBRIS.search(p)]
+            if (any(under(x, paths) for x in (p, old) if x) and not DEBRIS.search(p)) or p in named or old in named]
+
+def named_files(paths, own, shared, cmd):
+    """The files a caller names, from the repository's root and as named (a link stays the link, never its
+    target): each under `shared` — or under `own`, taken anyway — none a folder, on disk or tracked (a
+    folder would take another session's files beside the caller's), none run debris."""
+    out = []
+    for p in paths:
+        full = os.path.abspath(p)
+        rel = os.path.relpath(os.path.join(os.path.realpath(os.path.dirname(full)), os.path.basename(full)),
+                              os.path.realpath(ROOT)).replace(os.sep, "/")
+        need(under(rel, tuple(shared) + tuple(own)), "%s: not a file `mm %s` commits by name (those under %s)"
+             % (p, cmd, ", ".join(shared)))
+        at = os.path.join(ROOT, rel)
+        tracked = [x for x in git("--literal-pathspecs", "ls-files", "-z", "--", rel, check=False).split("\0") if x]
+        need(not (os.path.isdir(at) and not os.path.islink(at)) and all(x == rel for x in tracked),
+             "%s is a folder: name the files you wrote or deleted in it (another session's may sit beside them)" % p)
+        need(not DEBRIS.search(rel), "%s: run debris by its name: mm never commits it (rename it, or leave it out)" % p)
+        if not under(rel, own):
+            out.append(rel)
+    return tuple(out)
+
+REFERENCE = re.compile(r".*?: (After: .* names no single slice|example EX-\d+ is not in )")  # run_check's, on the tree
+
+def committed_under(sha, *paths):
+    return [f for f in git("ls-tree", "-r", "-z", "--name-only", sha, "--", *paths, check=False).split("\0") if f]
+
+def dangling(sl, sha, files):
+    """What this slice names that the commit of `files` on sha will not hold, read as the gate reads
+    the tree (`examples`, `slices`, `dep`): an example with no row in the example files committed at sha,
+    an `After:` that is not exactly one slice, and another one, among those committed at sha and those of
+    `files`. Another session's uncommitted draft — a row added or deleted, a slice written or removed —
+    changes nothing here. -> errors."""
+    rows = {r["id"] for r in examples([(f, git("show", "%s:%s" % (sha, f), check=False))
+                                       for f in committed_under(sha, EXAMPLES, OLD_EXAMPLES)
+                                       if f == OLD_EXAMPLES or (f.startswith(EXAMPLES + "/") and f.endswith(".md"))])[0]}
+    a_slice = re.compile(r"%s/slices/(%s)/[^/]+\.md" % (re.escape(M), "|".join(STATES)))
+    mine = {f for f in files if a_slice.fullmatch(f)}
+    held = ({f for f in committed_under(sha, M + "/slices") if a_slice.fullmatch(f)} - mine) | {
+        f for f in mine if os.path.isfile(os.path.join(ROOT, f))}
+    stems = sorted({os.path.basename(f)[:-3] for f in held})
+    def one(ref):  # exactly one slice by that stem or number, itself included in the count, and not itself
+        hits = [st for st in stems if st == ref or (ref.isdigit() and re.match(r"\d+", st)
+                                                     and int(re.match(r"\d+", st).group()) == int(ref))]
+        return len(hits) == 1 and hits[0] != sl["stem"]
+    return (["%s: example %s has no row in a committed example file (specify is writing it: run this again after "
+             "its `mm spec`)" % (sl["path"], ex) for ex in sl["examples"] if ex not in rows]
+            + ["%s: After: %r names no single committed slice (another session's draft, or two slices: run this "
+               "again once it is committed, or name it too if it is yours)" % (sl["path"], r)
+               for r in sl["after"] if not one(r)])
+
+def commit_beside(own, subject, what, broken, named=(), shared=(), holds=(), allow_empty=False):
+    """Under the lock: what changed under `own` and in the `named` files — those exactly, by name — as one
+    commit with this subject beside whatever else is dirty or staged. Refuses a rename across those paths,
+    a path staged with other content than the tree's, a check error naming one of them or of `holds`, and
+    a slice among the named that names an example or a slice (After:) not committed and not in this
+    commit; HEAD is read first, so what
+    is selected and checked is committed on that HEAD or selected, checked and built again (a commit
+    beside ours moved it), three times. -> (changes, HEAD, committed, left): left, what is still
+    uncommitted under `shared` — nobody named it. Nothing changed and not allow_empty: no commit."""
+    def chosen(x):
+        return under(x, own) or x in named
+    for _ in range(3):
+        sha, changes = head(), changes_under(own, named)
+        if not changes and not allow_empty:
+            return [], None, False, [p for _, p, _ in changes_under(shared)]
+        for xy, p, old in changes:
+            need(not old or chosen(p) == chosen(old), "%s -> %s: a rename across the %s paths is "
+                 "nobody's: undo it, or finish it by hand" % (old, p, what))
+            need(xy[0] in " ?" or xy[1] == " ", "%s: staged with other content than the tree's (%s): `git restore "
+                 "--staged -- %s` first" % (p, xy.strip(), p))
+        files = [x for _, p, old in changes for x in (p, old) if x]
+        bad = [e for e in run_check()[0] if any(h in e for h in [x + "/" for x in own] + files + list(holds))]
+        if named:  # the check reads the tree, this commit takes a part of it: the named slices' references
+            bad = [e for e in bad if not REFERENCE.match(e) or e.split(": ", 1)[0] not in named] + [
+                e for sl in slices() if sl["path"] in named for e in dangling(sl, sha, files)]  # by the commit
+        need(not bad, "%s (a builder's gate reads the same tree):\n%s" % (broken, "\n".join(bad)))
+        try:
+            return (changes, *publish(files, subject, sha, allow_empty=allow_empty),
+                    [p for _, p, _ in changes_under(shared)])
+        except Refused as e:
+            if "HEAD moved" not in str(e):
+                raise
+    raise Refused("HEAD kept moving while committing: run it again")
+
+def committed_as(subject, what, changes, new, committed, left):
+    """The lines a commit beside a build ends on."""
+    line = ("nothing to commit: the %s paths are as committed" % what if not changes and not committed else
+            "%s: nothing changed, recorded as %s (an empty commit: the pass ran)" % (subject, new[:12]) if not changes else
+            "%s: %d file(s), %s" % (subject, len(changes), new[:12]) if committed else
+            "%s: the %s paths were as committed; the index follows HEAD" % (subject, what))
+    return line + ("\nleft as they are, not named: %s — another session's; if yours, run it again naming them"
+                   % ", ".join(left) if left else "")
 
 def cmd_spec(a):
     note = " ".join(a.note.split())
     need(note, "spec: say what this commit specifies (`R1: EX-9 refund, slice 09`)")
     with locked():  # selected and checked under the lock: what was checked is what is committed
-        for _ in range(3):  # a commit beside ours before the ref moved: selected, checked and built again
-            changes = spec_changes()
-            if not changes:
-                print("nothing to commit: the spec paths are as committed")
-                return 0
-            for xy, p, old in changes:
-                need(not old or in_spec(p) == in_spec(old), "%s -> %s: a rename across the spec paths is nobody's: "
-                     "undo it, or finish it by hand" % (old, p))
-                need(xy[0] in " ?" or xy[1] == " ", "%s: staged with other content than the tree's (%s): `git restore "
-                     "--staged -- %s` first" % (p, xy.strip(), p))
-            files = [x for _, p, old in changes for x in (p, old) if x]
-            bad = [e for e in run_check()[0] if M + "/" in e]
-            need(not bad, "the spec does not hold together (a builder's gate reads the same tree):\n" + "\n".join(bad))
-            try:
-                new, committed = publish(files, "specify %s" % note, head())
-                break
-            except Refused as e:
-                if "HEAD moved" not in str(e):
-                    raise
-        else:
-            raise Refused("HEAD kept moving while committing: run it again")
-    print("specify %s: %d file(s), %s" % (note, len(changes), new[:12]) if committed
-          else "specify %s: the spec paths were as committed; the index follows HEAD" % note)
+        done = commit_beside(SPEC, "specify %s" % note, "spec", "the spec does not hold together", holds=(M + "/",))
+    print(committed_as("specify %s" % note, "spec", *done))
+    return 0
+
+def cmd_conventions(a):
+    note = " ".join(a.note.split())
+    need(note, "conventions: say what was decided (`errors: topic updated; logging: rejected`)")
+    with locked():
+        named = named_files(a.paths, DECIDED, DECIDED_NAMED, "conventions") + (
+            (find_slice(a.slice, slices())["path"],) if a.slice else ())  # its ## Answer
+        done = commit_beside(DECIDED, "conventions %s" % note, "conventions", "the conventions do not hold together",
+                             named, DECIDED_NAMED)
+    print(committed_as("conventions %s" % note, "conventions", *done))
+    return 0
+
+def cmd_designed(a):
+    note = " ".join(a.note.split())
+    need(note, "designed: say what the pass did (`R1: 2 refactor slices, 3 notes dropped`, `R1: nothing to pay down`)")
+    with locked():  # always a commit: a pass that changed nothing is recorded too, or `next` asks for it again
+        done = commit_beside(PASSED, "design pass %s" % note, "design pass",
+                             "what the design pass wrote does not hold together",
+                             named_files(a.paths, PASSED, PASSED_NAMED, "designed"), PASSED_NAMED, allow_empty=True)
+    print(committed_as("design pass %s" % note, "design pass", *done))
     return 0
 
 def cmd_built(a):
@@ -1635,6 +1909,15 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      "todo, decisions, artboards, stack reviews — in an index of its own, subject `specify <note>`; the rest of "
      "the tree stays; nothing to commit is fine",
      ("note", "what this commit specifies, e.g. `R1: EX-9 refund, slice 09`")),
+    ("conventions", "commit what the conventions session decided — the conventions skill, the proposals and the "
+     "design notes whole; a decision or ARCHITECTURE.md only when named; with --slice that slice's file — in an "
+     "index of its own, subject `conventions <note>`; the rest of the tree stays; nothing to commit is fine",
+     ("note", "what was decided, e.g. `errors: topic updated; logging: rejected`")),
+    ("designed", "the architect's design pass is done: commit the design notes and the proposals, and the files "
+     "it names of what it wrote (ARCHITECTURE.md, decisions, slices in todo, release files), in an index of its "
+     "own, subject `design pass <note>` — an empty commit when the pass changed nothing, so `next` does not ask "
+     "for it again",
+     ("note", "what the pass did, e.g. `R1: 2 refactor slices, 3 notes dropped`")),
     ("built", "the builder is done: gate green, screens on disk (Design:), write Built:, Friction:, Gate: <round>, commit",
      ("slice", "slice stem (NN-name), its number, or its path")),
     ("review", "write the next review file from its draft (HEAD unchanged since --sha)",
@@ -1672,6 +1955,14 @@ def parser():
                                       "slowed this round: `<category>: <note>` (%s; at most %d words) or none"
                                       % (", ".join(FRICTION), FRICTION_WORDS))
     sub.choices["log"].add_argument("--release", help="only this release's slices and reviews")
+    sub.choices["conventions"].add_argument("paths", nargs="*", help="the decisions the session wrote, and "
+                                            "ARCHITECTURE.md if it changed it: files, never a folder (specify, the "
+                                            "architect or a builder may have theirs beside them)")
+    sub.choices["designed"].add_argument("paths", nargs="*", help="the files the pass wrote or deleted: "
+                                         "ARCHITECTURE.md, decisions, slices in todo, release files — files, never "
+                                         "a folder (specify may have its own beside them)")
+    sub.choices["conventions"].add_argument("--slice", help="also commit this slice's file (the ## Answer the "
+                                            "session wrote): its stem (NN-name), its number, or its path")
     rv.add_argument("--body", help="file with the checklist and the findings "
                     "(default: .mismagent/reviews/<target>.draft.md, removed once used)")
     sub.choices["tag"].add_argument("--why", help="the human's words accepting a DESIGN-PASS review's findings, "

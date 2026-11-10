@@ -89,7 +89,16 @@ important doubt (`NEEDS-HUMAN`) and each release.
   signal through it, never by hand: `mm built` closes a builder's round with the gate run against
   the slice's `Base:` — the human's files untouched, the markers in place, the other examples' tests
   it touched listed for the reviewer — then `Built:` written; `mm review` writes the verdict lines
-  and refuses when HEAD moved during the review; `mm tag` needs a review at HEAD. Every gate command
+  and refuses when HEAD moved during the review; `mm tag` needs a review at HEAD. The commits `mm` later reads are
+  `mm`'s own: `mm spec`, `mm conventions`, `mm designed` (a design pass, recorded even when it
+  changed nothing) — no prompt asks an agent to type one, and a hook denies the three agents the
+  literal command, as it denies them the `mm` subcommands of another role (it reads the command's
+  text: a convention it backs, not a signature). In the folders two sessions write (decisions,
+  slices in todo, release files, the map) those two commit the files their caller names, never the
+  folder. A gate setting a slice changed in `CLAUDE.md` (a threshold, a command) is listed for its
+  reviewer, and a slice's `Base:` is `mm`'s: a header that is no longer the one in the last commit
+  that moved the slice from todo to doing turns the gate red. `suppress:` names the stack's own
+  suppression markers, so `suppressions: 0` means it on Swift, Rust or TypeScript too. Every gate command
   runs under a `timeout:`, so a hung simulator never holds the conductor.
 - **The map stays a map, the sensors prove the real app:** `ARCHITECTURE.md` says the code as it
   is now, by paths and symbols — a change of decision is a decision file, never a history in the
@@ -112,7 +121,10 @@ list of single entries (24 versions in 22 days was that). 0.7.25 is measured the
 (`Gate:`), which `mm log` reports: a faster gate is decided on that number. 0.7.26 comes from an
 external architecture review of a 10k-line iOS app built with the method
 ([plan](docs/rationale/v0.7.26-plan.md)). 0.7.27 lets `/mismagent:specify` work beside the build loop in
-the same checkout ([plan](docs/rationale/v0.7.27-plan.md)).
+the same checkout ([plan](docs/rationale/v0.7.27-plan.md)). 0.7.28 closes four defects a review
+of the harness reproduced: a builder loosening its own gate, state read from hand-typed commit
+subjects, a suppression sensor blind outside Python/JS/Go, gaps in the git guard
+([plan](docs/rationale/v0.7.28-plan.md)).
 
 ## The design, in three layers
 | file | layer |

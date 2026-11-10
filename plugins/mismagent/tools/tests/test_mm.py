@@ -168,7 +168,7 @@ class Parsing(Repo):
         self.assertEqual(list(json.loads(out)["releases"]), ["R0", "R1", "CR1"])
 
     def test_help_and_usage(self):
-        for sub in ("status", "next", "start", "land", "gate", "tag", "check"):
+        for sub in ("status", "next", "start", "land", "gate", "tag", "check", "conventions", "designed"):
             self.assertEqual(self.mm(sub, "--help")[0], 0, sub)
         self.assertEqual(self.mm()[0], 2)
         self.assertEqual(self.mm("bogus")[0], 2)
@@ -395,6 +395,91 @@ class Next(Repo):
         self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(7)))
         self.commit("mm land 02-pay")  # a new note: one more pass, for it
         self.assertEqual(self.next()["action"], "design-pass")
+
+    def test_designed_records_a_pass_that_changed_nothing(self):
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
+        self.slice("01-cart")
+        self.write("src/cart.py", "x = 1\n")
+        before = self.commit()
+        self.assertEqual(self.next()["action"], "design-pass")
+        self.write("src/cart.py", "x = 2\n")  # a builder's work beside the pass: unstaged, staged, untracked
+        self.write("src/more.py", "y = 1\n")
+        self.git("add", "src/more.py")
+        self.write("src/new.py", "z = 1\n")
+        self.write(".mismagent/decisions/0001-human.md", "# specify's, half written\n")
+        self.slice("08-draft", release="R1", examples="EX-3")  # and a slice specify has not agreed with the human
+        status, index = self.git("status", "--porcelain", "--untracked-files=all"), self.git("ls-files", "-s")
+        code, out, err = self.mm("designed", "R0: nothing to pay down")  # the architect read them and left them
+        self.assertEqual(code, 0, err)
+        self.assertIn("nothing changed", out)
+        self.assertIn("left as they are, not named: .mismagent/decisions/0001-human.md, "
+                      ".mismagent/slices/todo/08-draft.md", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "design pass R0: nothing to pay down")
+        self.assertEqual((self.git("rev-parse", "HEAD~1"), self.git("rev-parse", "HEAD^{tree}")),
+                         (before, self.git("rev-parse", before + "^{tree}")))  # an empty commit: the record `next` reads
+        self.assertEqual((self.git("status", "--porcelain", "--untracked-files=all"), self.git("ls-files", "-s")),
+                         (status, index))  # nobody's file taken, nothing staged or unstaged
+        self.git("reset", "-q")
+        self.git("clean", "-qfd")
+        self.git("checkout", "-q", "--", ".")
+        d = self.next()
+        self.assertEqual((d["action"], d["notes"]), ("idle", 6))  # not design-pass again, on every call
+        self.assertEqual(self.mm("designed", " ")[0], 1)  # a note of nothing
+
+    def test_designed_commits_what_the_pass_wrote_and_nothing_else(self):
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(7)))
+        self.slice("01-cart")
+        self.commit()
+        self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
+        self.write("ARCHITECTURE.md", "# Architecture\n\nOne module.\n")
+        self.write(".mismagent/decisions/0001-seam.md", "# seam\n\n## Evidence\n- the code\n")
+        self.write(".mismagent/slices/todo/05-cleanup.md", "# Slice\n\nKind: cleanup\nRelease: R0\n")
+        self.write("src/cart.py", "x = 1\n")  # a builder's file, not the pass's
+        self.write(".mismagent/decisions/0002-human.md", "# specify's, half written\n")  # nor is specify's, beside
+        self.write(".mismagent/slices/todo/08-draft.md", "# Slice\n\nKind: nonsense\n")  # not agreed, not even whole
+        wrote = ("ARCHITECTURE.md", ".mismagent/decisions/0001-seam.md", ".mismagent/slices/todo/05-cleanup.md")
+        head = self.head()
+        code, _, err = self.mm("designed", "R0: one refactor slice", *wrote)
+        self.assertEqual(code, 1)  # the slice it wrote is malformed: the next gate would be red on it
+        self.assertIn("what the design pass wrote does not hold together", err)
+        self.assertIn("05-cleanup.md: Kind 'cleanup'", err)
+        self.assertNotIn("08-draft", err)  # another session's file holds nothing: it is not in this commit
+        self.assertEqual(self.head(), head)
+        self.slice("05-cleanup", kind="refactor", examples="")
+        self.write(".mismagent/slices/todo/05-cleanup.md",
+                   self.read(".mismagent/slices/todo/05-cleanup.md").replace("Examples:", "After: 01\nExamples:"))
+        for bad, why in ((".mismagent/decisions", "is a folder: name the files you wrote or deleted in it"),
+                         (".mismagent/slices/todo/", "is a folder"), ("src/cart.py", "not a file `mm designed` commits"),
+                         (".mismagent/examples/cart.md", "not a file `mm designed` commits")):
+            code, _, err = self.mm("designed", "R0: one refactor slice", *wrote, bad)
+            self.assertEqual((code, self.head()), (1, head), bad)
+            self.assertIn(why, err)
+        code, out, err = self.mm("designed", "R0: one refactor slice", *wrote, cwd=os.path.join(self.dir, "src"))
+        self.assertEqual(code, 1)  # a name is read from where the caller stands
+        code, out, err = self.mm("designed", "R0: one refactor slice", *("../" + w for w in wrote),
+                                 cwd=os.path.join(self.dir, "src"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("design pass R0: one refactor slice: 4 file(s)", out)
+        self.assertIn("left as they are, not named: .mismagent/decisions/0002-human.md, "
+                      ".mismagent/slices/todo/08-draft.md — another session's", out)
+        self.assertEqual(sorted(self.git("show", "--name-only", "--format=", "HEAD").split()),
+                         [".mismagent/decisions/0001-seam.md", ".mismagent/design-notes.md",
+                          ".mismagent/slices/todo/05-cleanup.md", "ARCHITECTURE.md"])
+        self.assertEqual(sorted(self.git("status", "--porcelain", "--untracked-files=all").splitlines()),
+                         ["?? .mismagent/decisions/0002-human.md", "?? .mismagent/slices/todo/08-draft.md",
+                          "?? src/cart.py"])  # specify's and the builder's, as they were
+        os.remove(os.path.join(self.dir, ".mismagent/decisions/0002-human.md"))
+        os.remove(os.path.join(self.dir, ".mismagent/slices/todo/08-draft.md"))
+        self.assertEqual(self.next()["action"], "idle")  # six notes left, the refactor slice waits: the human decides
+
+    def test_a_design_pass_committed_by_hand_is_read_in_either_case(self):
+        self.slice("01-cart")
+        for n, subject in enumerate(("Design pass: R0 notes read, none paid down", "design-pass R0", "DESIGN PASS R0"), 6):
+            self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(n)))
+            self.commit("mm land 0%d-pay" % n)  # a new note: one more pass, for it
+            self.assertEqual(self.next()["action"], "design-pass", subject)
+            self.commit(subject)
+            self.assertEqual(self.next()["action"], "idle", subject)  # not design-pass on every call
 
     def test_a_waiting_refactor_slice_does_not_hold_the_design_pass(self):
         self.write(".mismagent/design-notes.md", "".join("- note %d\n" % i for i in range(6)))
@@ -1291,6 +1376,104 @@ class Check(Repo):
         self.assertNotIn("untracked.py", out)
         self.assertNotIn("test_big.py", out)
 
+    def test_a_gate_setting_changed_since_base_is_warned_for_the_reviewer(self):
+        base = self.commit("base")
+        self.write("src/big.py", "import os  # noqa: F401\n" + "x = 1\n" * 451)
+        self.commit("01-cart: big")
+        code, out, _ = self.check("--base", base)
+        self.assertEqual(code, 1)
+        self.assertIn("src/big.py: 452 lines > max_file_lines 400", out)
+        self.assertIn("suppression markers: 1 > suppressions 0", out)
+        self.assertNotIn("the gate's own setting", out)  # nothing changed in CLAUDE.md
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- max_file_lines: 2000\n- suppressions: 5"))
+        self.commit("01-cart: room for it")  # the builder loosens its own gate
+        code, out, err = self.check("--base", base)
+        self.assertEqual(code, 0, out + err)  # green, a migration changes them too — but said, one line a key
+        self.assertIn("warning: CLAUDE.md ## mismagent: `max_file_lines:` changed since %s (was 400, now 2000) — the "
+                      "gate's own setting: the reviewer judges it against `git show %s:CLAUDE.md`" % (base, base[:12]), out)
+        self.assertIn("warning: CLAUDE.md ## mismagent: `suppressions:` changed since %s (was unset, now 5)" % base, out)
+        self.assertEqual(out.count("the gate's own setting"), 2)
+        self.assertNotIn("the gate's own setting", self.check()[1])  # no base: nothing to compare with
+        loosened = self.head()
+        self.write("CLAUDE.md", self.read("CLAUDE.md").replace("- smoke: true", "- smoke: true\n- shot: true"))
+        self.commit("01-cart: shot")  # the builder is told to write it
+        self.assertNotIn("the gate's own setting", self.check("--base", loosened)[1])
+        self.write("CLAUDE.md", self.read("CLAUDE.md").replace("- suppressions: 5\n", "").replace("-   lint :  `true`", "- lint: true"))
+        out = self.check("--base", loosened)[1]  # uncommitted too; `lint` is the same value, written another way
+        self.assertIn("warning: CLAUDE.md ## mismagent: `suppressions:` changed since %s (was 5, now unset)" % loosened, out)
+        self.assertEqual(out.count("the gate's own setting"), 1)
+
+    def test_no_claude_md_at_base_had_no_setting(self):
+        self.git("rm", "-q", "CLAUDE.md")
+        base = self.commit("no settings yet")
+        self.write("CLAUDE.md", CLAUDE)
+        self.commit("skeleton")
+        out = self.check("--base", base)[1]
+        self.assertEqual(out.count("the gate's own setting"), 4)  # test, lint, smoke, max_file_lines
+        self.assertIn("`test:` changed since %s (was unset, now true)" % base, out)
+
+    def test_the_stacks_own_suppression_markers(self):
+        self.write("src/a.py", "x = 1\n")
+        self.write("web/app.js", "let a = 1\n")
+        self.commit()
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("suppress:", out)  # the built-in markers cover these
+        self.write("App/View.swift", "// swiftlint:disable force_cast\nlet a = b as! C // @ts-ignore\n"
+                   "#[allow(dead_code)]\n@Suppress(\"x\")\n// @ts-expect-error\n#pragma warning disable\n")
+        self.write("App/Model.kt", "val a = 1\n")
+        self.write("scripts/run.sh", "# shellcheck disable=SC2086\necho $x\n")  # a shell script has its own too
+        self.commit()
+        code, out, _ = self.check()
+        self.assertEqual(code, 0, out)  # blind there, and no project turns red on an upgrade — but said, once
+        self.assertEqual(out.count("no suppress:"), 1)
+        self.assertIn("warning: CLAUDE.md ## mismagent: no suppress: — the built-in suppression markers are those of "
+                      "Python, JavaScript, Go and Java, and 3 tracked source file(s) are in other languages (.kt, .sh, "
+                      ".swift): `suppress: <markers>` names this stack's own, comma-separated", out)
+        own = "swiftlint:disable, `@ts-ignore`, @ts-expect-error , #[allow(,@Suppress(, #pragma warning disable"
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- suppress: %s" % own))
+        self.assertError("suppression markers: 6 > suppressions 0")  # a line with two of them is one line
+        self.assertNotIn("no suppress:", self.check()[1])
+        self.write("src/a.py", "import os  # noqa: F401\n")  # the built-in ones still count, beside the stack's
+        self.assertError("suppression markers: 7 > suppressions 0")
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- suppress: %s\n- suppressions: 7" % own))
+        self.assertEqual(self.check()[0], 0)
+        for none in ("none", "-"):  # the stack has no marker of its own: said, so not warned
+            self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- suppress: %s\n- suppressions: 1" % none))
+            code, out, _ = self.check()
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("suppress:", out)
+
+    def test_a_suppression_marker_is_plain_text_never_a_pattern(self):
+        self.write("App/View.swift", "let aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa! = 1\nlet x = 1\n")
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- timeout: 1\n- suppress: `(a+)+$`, (?=x)"))
+        self.commit()
+        code, out, _ = self.check()  # as a pattern the first would hang the gate, the second count `let x`
+        self.assertEqual(code, 0, out)
+        self.write("App/View.swift", "let a = 1 // (a+)+$\n")
+        self.assertError("suppression markers: 1 > suppressions 0")
+        for short in ("//", "#"):
+            self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- suppress: swiftlint:disable, %s" % short))
+            self.assertError("CLAUDE.md ## mismagent: suppress: %r is too short for a marker (4 characters at least)" % short)
+
+    def test_test_folders_have_no_size_limit(self):
+        settings = CLAUDE.replace("400", "3").replace("- smoke: true", "- smoke: true\n- suppress: none")
+        self.write("CLAUDE.md", settings)
+        self.write("AppTests/CartTests.swift", "let a = 1\n" * 10)
+        self.write("app/src/test/kotlin/CartTest.kt", "val a = 1\n" * 10)
+        self.write("Features/Cart.swift", "let a = 1\n" * 10)
+        self.commit()
+        code, out, _ = self.check()
+        self.assertEqual(code, 1)
+        for rel in ("AppTests/CartTests.swift", "app/src/test/kotlin/CartTest.kt", "Features/Cart.swift"):
+            self.assertIn("%s: 10 lines > max_file_lines 3" % rel, out)
+        self.write("CLAUDE.md", settings + "\n## mismagent\n- tests: `AppTests`, app/src/test/\n- acceptance: Features\n")
+        code, out, _ = self.check()
+        self.assertNotIn("Tests.swift", out)
+        self.assertNotIn("CartTest.kt", out)
+        self.assertNotIn("Features/Cart.swift", out)  # an acceptance folder is a test folder
+        self.assertEqual(code, 0, out)
+
     def test_another_examples_test_edited_is_a_warning_naming_the_file(self):
         self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z (superseded by EX-3) | R | Q | R1 |\n")
         self.acceptance("test_other.py", "# EX-3\n" + "x = 1\n" * 20)
@@ -1850,6 +2033,30 @@ class Spec(Repo):
         code, out, err = self.mm("spec", note, **kw)
         return code, out + err
 
+    def beside_bad(self):
+        """sh: a builder's commit of a todo slice that does not parse."""
+        git = shutil.which("git")
+        return ('mkdir -p .mismagent/slices/todo && printf "# Slice\\n\\nKind: cleanup\\nRelease: R0\\n" > '
+                '.mismagent/slices/todo/99-bad.md && env -u GIT_INDEX_FILE "%s" add .mismagent/slices/todo/99-bad.md '
+                '&& env -u GIT_INDEX_FILE "%s" commit -q -m "99: beside"' % (git, git))
+
+    def test_spec_checks_the_head_it_commits_on(self):
+        self.write(".mismagent/brief.md", "# Brief\n\nA cart.\n")
+        first = 'if [ "$2" = "HEAD" ] && [ ! -e .git/injected ]; then : > .git/injected; %s; fi' % self.beside_bad()
+        code, out = self.spec("R0: the brief", env=self.fake_git("rev-parse", first, once=False))
+        self.assertEqual(code, 1, out)  # a commit as HEAD is first read: the check comes after, and sees it
+        self.assertIn("the spec does not hold together", out)
+        self.assertIn("99-bad.md: Kind 'cleanup'", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "99: beside")  # nothing of ours on top of it
+
+    def test_spec_never_commits_on_a_head_it_did_not_check(self):
+        self.write(".mismagent/brief.md", "# Brief\n\nA cart.\n")
+        code, out = self.spec("R0: the brief", env=self.fake_git("read-tree", self.beside_bad()))
+        self.assertEqual(code, 1, out)  # after the check, before the commit: built again on the HEAD that moved
+        self.assertIn("the spec does not hold together", out)
+        self.assertIn("99-bad.md: Kind 'cleanup'", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "99: beside")
+
     def test_spec_commits_the_spec_paths_only(self):
         self.write("src/cart.py", "x = 1\n")  # the builder's work, uncommitted
         self.write("src/more.py", "y = 1\n")
@@ -2037,12 +2244,28 @@ class Spec(Repo):
         self.assertEqual(self.git("status", "--porcelain"), "")
 
     def test_a_cut_reconciliation_heals_at_the_next_move(self):
-        self.started()
-        self.git("read-tree", "HEAD~1")  # the index as before `mm start`: cut after its ref moved
-        self.assertNotEqual(self.git("status", "--porcelain"), "")
-        code, _, err = self.mm("park", "01-cart")
+        self.slice("01-cart")
+        self.acceptance("test_01-cart.py", "# EX-1\n")
+        self.commit("plan")
+        killed = self.fake_git("reset", 'kill -KILL "$PPID"; exit 128')  # mm dies as its ref has just moved
+        self.assertNotEqual(self.mm("start", "01-cart", env=killed)[0], 0)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "mm start 01-cart")  # the commit stands
+        self.assertNotEqual(self.git("status", "--porcelain"), "")  # the index as before it
+        code, _, err = self.mm("park", "01-cart")  # the record names what that publish left
         self.assertEqual(code, 0, err)
         self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".git", "mismagent.cut")))
+
+    def test_an_index_nobody_recorded_is_nobodys_leftover(self):
+        self.started()
+        self.write(".mismagent/decisions/0001-human.md", "# a choice\n\n## Evidence\n- the human\n")
+        self.commit("specify R0: a choice")
+        self.write(".mismagent/decisions/0001-human.md", "# another\n\n## Evidence\n- the human\n")
+        self.git("add", ".mismagent/decisions/0001-human.md")  # staged by someone, the tree back as at HEAD:
+        self.write(".mismagent/decisions/0001-human.md", "# a choice\n\n## Evidence\n- the human\n")
+        before = self.git("ls-files", "-s")  # what a cut publish would look like, and mm published nothing
+        self.assertEqual(self.mm("designed", "R0: nothing")[0], 0)  # a move under the lock
+        self.assertEqual(self.git("ls-files", "-s"), before)
 
     def test_land_takes_review_names_literally_and_records_a_review_deleted(self):
         self.started()
@@ -2218,6 +2441,375 @@ class Spec(Repo):
         self.assertEqual(code, 1)
         self.assertIn("slices not done: 02-more", err)
         self.assertEqual(self.git("tag", "-l"), "")
+
+
+class Conventions(Repo):
+    """`mm conventions`: the conventions session's commit beside a build — its paths only, the human's subject."""
+
+    SKILL = ".claude/skills/conventions/SKILL.md"
+
+    def conventions(self, note, *args, **kw):
+        code, out, err = self.mm("conventions", note, *args, **kw)
+        return code, out + err
+
+    def test_conventions_commits_its_paths_only_and_is_the_humans_for_the_gate(self):
+        base = self.commit("base")
+        self.started()
+        doing = ".mismagent/slices/doing/01-cart.md"
+        self.write("src/cart.py", "x = 1\n")  # the builder's work, uncommitted
+        self.write("src/more.py", "y = 1\n")
+        self.git("add", "src/more.py")  # and staged
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        self.write(".mismagent/conventions-proposals.md", "# Proposals\n")
+        self.write(".mismagent/decisions/0001-errors.md", "# errors\n\n## Evidence\n- the human\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n\nTyped errors.\n")
+        self.write(doing, self.read(doing) + "\n## Question\nWhich errors?\n\n## Answer\nTyped.\n")
+        self.write(".mismagent/decisions/0002-human.md", "# specify's, half written\n")  # another session's, beside
+        self.assertEqual(self.check("--base", base)[0], 1)  # uncommitted: nobody's yet
+        head = self.head()
+        for bad, why in ((".mismagent/decisions", "is a folder"), (".claude/skills/conventions", "is a folder"),
+                         ("src/cart.py", "not a file `mm conventions` commits by name"),
+                         (".mismagent/slices/todo/01-cart.md", "not a file `mm conventions` commits by name")):
+            code, out = self.conventions("errors: topic updated", bad)
+            self.assertEqual((code, self.head()), (1, head), bad)
+            self.assertIn(why, out)
+        code, out = self.conventions("errors:  topic updated", ".mismagent/decisions/0001-errors.md", "ARCHITECTURE.md")
+        self.assertEqual(code, 0, out)
+        self.assertIn("conventions errors: topic updated: 4 file(s)", out)
+        self.assertIn("left as they are, not named: .mismagent/decisions/0002-human.md", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "conventions errors: topic updated")
+        self.assertEqual(sorted(self.git("show", "--name-only", "--format=", "HEAD").split()),
+                         [self.SKILL, ".mismagent/conventions-proposals.md", ".mismagent/decisions/0001-errors.md",
+                          "ARCHITECTURE.md"])
+        os.remove(os.path.join(self.dir, ".mismagent/decisions/0002-human.md"))
+        self.assertEqual(sorted(self.git("status", "--porcelain").splitlines()),  # the helper strips the first line
+                         ["?? src/cart.py", "A  src/more.py", "M " + doing])  # the rest as it was, staged or not
+        code, out, err = self.check("--base", base)
+        self.assertEqual(code, 0, out + err)  # the skill changed since Base, by the human
+        code, out = self.conventions("errors: the builder's doubt answered", "--slice", "01")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), doing)
+        self.assertEqual(sorted(self.git("status", "--porcelain").splitlines()), ["?? src/cart.py", "A  src/more.py"])
+        head = self.head()
+        code, out = self.conventions("errors: nothing more")
+        self.assertEqual((code, self.head()), (0, head))
+        self.assertIn("nothing to commit", out)
+        self.assertEqual(self.conventions(" ")[0], 1)  # a note of nothing
+        self.assertEqual(self.conventions("errors", "--slice", "09")[0], 1)  # no such slice
+
+    def test_a_conventions_commit_typed_by_hand_is_the_humans_in_either_case(self):
+        base = self.commit("base")
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        self.commit("Conventions: errors topic updated")
+        code, out, err = self.check("--base", base)
+        self.assertEqual(code, 0, out + err)
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R1 |\n")
+        self.commit("Specify R1: EX-4")
+        self.assertEqual(self.check("--base", base)[0], 0)
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are strings.\n")
+        self.commit("Conventions-fix: errors")  # a lookalike is nobody's, capitalised or not
+        self.assertEqual(self.check("--base", base)[0], 1)
+
+    def test_conventions_is_held_by_a_broken_skill_never_by_the_code(self):
+        self.write("src/big.py", "x = 1\n" * 401)
+        self.commit("01-cart: big")
+        self.assertEqual(self.check()[0], 1)  # the code is red, not the skill
+        topic = ".claude/skills/conventions/references/practices/doubts.md"
+        self.write(topic, "# doubts\n\n## Must\n- ask\n")
+        head, before = self.head(), self.git("status", "--porcelain")
+        code, out = self.conventions("doubts: created")
+        self.assertEqual(code, 1)
+        self.assertIn("the conventions do not hold together", out)
+        self.assertIn("practices/doubts.md: no ## Never", out)
+        self.assertNotIn("big.py", out)
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (head, before))  # nothing moved, nothing staged
+        self.write(topic, "# doubts\n\n## Must\n- ask\n## Never\n- guess\n")
+        code, out = self.conventions("doubts: created")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_conventions_builds_again_on_a_head_that_moved(self):
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        code, out = self.conventions("errors: topic updated", env=self.beside("01-cart: green"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.git("log", "--format=%s").splitlines(),
+                         ["conventions errors: topic updated", "01-cart: green", "init"])
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_a_named_file_is_the_one_named_never_its_target_or_its_folder(self):
+        self.write(".mismagent/decisions/old/a.md", "# a\n\n## Evidence\n- x\n")
+        self.write(".mismagent/decisions/old/b.md", "# b\n\n## Evidence\n- x\n")
+        self.commit("decisions")
+        self.write(".mismagent/decisions/human.md", "# specify's, half written\n")
+        os.symlink("human.md", os.path.join(self.dir, ".mismagent/decisions/mine.md"))
+        code, out, err = self.mm("designed", "R0: my link", ".mismagent/decisions/mine.md")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), ".mismagent/decisions/mine.md")
+        self.assertIn("left as they are, not named: .mismagent/decisions/human.md", out)
+        shutil.rmtree(os.path.join(self.dir, ".mismagent/decisions/old"))  # two files deleted: the folder names neither
+        head = self.head()
+        code, _, err = self.mm("designed", "R0: deleted a", ".mismagent/decisions/old")
+        self.assertEqual((code, self.head()), (1, head))
+        self.assertIn("is a folder: name the files you wrote or deleted in it", err)
+        code, out, err = self.mm("designed", "R0: deleted a", ".mismagent/decisions/old/a.md")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), ".mismagent/decisions/old/a.md")
+        self.assertIn(".mismagent/decisions/old/b.md", out)  # left: deleted by someone, named by nobody
+        self.write(".mismagent/decisions/own.log", "notes\n")
+        head = self.head()
+        code, _, err = self.mm("designed", "R0: a log", ".mismagent/decisions/own.log")
+        self.assertEqual((code, self.head()), (1, head))  # never dropped in silence
+        self.assertIn("own.log: run debris by its name: mm never commits it", err)
+        os.remove(os.path.join(self.dir, ".mismagent/decisions/own.log"))
+        self.write(".mismagent/design-notes.md", "- one note\n")
+        code, out, err = self.mm("designed", "R0: notes", ".mismagent/design-notes.md",  # its own: named or not
+                                 ".mismagent/conventions-proposals.md")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), ".mismagent/design-notes.md")
+
+    def test_a_named_slice_refers_to_what_is_committed_or_in_its_commit(self):
+        self.slice("05-old", examples="EX-1")
+        self.commit("specify R0: slice 05")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R0 |\n")  # specify, writing
+        self.slice("06-new", examples="EX-4")
+        head = self.head()
+        code, _, err = self.mm("designed", "R0: one slice", ".mismagent/slices/todo/06-new.md")
+        self.assertEqual((code, self.head()), (1, head))
+        self.assertIn("06-new.md: example EX-4 has no row in a committed example file", err)
+        self.slice("05-old", examples="EX-1, EX-4")  # a slice there already, now naming the draft: the same
+        code, _, err = self.mm("designed", "R0: one slice", ".mismagent/slices/todo/05-old.md")
+        self.assertEqual((code, self.head()), (1, head))
+        self.assertIn("05-old.md: example EX-4 has no row", err)
+        self.slice("06-new", examples="EX-2")  # a committed example: specify's draft beside it holds nothing
+        code, out, err = self.mm("designed", "R0: one slice", ".mismagent/slices/todo/06-new.md")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), ".mismagent/slices/todo/06-new.md")
+        self.slice("07-mine", kind="refactor", examples="", extra="")
+        path = ".mismagent/slices/todo/07-mine.md"
+        self.write(path, self.read(path).replace("Examples:", "After: 08\nExamples:"))
+        self.slice("08-human", kind="refactor", examples="")  # another session's draft, uncommitted
+        head = self.head()
+        code, _, err = self.mm("designed", "R0: after", path)
+        self.assertEqual((code, self.head()), (1, head))
+        self.assertIn("07-mine.md: After: '08' names no single committed slice", err)
+        code, _, err = self.mm("designed", "R0: after", path, ".mismagent/slices/todo/08-human.md")  # both its own
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.mm("spec", "R0: EX-4")[0], 0)  # specify's own commit takes its examples, as ever
+        self.assertEqual(self.check()[0], 0)
+
+    def test_a_named_slices_references_are_read_in_the_commit_not_in_a_draft(self):
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "\nDraft idea: EX-4 will cover refunds.\n")
+        self.slice("06-a", kind="refactor", examples="")
+        self.slice("06-b", kind="refactor", examples="")
+        self.commit("specify R0: a note, two slices")
+        self.write(".mismagent/examples/cart.md", EXAMPLES + "| EX-4 | x | y | z | R | Q | R0 |\n")  # the row: a draft
+        self.slice("05-mine", examples="EX-4")
+        mine, head = ".mismagent/slices/todo/05-mine.md", self.head()
+        code, _, err = self.mm("designed", "R0: one slice", mine)
+        self.assertEqual((code, self.head()), (1, head))  # a mention in prose is no example
+        self.assertIn("05-mine.md: example EX-4 has no row in a committed example file", err)
+        self.write(".mismagent/examples/cart.md", EXAMPLES.replace("| EX-1 | a cart | add | 1 item | R | Q1 | R0 |\n", ""))
+        self.slice("05-mine", examples="EX-1")  # committed; deleted only in specify's draft: still there for us
+        self.write(mine, self.read(mine).replace("Examples:", "After: 06\nExamples:"))
+        os.remove(os.path.join(self.dir, ".mismagent/slices/todo/06-b.md"))  # and one of two 06, deleted in a draft
+        code, _, err = self.mm("designed", "R0: one slice", mine)
+        self.assertEqual((code, self.head()), (1, head))
+        self.assertIn("05-mine.md: After: '06' names no single committed slice", err)
+        self.assertNotIn("EX-1", err)
+        self.write(".mismagent/examples/notes.txt", "| EX-9 | x | y | z | R | Q | R0 |\n")  # no example file
+        self.write(".mismagent/slices/archive/07-old.md", slice_text(kind="refactor", examples=""))  # no slice
+        self.write(".mismagent/slices/todo/05-other.md", slice_text(kind="refactor", examples=""))
+        self.git("add", ".mismagent/examples/notes.txt", ".mismagent/slices/archive", ".mismagent/slices/todo/05-other.md")
+        self.git("commit", "-q", "-m", "specify R0: notes")
+        head = self.head()
+        for after, examples in (("05", "EX-1"), ("07-old", "EX-1"), ("06-a", "EX-9")):  # as the gate reads them:
+            self.slice("05-mine", examples=examples)  # two slices numbered 05, itself one; a folder and a file it skips
+            self.write(mine, self.read(mine).replace("Examples:", "After: %s\nExamples:" % after))
+            code, _, err = self.mm("designed", "R0: one slice", mine)
+            self.assertEqual((code, self.head()), (1, head), (after, examples))
+            self.assertIn("EX-9 has no row" if examples == "EX-9" else "After: %r names no single committed slice" % after, err)
+        self.slice("05-mine", examples="EX-1")
+        self.write(mine, self.read(mine).replace("Examples:", "After: 06-a\nExamples:"))
+        code, out, err = self.mm("designed", "R0: one slice", mine)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.git("show", "--name-only", "--format=", "HEAD"), mine)
+        self.git("checkout", "-q", "--", ".mismagent/examples/cart.md", ".mismagent/slices/todo/06-b.md")
+        code, out, err = self.check()
+        self.assertEqual(code, 0, out + err)  # what was committed holds together once the drafts are gone
+
+    def test_a_staged_skill_or_map_is_nobodys_leftover(self):
+        self.write(self.SKILL, "---\nname: conventions\n---\nStaged.\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n\nStaged.\n")
+        self.git("add", self.SKILL, "ARCHITECTURE.md")
+        self.write(self.SKILL, "---\nname: conventions\n---\n")  # the tree back as at HEAD, the staged version kept
+        self.write("ARCHITECTURE.md", "# Architecture\n")
+        staged = self.git("diff", "--cached", "--stat")
+        self.assertIn("2 files changed", staged)
+        for move in (("spec", "nothing"), ("designed", "R0: nothing"), ("spec", "again")):
+            self.assertEqual(self.mm(*move)[0], 0, move)
+            self.assertEqual(self.git("diff", "--cached", "--stat"), staged, move)  # whoever staged it still has it
+
+    def test_a_cut_conventions_commit_heals_at_the_next_move(self):
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        self.write("ARCHITECTURE.md", "# Architecture\n\nTyped errors.\n")
+        code, out = self.conventions("errors: topic updated", "ARCHITECTURE.md",
+                                     env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("published as", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s"), "conventions errors: topic updated")  # the commit stands
+        self.assertNotEqual(self.git("status", "--porcelain"), "")  # the index still at the skill and the map before it
+        failing = self.fake_git("reset", "exit 128", once=False)
+        self.assertEqual(self.mm("spec", "nothing", env=failing)[0], 0)  # the heal cannot reset either: it stays on record
+        self.assertTrue(os.path.exists(os.path.join(self.dir, ".git", "mismagent.cut")))
+        self.assertEqual(self.mm("spec", "nothing")[0], 0)  # any move under the lock: the cut publish named its entries
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".git", "mismagent.cut")))
+
+    def cut(self):
+        """A conventions commit whose index could not follow: -> (the skill's blob before it, at it)."""
+        old = self.git("rev-parse", "HEAD:" + self.SKILL)
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        code, out = self.conventions("errors: topic updated", env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.assertIn("published as", out)
+        return old, self.git("rev-parse", "HEAD:" + self.SKILL)
+
+    def record(self):
+        return os.path.join(self.dir, ".git", "mismagent.cut")
+
+    def test_a_merges_conflict_stages_are_never_mms_leftover(self):
+        old, new = self.cut()
+        stages = "".join("100644 %s %d\t%s\n" % (blob, n, self.SKILL) for n, blob in ((1, old), (2, new), (3, old)))
+        subprocess.run(["git", "update-index", "--index-info"], cwd=self.dir, check=True, text=True,
+                       input="0 %s\t%s\n" % ("0" * 40, self.SKILL) + stages)  # theirs is the blob that publish found
+        before = self.git("ls-files", "-s", "--", self.SKILL)
+        self.assertEqual(before.count("\n"), 2)
+        self.assertEqual(self.mm("designed", "R0: nothing")[0], 0)  # a move under the lock
+        self.assertEqual(self.git("ls-files", "-s", "--", self.SKILL), before)  # three stages, as the merge left them
+
+    def test_a_record_mm_cannot_read_or_place_is_kept_and_said(self):
+        self.cut()
+        with open(self.record(), encoding="utf-8") as f:
+            good = f.read()
+        for failed in ("exit 128", "kill -TERM $$"):  # git's error, or its death, is no answer: kept
+            self.assertEqual(self.mm("spec", "nothing", env=self.fake_git("merge-base", failed, once=False))[0], 0)
+            with open(self.record(), encoding="utf-8") as f:
+                self.assertEqual(f.read(), good, failed)
+        for bad in ("", "{}\n", '{"commit": 1, "entries": []}\n', good[:len(good) // 2]):
+            with open(self.record(), "w", encoding="utf-8") as f:
+                f.write(bad or "not json\n")
+            code, out, err = self.mm("spec", "nothing")
+            self.assertEqual(code, 1)
+            self.assertIn(".git/mismagent.cut: cannot be read", err)
+            self.assertNotIn("Traceback", err)
+            self.assertTrue(os.path.exists(self.record()))  # the only trace: the human looks, then removes it
+        with open(self.record(), "w", encoding="utf-8") as f:
+            f.write(good)
+        self.assertEqual(self.mm("spec", "nothing")[0], 0)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertFalse(os.path.exists(self.record()))
+
+    def test_a_record_that_cannot_be_written_commits_nothing(self):
+        self.slice("01-cart")
+        self.acceptance("test_01-cart.py", "# EX-1\n")
+        head = self.commit("plan")
+        code, _, err = self.mm("start", "01-cart", env=self.fake_git("commit-tree", "mkdir -p .git/mismagent.cut.new"))
+        self.assertEqual(code, 1)
+        self.assertIn(".git/mismagent.cut: cannot be written", err)
+        self.assertNotIn("Traceback", err)
+        os.rmdir(self.record() + ".new")
+        self.assertEqual((self.head(), self.git("status", "--porcelain")), (head, ""))  # the move put back
+        code, _, err = self.mm("start", "01-cart")
+        self.assertEqual(code, 0, err)
+
+    def test_a_version_staged_after_a_cut_commit_is_its_stagers(self):
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")
+        code, out = self.conventions("errors: topic updated", env=self.fake_git("reset", "exit 128", once=False))
+        self.assertEqual(code, 1)
+        self.write(self.SKILL, "---\nname: conventions\n---\nOTHER STAGED\n")  # someone's next version, staged
+        self.git("add", self.SKILL)
+        self.write(self.SKILL, "---\nname: conventions\n---\nErrors are typed.\n")  # the tree back as at HEAD
+        staged = self.git("diff", "--cached")
+        self.assertIn("OTHER STAGED", staged)
+        self.assertEqual(self.mm("spec", "nothing")[0], 0)
+        self.assertEqual(self.git("diff", "--cached"), staged)  # not the entry that publish found: not mm's
+        self.assertFalse(os.path.exists(os.path.join(self.dir, ".git", "mismagent.cut")))
+
+
+class Base(Repo):
+    """A doing slice's `Base:` is where everything the gate compares starts: mm's alone."""
+
+    PATH = ".mismagent/slices/doing/01-cart.md"
+
+    def test_a_base_rewritten_by_hand_is_an_error(self):
+        self.started()
+        base = self.git("rev-parse", "HEAD~1")
+        self.assertEqual(self.check()[0], 0)
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- max_file_lines: 1000"))
+        loosened = self.commit("01-cart: settings")
+        self.write(self.PATH, self.read(self.PATH).replace("Base: " + base, "Base: " + loosened))  # the gate moved with it
+        self.write("src/cart.py", "x = 1\n" * 401)
+        self.commit("01-cart: implementation")
+        code, out, _ = self.check("--base", loosened)
+        self.assertEqual(code, 1)
+        self.assertIn("error: %s: Base: %s is not the one it was started with (%s, in %s): the Base is mm's"
+                      % (self.PATH, loosened[:12], base[:12], self.git("rev-parse", "HEAD~2")[:7]), out)
+        code, _, err = self.mm("built", "01-cart", "--friction", "none")
+        self.assertEqual(code, 1)  # the builder's own gate is red on it
+        self.assertNotIn("Built:", self.read(self.PATH))
+        self.write(self.PATH, self.read(self.PATH).replace("Base: " + loosened, "Base: " + base[:12]))  # the same commit
+        self.commit("01-cart: base back")
+        code, out, err = self.check("--base", base)
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("`max_file_lines:` changed since %s (was 400, now 1000)" % base, out)  # and the loosening shows
+
+    def test_a_base_edited_and_not_committed_is_an_error_too(self):
+        self.started()
+        base = self.git("rev-parse", "HEAD~1")
+        self.write(self.PATH, self.read(self.PATH).replace("Base: " + base, "Base: " + self.head()))
+        self.assertEqual(self.check()[0], 1)
+        self.write(self.PATH, self.read(self.PATH).replace("Base: " + self.head(), "Base: " + base)
+                   + "Base: " + self.head() + "\n")  # a second line: the last one is read
+        self.assertEqual(self.check()[0], 0)  # after ## Goal: not a header
+        self.write(self.PATH, self.read(self.PATH).replace("Base: " + base, "Base: %s\nBase: %s" % (base, self.head()), 1))
+        code, out, _ = self.check()  # a second header line: the last one is the one read
+        self.assertEqual(code, 1)
+        self.assertIn("is not the one it was started with (%s" % base[:12], out)
+
+    def test_a_slice_deleted_and_added_again_is_no_new_start(self):
+        self.started()
+        base, text = self.git("rev-parse", "HEAD~1"), self.read(self.PATH)
+        os.remove(os.path.join(self.dir, self.PATH))
+        self.commit("01: reorganize notes")
+        self.write("CLAUDE.md", CLAUDE.replace("- max_file_lines: 400", "- max_file_lines: 1000"))
+        loosened = self.commit("01: settings")
+        self.write(self.PATH, text.replace("Base: " + base, "Base: " + loosened))
+        self.write("src/cart.py", "x = 1\n" * 401)
+        self.commit("01: restored notes and implementation")
+        code, out, _ = self.check()
+        self.assertEqual(code, 1)
+        self.assertIn("Base: %s is not the one it was started with (%s" % (loosened[:12], base[:12]), out)
+        self.assertEqual(self.mm("built", "01-cart", "--friction", "none")[0], 1)
+
+    def test_a_start_commit_carried_elsewhere_keeps_its_base(self):
+        self.started()
+        start, base = self.head(), self.git("rev-parse", "HEAD~1")
+        self.git("checkout", "-q", "-b", "newbase", base)
+        self.commit("specify another note")  # an empty commit beside: the same code
+        self.git("cherry-pick", start)
+        code, out, err = self.check()
+        self.assertEqual(code, 0, out + err)  # the header is what it was: nothing to say
+        self.assertIn("Base: " + base, self.read(self.PATH))
+
+    def test_a_slice_parked_and_started_again_has_its_new_base(self):
+        self.started()
+        self.assertEqual(self.mm("park", "01-cart")[0], 0)
+        self.commit("specify R0: a note")
+        code, _, err = self.mm("start", "01-cart")
+        self.assertEqual(code, 0, err)
+        code, out, err = self.check()
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("Base: " + self.git("rev-parse", "HEAD~1"), self.read(self.PATH))
 
 
 if __name__ == "__main__":

@@ -61,7 +61,12 @@ update, reject, or reword. The human decides, one question at a time.
   rule → a line in `.mismagent/design-notes.md`.
 - A slice's `## Question` waiting on a proposal: write its `## Answer` (what was decided).
 - Remove every decided proposal, rejected ones too (a reason that matters later → "not: …" in its topic).
-- `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" check` green; commit (`conventions`).
+- `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" conventions "<what was decided>" <each decision
+  file you wrote, ARCHITECTURE.md if you changed it>` (with `--slice <slice>` when you wrote a
+  slice's `## Answer`): it refuses a skill that does not hold together (`mm check`'s errors on it),
+  then commits the skill, the proposals and the notes, and the files you named — files, never a
+  folder (specify or a builder may have theirs beside yours). Never by hand: its subject is how the
+  gate tells the human's change from a builder's.
 
 ## 4. End
 Three lines: kinds and practices created, updated, rejected. Next: `/mismagent:build`.

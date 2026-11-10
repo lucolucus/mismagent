@@ -112,7 +112,8 @@ Before returning DONE (a rework too): end your slice file with `## Progress` (a 
 slice should know — and commit it. Then `python3 "${CLAUDE_PLUGIN_ROOT}/tools/mm.py" built <slice> --friction "…"`:
 it runs the gate with your `Base:` — the human's files untouched, your examples' markers, the other
 examples' tests you touched listed for the reviewer — then the suite and lint, writes `Built:` and
-commits. `--friction` is required: what in the *method* slowed this round — an example unclear or
+commits. The suite runs once per commit of code: make your last full run `mm.py gate --base <Base>`
+on the committed tree (it names the file with the whole output) and `mm built` does not repeat it. `--friction` is required: what in the *method* slowed this round — an example unclear or
 missing (`spec`), `mm`, the gate or a hook (`tool`), the skill (`conventions`), the SDK, CI or a
 device (`env`), your context (`context`), a REWORK you think wrong (`review`) — as
 `"<category>: <at most 15 words>"`, or `none`, the normal answer. Never the code (that is

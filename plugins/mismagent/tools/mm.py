@@ -29,7 +29,8 @@ line on stderr) · 2 usage. Files, parsed line by line (forgiving about whitespa
     must be done before it starts; Built: <round> is written by `mm built`, never by hand; Design:
     lists the artboards the slice's screens must look like (images under .mismagent/design/);
     Friction: <round>: <category>: <note> — one line per round, written by `mm built`; Gate:
-    <round>: <seconds> — the gate's wall-clock that round, written by `mm built`
+    <round>: <seconds> — the gate's seconds that round (a command not run again counts the seconds of
+    its run), written by `mm built`
   .mismagent/shots/<slice-stem|release>/<artboard name>.png: the app's screens, written by `mm shot`;
     a slice's stay on disk for its reviewer, never committed (shots/.gitignore ignores them all, its
     own line included); a release's are committed by `tag`, past it
@@ -116,6 +117,27 @@ Design choices:
   sections missing), or a done model slice with no skill and no proposal -> `catalog` (the architect
   proposes the whole catalog as `- now ` lines) before anything else, even a slice in doing: the gate
   stays red until it lands; once proposed -> `conventions`.
+- The suite runs once per code tree. `test` and `lint` read the code, and between `built`, the review and
+  `land` only .mismagent/ moves (the card's headers, the review, the move to done). A command green on
+  HEAD's tree without .mismagent/ is on record in .git/mismagent.gate/ (its seconds, when, the whole
+  output of that run, and what the tracked files were on disk: each name as written, its type, mode,
+  size, links and times of last write and last change, its directories' modes) and the next gate names the run instead of repeating it — only while
+  repeating it would read the same files: the same commit's code, nothing uncommitted outside
+  .mismagent/ (untracked debris too: the line says which file), and every tracked file on disk as
+  that run left it. `check` always runs again. So the record promises what the run it stands for
+  promised — this checkout, not a clone — and mm does not reason about what git fails to see (a
+  name's case, a mode, a sparse checkout, a filter's bytes): it looks at the disk. Nothing is on
+  record from a tree with a submodule, a red run, or a command that touched a tracked file (the
+  command after it runs too); a run that starts drops what was on record for it, and one gate's
+  commands run at a time in a checkout (a second gate waits, as long as two commands may take), so
+  a red `--fresh` is never followed by a green, the old one or one still running; a changed `test:`
+  or `lint:` runs again; `mm gate --fresh` runs whatever is on record (the release review does: one
+  real run of the app's suite per release, by fresh eyes). The record is local and not signed: an
+  agent that wrote there by hand would forge a green, as one that typed `Built:` would — the release
+  review's fresh run is what bounds it. Not seen: a test that reads .mismagent/; what no commit holds
+  (an ignored file, a simulator, the network); a tracked file rewritten with its size and both its
+  times kept (two writes in one tick of a filesystem that keeps whole seconds); a directory's ACL:
+  `--fresh`.
 - Friction is the method's, never the code's: `mm built` requires `--friction "<category>: <note>"`
   or `none` (validated before the gate), `mm review` takes it optionally; `mm log` counts them and
   reads rounds, doubts and wall-clock of the landed slices and the gate's seconds of each built round
@@ -179,6 +201,7 @@ Design choices:
 import argparse
 import fnmatch
 import glob
+import hashlib
 import json
 import os
 import re
@@ -188,6 +211,7 @@ import signal
 import subprocess
 import sys
 import time
+import unicodedata
 try:
     import fcntl
 except ImportError:  # Windows: the lock is the file, created exclusively
@@ -311,6 +335,8 @@ class locked:
             except FileNotFoundError:
                 pass
 
+GATED = "mismagent.gate"  # in .git, a folder: per code tree, the green run of each gate command — its seconds, when — and its output
+GATED_KEEP = 5  # code trees remembered: a round's (built, reviewed, landed) and a release's are the newest
 CUT = "mismagent.cut"  # in .git: a JSON line per publish under way — its commit, and each path's entry in the shared index before it
 
 def index_entries(paths):
@@ -1373,6 +1399,154 @@ def report(errors, warnings):
     for line in ["error: " + e for e in errors] + ["warning: " + w for w in warnings]:
         print(line)
 
+def code_tree():
+    """What `test` and `lint` read, in two hashes: the commit's — HEAD's tree without .mismagent/ (a card
+    moved, a review, an example added change no code), read as bytes: two names a carriage return apart
+    are two trees — and the disk's (`on_disk`); -> ((tree, disk), None), or (None, why) when a run stands
+    for no commit: something else is uncommitted (untracked run debris too: what a suite may read is
+    ignored or committed; a file moved into .mismagent/ is gone from where it was), or the tree holds a
+    submodule, whose files are no part of this commit."""
+    if not fcntl:
+        return None, "no file lock on this system"
+    dirt = [p for _, new, old in status() for p in (new, old) if p and not p.startswith(M + "/")]
+    if dirt:
+        return None, "uncommitted: %s%s" % (", ".join(dirt[:3]), " and %d more" % (len(dirt) - 3) if len(dirt) > 3 else "")
+    p = subprocess.run(["git", "ls-tree", "-r", "-z", "--full-tree", "HEAD"], cwd=ROOT, capture_output=True, env=plain_env())
+    entries = [e for e in p.stdout.split(b"\0") if e and not e.split(b"\t", 1)[-1].startswith(M.encode() + b"/")]
+    if p.returncode or not entries:
+        return None, "no commit to name it by"
+    if any(e.startswith(b"160000 ") for e in entries):
+        return None, "a submodule's files are no part of this commit"
+    return (hashlib.sha256(b"\0".join(entries)).hexdigest()[:16], on_disk(entries)), None
+
+def on_disk(entries):
+    """The tracked files as they are on disk, in one hash: each name as its directory spells it, each
+    directory's mode and flags on the way, the file's type and mode, its size, its links, and the times of its
+    last write and of its last change of any kind (a mode, an ACL, a link: ctime) — read with lstat: a
+    link is itself, not its target. A run is not repeated only while this is what the run on record left: `status` is no witness of the disk (a name's case on a filesystem that
+    folds it, a mode under core.filemode=false, a file a sparse checkout took away, bytes a checkout
+    filter writes differently), and mm does not list what git cannot see — it looks."""
+    h, listed, modes = hashlib.sha256(), {}, {}
+
+    def fold(name):
+        return unicodedata.normalize("NFC", name).casefold()
+
+    def spelt(d, name):  # the names in d that a folding filesystem takes for this one, as they are written
+        if d not in listed:
+            try:
+                names = os.listdir(os.path.join(ROOT, d))
+            except OSError:
+                names = []
+            listed[d] = {}
+            for n in names:
+                listed[d].setdefault(fold(n), []).append(n)
+        return sorted(listed[d].get(fold(name), []))
+
+    for e in entries:
+        rel = os.fsdecode(e.split(b"\t", 1)[-1])
+        parts = rel.split("/")
+        seen = [spelt("/".join(parts[:i]), name) for i, name in enumerate(parts)]
+        for d in ("/".join(parts[:i]) for i in range(len(parts))):  # a directory's mode and flags, never its times: a suite's
+            if d not in modes:                                      # temporary file beside the source moves those
+                try:
+                    st = os.lstat(os.path.join(ROOT, d))
+                    modes[d] = (st.st_mode, getattr(st, "st_flags", 0))  # flags: BSD's and macOS's (an immutable folder)
+                except OSError:
+                    modes[d] = "missing"
+            seen.append(modes[d])
+        try:
+            st = os.lstat(os.path.join(ROOT, rel))
+            what = (st.st_mode, st.st_size, st.st_nlink, st.st_mtime_ns, st.st_ctime_ns)
+        except OSError:
+            what = "missing"
+        h.update(repr((rel, seen, what)).encode("utf-8", "surrogateescape") + b"\0")
+    return h.hexdigest()[:16]
+
+class gating:
+    """One gate's commands at a time in a checkout (an OS lock on .git/mismagent.gate.lock, released when
+    the process ends): the record is read, dropped, run for and written by one gate, so a green never
+    lands after a later red, and two suites never share a simulator or a database. A second gate waits
+    for the first — as long as two commands may take ($MM_GATE_WAIT seconds) — and then finds its run on
+    record."""
+    def __enter__(self):
+        self.fd = None
+        if fcntl:
+            self.fd = os.open(os.path.join(git_dir(), GATED + ".lock"), os.O_CREAT | os.O_RDWR)
+            deadline, told = time.time() + float(os.environ.get("MM_GATE_WAIT", 2 * seconds(config()) + 60)), False
+            while True:
+                try:
+                    fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() >= deadline:
+                        os.close(self.fd)
+                        raise Refused("another gate still runs in this checkout: run it again when it ends")
+                    if not told:
+                        print("gate: another gate is running in this checkout: waiting for it")
+                        sys.stdout.flush()
+                        told = True
+                    time.sleep(0.2)
+        return self
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+
+def gate_file(tree, key, ext):
+    return os.path.join(git_dir(), GATED, "%s.%s.%s" % (tree, key, ext))
+
+def gated(tree, key):
+    """-> the green run of this command on record for this code tree, {cmd, seconds, at, disk}, its output
+    still there — or None: a record that is not one (cut, of another shape) is no record."""
+    try:
+        with open(gate_file(tree, key, "json"), encoding="utf-8") as f:
+            was = json.load(f)
+    except (OSError, ValueError):
+        return None
+    ok = (isinstance(was, dict) and isinstance(was.get("cmd"), str) and isinstance(was.get("disk"), str)
+          and type(was.get("seconds")) is int
+          and type(was.get("at")) is int and 0 <= was["at"] < 2 ** 33 and os.path.exists(gate_file(tree, key, "log")))
+    return was if ok else None
+
+def drop(path):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+def keep_output(tree, key, said, out):
+    """The command's whole output, where its reader finds it (the gate prints the tail of a red one only),
+    under a first line that says which run it is — a later run on this tree writes the same file; -> its
+    path from the root."""
+    path = gate_file(tree or "uncommitted", key, "log")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8", errors="replace") as f:
+        f.write("# %s, %s\n%s" % (said, time.strftime("%Y-%m-%d %H:%M:%S"), out or ""))
+    os.replace(path + ".tmp", path)  # in one move: a reader that has the old file open keeps it whole
+    return os.path.relpath(path, ROOT)
+
+def record_gate(tree, disk, key, cmd, took):
+    """A green run of `cmd` on this code tree, the tracked files on disk as `disk` says, goes on record, in
+    one move."""
+    tmp = gate_file(tree, key, "tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"cmd": cmd, "seconds": took, "at": int(time.time()), "disk": disk}, f)
+    os.replace(tmp, gate_file(tree, key, "json"))
+
+def prune_gate():
+    """The trees past the GATED_KEEP newest leave, records and output — a red tree's output too; a dirty
+    tree's is one file a command."""
+    d, newest = os.path.join(git_dir(), GATED), {}
+    names = os.listdir(d) if os.path.isdir(d) else []
+    for n in names:
+        if not n.startswith("uncommitted."):
+            newest[n.split(".")[0]] = max(newest.get(n.split(".")[0], 0), os.path.getmtime(os.path.join(d, n)))
+    gone = sorted(newest, key=newest.get, reverse=True)[GATED_KEEP:]
+    for n in names:
+        if n.split(".")[0] in gone:
+            drop(os.path.join(d, n))
+
 def cmd_check(a):
     errors, warnings = run_check(a.base, a.release)
     report(errors, warnings)
@@ -1380,36 +1554,58 @@ def cmd_check(a):
     print("check: ok")
     return 0
 
-def gate(base=None):
+def gate(base=None, fresh=False):
     """Runs check (with base: the slice's files too), then test and lint, one line each with its
-    seconds; refuses when any is red; -> the gate's seconds. Check first: it is cheap, and a red one
-    is not worth a suite run."""
-    cfg, red, detail, started = config(), [], [], time.time()
+    seconds and where its output is; refuses when any is red; -> the gate's seconds. Check first: it is
+    cheap, and a red one is not worth a suite run. A command already green on this code tree (`code_tree`:
+    the same commit's code, whatever moved under .mismagent/ since) is not run again unless `fresh`: the
+    line names that run, its seconds count as this gate's, its output is the one on record."""
+    cfg, red, detail, started, reused = config(), [], [], time.time(), 0
     errors, warnings = run_check(base)
     report(errors, warnings)
     print("check: %s" % ("red" if errors else "green"))
     if errors:
         red.append("check")
         detail += ["  check: " + e for e in errors]
-    for key in ("test", "lint"):
-        cmd = cfg.get(key)
-        if not cmd:
-            print("%s: red (not configured in CLAUDE.md ## mismagent)" % key)
-            red.append(key)
-            continue
-        if errors:
-            print("%s: not run (check red)" % key)
-            continue
-        t = time.time()
-        code, out, late = run(cmd)
-        print(timed_out(key) if late else "%s: %s (%s) %d s" % (key, "green" if code == 0 else "red", cmd,
-                                                                 time.time() - t))
-        if code:
-            red.append(key)
-            tail = ["  %s: %s" % (key, x) for x in out.strip().splitlines()[-15:]]
-            detail += tail
-            for line in tail:
-                print(line)
+    with gating():
+        for key in ("test", "lint"):
+            cmd = cfg.get(key)
+            if not cmd:
+                print("%s: red (not configured in CLAUDE.md ## mismagent)" % key)
+                red.append(key)
+                continue
+            if errors:
+                print("%s: not run (check red)" % key)
+                continue
+            code_is, why = code_tree()  # each command's own: the one before it may have changed the code
+            tree, disk = code_is or (None, None)
+            was = gated(tree, key) if tree and not fresh else None
+            if was and was["cmd"] == cmd and was["disk"] == disk:
+                print("%s: green (%s) %d s — run %s on this code tree, not run again (`mm gate --fresh` does) · output: %s"
+                      % (key, cmd, was["seconds"], time.strftime("%Y-%m-%d %H:%M", time.localtime(was["at"])),
+                         os.path.relpath(gate_file(tree, key, "log"), ROOT)))
+                reused += was["seconds"]
+                continue
+            if tree:  # a run starts: what was on record stands no more — red, cut or timed out, the next gate runs it
+                drop(gate_file(tree, key, "json"))
+            t = time.time()
+            code, out, late = run(cmd)
+            took = int(time.time() - t)
+            same = tree if code_is and code_tree()[0] == code_is else None  # a command that changed a tracked file ran on other code
+            said = timed_out(key) if late else "%s: %s (%s) %d s" % (key, "green" if code == 0 else "red", cmd, took)
+            print("%s · output: %s" % (said, keep_output(same, key, said, out)))
+            if code:
+                red.append(key)
+                tail = ["  %s: %s" % (key, x) for x in out.strip().splitlines()[-15:]]
+                detail += tail
+                for line in tail:
+                    print(line)
+            elif same:
+                record_gate(tree, disk, key, cmd, took)
+            else:
+                print("%s: not on record (%s): the next gate runs it again"
+                      % (key, why or "the command changed a tracked file on disk"))
+        prune_gate()
     if not red:  # the commands ran: the tree they left is the one check certifies
         errors, _ = run_check(base)
         if errors:
@@ -1423,10 +1619,10 @@ def gate(base=None):
         need(False, "\n".join(["gate red: " + ", ".join(red)] + detail + [verdict]))
     took = int(time.time() - started)
     print("gate: green (%d s)" % took)
-    return took
+    return took + reused
 
 def cmd_gate(a):
-    gate(a.base)
+    gate(a.base, a.fresh)
     return 0
 
 def move(s, state):
@@ -1924,7 +2120,8 @@ SUBCOMMANDS = (  # name, help, positional argument (name, help) or a --json flag
      ("target", "slice stem or number, or release token")),
     ("land", "doing -> done, commit (PASS at HEAD, clean tree, gate green)",
      ("slice", "slice stem (NN-name), its number, or its path")),
-    ("gate", "run check, then test and lint from CLAUDE.md ## mismagent (--base: the slice's files too)", None),
+    ("gate", "run check, then test and lint from CLAUDE.md ## mismagent (--base: the slice's files too); a "
+     "command already green on this code tree is not run again: its run and its output are named", None),
     ("shot", "render the screens of a slice's or a release's artboards (Design:) with the project's "
      "shot command, into .mismagent/shots/<target>/; prints each pair",
      ("target", "slice stem or number, or release token")),
@@ -1970,6 +2167,8 @@ def parser():
     for name in ("check", "gate"):
         sub.choices[name].add_argument("--base", help="also refuse the human's files changed since this ref, "
                                        "and list the other examples' acceptance files the slice touched")
+    sub.choices["gate"].add_argument("--fresh", action="store_true", help="run test and lint even when they are "
+                                     "already green on this code tree (a release review; a suite you doubt)")
     sub.choices["check"].add_argument("--release", help="also refuse what does not hold together in this "
                                       "release's spec: an example in no slice, a feature or fix slice with no "
                                       "example, no release file or open questions in it (specify, before closing)")

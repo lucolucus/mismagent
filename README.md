@@ -47,7 +47,7 @@ both honest. Heir of **BMad** and **Agentheim**.
 | `/mismagent:build --confirm R0` | Your confirmation of a release: the tag. Over a review that still has findings (`DESIGN-PASS`), `--why "…"`: your words are kept as a decision. |
 | `/mismagent:conventions` | When the conductor stops for it (after the model slice, and after any slice that did something new): the agents' proposals as one table — you accept in one answer the ones recommended as they are, and decide one by one only those to reject, reword or that conflict — create or update a topic of the project's conventions skill (`.claude/skills/conventions/`), or reject it. |
 | `/mismagent:site` | The project in the browser, read-only: the releases as swimlanes (to do · doing · done, foldable), each slice with its reviews, progress and commits, a slice built in a parallel worktree or branch among the doing ones; the requirements → examples → slices → acceptance tests; the conventions and decisions. The page is served live from a small local server (Python standard library, `127.0.0.1` only): it follows the project by itself while the builder works, and the conductor makes sure it is up whenever it stops for you. |
-| `/loop /mismagent:build` (in a session of its own) | The always-on conductor: every action as soon as it is ready — build, review, land, design pass; when it needs you it waits and checks back every ten minutes, and resumes by itself once you have answered. Meanwhile `/mismagent:specify`, in another session, adds to the same release. |
+| `/loop /mismagent:build` (in a session of its own, started with `claude --autocompact 100k`) | The always-on conductor: every action as soon as it is ready — build, review, land, design pass; when it needs you it waits and checks back every ten minutes, and resumes by itself once you have answered. Meanwhile `/mismagent:specify`, in another session, adds to the same release. |
 
 You step in for the challenger's verdict, the examples, the stack, the project's conventions, an
 important doubt (`NEEDS-HUMAN`) and each release.
@@ -99,7 +99,10 @@ important doubt (`NEEDS-HUMAN`) and each release.
   reviewer, and a slice's `Base:` is `mm`'s: a header that is no longer the one in the last commit
   that moved the slice from todo to doing turns the gate red. `suppress:` names the stack's own
   suppression markers, so `suppressions: 0` means it on Swift, Rust or TypeScript too. Every gate command
-  runs under a `timeout:`, so a hung simulator never holds the conductor.
+  runs under a `timeout:`, so a hung simulator never holds the conductor. The suite runs once per
+  code tree: between `mm built`, the review and `mm land` only `.mismagent/` moves, so a gate on
+  the same code names the green run on record and the file with its whole output instead of
+  repeating it (`check` always runs again); the release review runs it fresh (`mm gate --fresh`).
 - **The map stays a map, the sensors prove the real app:** `ARCHITECTURE.md` says the code as it
   is now, by paths and symbols — a change of decision is a decision file, never a history in the
   map; `mm check` warns on a path no file or folder has, a `file:line`, a slice named, more than
@@ -124,7 +127,10 @@ external architecture review of a 10k-line iOS app built with the method
 the same checkout ([plan](docs/rationale/v0.7.27-plan.md)). 0.7.28 closes four defects a review
 of the harness reproduced: a builder loosening its own gate, state read from hand-typed commit
 subjects, a suppression sensor blind outside Python/JS/Go, gaps in the git guard
-([plan](docs/rationale/v0.7.28-plan.md)).
+([plan](docs/rationale/v0.7.28-plan.md)). 0.7.29 cuts two costs measured on the projects built
+with the method: the gate ran three times a round on the same code (wiki_planet: 831 s each), and
+the conductor's session, never compacted, read more tokens than the builders
+([plan](docs/rationale/v0.7.29-plan.md)).
 
 ## The design, in three layers
 | file | layer |

@@ -29,6 +29,10 @@ def slice_text(kind="feature", release="R0", examples="EX-1", extra=""):
         kind, release, examples, extra)
 
 
+def parse_base(text):
+    return re.search(r"^Base: (\w+)", text, re.M).group(1)
+
+
 class Repo(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="mm-test-")
@@ -115,6 +119,16 @@ class Repo(unittest.TestCase):
 
     def check(self, *args):
         return self.mm("check", *args)
+
+    def counting(self, lint="true"):
+        """A `test:` that counts its runs outside the tree; -> the count so far."""
+        self.write("CLAUDE.md", "## mismagent\n- test: echo run >> .git/runs; seq 1 40; echo test_cart PASSED\n"
+                   "- lint: %s\n" % lint)
+        self.commit("gate")
+        return lambda: len(self.read(".git/runs").split()) if os.path.exists(os.path.join(self.dir, ".git/runs")) else 0
+
+    def forget_gate(self):
+        shutil.rmtree(os.path.join(self.dir, ".git", "mismagent.gate"), ignore_errors=True)
 
     def fake_git(self, sub, action, once=True):
         """A git on PATH that runs `action` (sh) before the first (or every) `git <sub>`; -> the env."""
@@ -1025,6 +1039,352 @@ class Gate(Repo):
         self.assertEqual(code, 0)
         self.assertRegex(out, r"test: green \(true\) \d+ s")
         self.assertRegex(out, r"gate: green \(\d+ s\)")
+
+    def test_a_command_green_on_this_code_tree_is_not_run_again(self):
+        runs = self.counting()
+        code, out, _ = self.mm("gate")
+        self.assertEqual((code, runs()), (0, 1))
+        log = re.search(r"test: green .* · output: (\S+)", out).group(1)
+        said, _, body = self.read(log).partition("\n")  # which run it is, then all of its output
+        line, _, when = said.rpartition(", ")
+        self.assertEqual(line, "# " + re.search(r"^(test: green \(.*\) \d+ s) · output", out, re.M).group(1))
+        self.assertIn("test: green (echo run >> .git/runs; seq 1 40; echo test_cart PASSED) ", line)
+        self.assertLess(abs(time.mktime(time.strptime(when, "%Y-%m-%d %H:%M:%S")) - time.time()), 120)
+        self.assertEqual(body.split(), [str(i) for i in range(1, 41)] + ["test_cart", "PASSED"])
+        code, out, _ = self.mm("gate")
+        self.assertEqual((code, runs()), (0, 1))
+        self.assertRegex(out, r"test: green \(.*\) \d+ s — run \S+ \S+ on this code tree, not run again .* output: " + re.escape(log))
+        self.assertRegex(out, r"gate: green \(\d+ s\)")
+        self.write(".mismagent/slices/todo/02-more.md", slice_text(examples="EX-2"))  # a card: no code
+        self.commit("specify R0: slice 02")
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 1))
+        self.write("src/cart.py", "x = 2\n")  # code: another tree
+        self.commit("code")
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 2))
+
+    def test_fresh_runs_what_is_on_record(self):
+        runs = self.counting()
+        self.mm("gate")
+        code, out, _ = self.mm("gate", "--fresh")
+        self.assertEqual((code, runs()), (0, 2))
+        self.assertNotIn("not run again", out)
+
+    def test_nothing_is_on_record_from_a_dirty_tree_a_red_run_or_a_command_that_changed_the_code(self):
+        runs = self.counting()
+        self.write("src/cart.py", "x = 1\n")  # uncommitted: the tree on disk is no commit's
+        self.mm("gate")
+        _, out, _ = self.mm("gate")
+        self.assertEqual(runs(), 2)
+        self.assertIn("test: not on record (uncommitted: src/cart.py)", out)
+        self.commit("code")
+        runs = self.counting(lint="false")  # red: lint, after a green test
+        self.assertEqual(self.mm("gate")[0], 1)
+        self.assertEqual(self.mm("gate")[0], 1)
+        self.assertEqual(runs(), 3)  # the green test is on record, the red lint never: it ran twice, red twice
+        self.write("CLAUDE.md", "## mismagent\n- test: echo run >> .git/runs; echo y >> src/cart.py\n- lint: true\n")
+        self.commit("a test that writes the code")
+        self.mm("gate")
+        self.git("checkout", "--", "src/cart.py")
+        code, out, _ = self.mm("gate")
+        self.assertNotIn("not run again", out)
+        self.assertIn("test: not on record (the command changed a tracked file on disk)", out)
+        self.assertEqual(runs(), 5)
+
+    def test_a_round_runs_the_suite_once_built_reviewed_and_landed(self):
+        runs = self.counting()
+        self.started()
+        sha = self.work()  # mm built: the one run
+        self.assertEqual(runs(), 1)
+        code, out, _ = self.mm("gate", "--base", parse_base(self.read(".mismagent/slices/doing/01-cart.md")))
+        self.assertEqual(code, 0, out)
+        self.assertIn("not run again", out)  # the reviewer's gate: the base check, and the run named
+        self.review("01-cart-1", "PASS", sha)
+        code, _, err = self.mm("land", "01-cart")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(runs(), 1)
+
+    def test_built_counts_the_seconds_of_a_run_it_did_not_repeat(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: sleep 1\n- lint: true\n")
+        self.started()
+        self.write("src/cart.py", "x = 1\n")
+        self.commit("code")
+        self.assertEqual(self.mm("gate")[0], 0)  # the builder's own, on the committed tree
+        code, _, err = self.mm("built", "01-cart", "--friction", "none")
+        self.assertEqual(code, 0, err)
+        self.assertRegex(self.read(".mismagent/slices/doing/01-cart.md"), r"Gate: 1: [1-9]")
+
+    def test_the_record_keeps_the_newest_code_trees(self):
+        self.counting()
+        trees = []
+        for i in range(7):
+            self.write("src/cart.py", "x = %d\n" % i)
+            self.commit("code %d" % i)
+            self.assertEqual(self.mm("gate")[0], 0)
+            time.sleep(0.02)
+            trees.append(re.search(r"mismagent\.gate/(\w+)\.test\.", self.mm("gate")[1]).group(1))
+        kept = os.listdir(os.path.join(self.dir, ".git", "mismagent.gate"))
+        self.assertEqual({n.split(".")[0] for n in kept}, set(trees[-5:]))  # the newest five, whole
+        self.assertEqual(len(kept), 5 * 4, kept)  # a record and its output, test and lint
+
+    def test_a_red_fresh_run_is_never_followed_by_the_old_green(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: test ! -e .git/broken && echo run >> .git/runs\n- lint: true\n")
+        self.commit("gate")
+        self.assertEqual(self.mm("gate")[0], 0)
+        self.write(".git/broken", "")  # what no commit holds went wrong
+        self.assertEqual(self.mm("gate")[0], 0)  # on record: not seen
+        green = re.search(r"test: green .* · output: (\S+)", self.mm("gate")[1]).group(1)
+        self.assertTrue(self.read(green).startswith("# test: green (test ! -e .git/broken"))
+        self.assertEqual(self.mm("gate", "--fresh")[0], 1)  # seen
+        self.assertTrue(self.read(green).startswith("# test: red (test ! -e .git/broken"))  # the same file says which run
+        self.assertFalse(os.path.exists(os.path.join(self.dir, green + ".tmp")))
+        code, out, _ = self.mm("gate")
+        self.assertEqual(code, 1, out)  # and not forgotten: land and tag would run it too
+        os.remove(os.path.join(self.dir, ".git", "broken"))
+        code, out, _ = self.mm("gate")
+        self.assertEqual(code, 0)
+        self.assertRegex(out, r"test: green \(.*\) \d+ s · output")  # run now, not read from the record
+        self.assertEqual(len(self.read(".git/runs").split()), 2)
+
+    def test_two_names_a_carriage_return_apart_are_two_trees(self):
+        runs = self.counting()
+        self.write("input\rdata", "x\n")
+        self.commit("cr")
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 1))
+        self.git("mv", "input\rdata", "input\ndata")
+        self.commit("lf")
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 2))
+
+    def test_untracked_debris_and_a_submodule_keep_a_run_off_the_record(self):
+        runs = self.counting()
+        self.assertEqual(self.mm("gate")[0], 0)
+        self.write("src/broken.sqlite.py", "def broken(\n")  # debris by its name, source by what it is
+        code, out, _ = self.mm("gate")
+        self.assertEqual((code, runs()), (0, 2))
+        self.assertIn("test: not on record (uncommitted: src/broken.sqlite.py)", out)
+        os.remove(os.path.join(self.dir, "src/broken.sqlite.py"))
+        os.makedirs(os.path.join(self.dir, "vendor"))
+        for args in (("init", "-q"), ("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q",
+                                      "--allow-empty", "-m", "x")):
+            subprocess.run(["git", *args], cwd=os.path.join(self.dir, "vendor"), check=True, capture_output=True)
+        self.commit("a gitlink")
+        self.mm("gate")
+        code, out, _ = self.mm("gate")
+        self.assertEqual((code, runs()), (0, 4))
+        self.assertIn("test: not on record (a submodule's files are no part of this commit)", out)
+
+    def test_one_gates_commands_at_a_time_and_the_second_finds_the_first_on_record(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: mkdir .git/busy && sleep 0.3 && rmdir .git/busy && echo run >> .git/runs\n"
+                   "- lint: true\n")  # two at once: the second mkdir fails
+        self.commit("gate")
+        for args, runs in ((("gate", "--fresh"), 5), (("gate",), 6)):
+            ps = [subprocess.Popen([sys.executable, MM, *args], cwd=self.dir, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True) for _ in range(5)]
+            outs = [p.communicate() + (p.returncode,) for p in ps]
+            self.assertEqual([code for _, _, code in outs], [0] * 5, outs)
+            self.assertTrue(any("another gate is running in this checkout" in out for out, _, _ in outs))
+            if runs == 5:
+                self.forget_gate()  # then five plain gates at once: one runs, four read its record
+            self.assertEqual(len(self.read(".git/runs").split()), runs)
+
+    def test_a_file_moved_into_mismagent_is_gone_from_where_it_was(self):
+        self.write("src/cart.py", "x = 1\n")
+        self.write("CLAUDE.md", "## mismagent\n- test: test -f src/cart.py && echo run >> .git/runs\n- lint: true\n")
+        self.commit("gate")
+        self.assertEqual(self.mm("gate")[0], 0)
+        os.makedirs(os.path.join(self.dir, ".mismagent/reviews"))
+        self.git("mv", "src/cart.py", ".mismagent/reviews/cart.py")  # staged: a rename, its new name under .mismagent/
+        code, out, _ = self.mm("gate")
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("not run again", out)
+
+    def test_the_command_after_one_that_changed_the_code_runs(self):
+        self.write("src/cart.py", "x = 1\n")
+        self.write("CLAUDE.md", "## mismagent\n- test: test -e .git/go && echo y >> src/cart.py\n"
+                   "- lint: echo run >> .git/runs\n")
+        self.commit("gate")
+        self.assertEqual(self.mm("gate")[0], 1)  # test red, lint green: on record
+        self.write(".git/go", "")
+        code, out, _ = self.mm("gate")  # test green, and it wrote the code lint reads
+        self.assertEqual(code, 0, out)
+        self.assertIn("test: not on record (the command changed a tracked file on disk)", out)
+        self.assertIn("lint: not on record (uncommitted: src/cart.py)", out)
+        self.assertEqual(len(self.read(".git/runs").split()), 2)
+
+    def test_a_record_that_is_not_one_or_has_lost_its_output_is_a_run(self):
+        runs = self.counting()
+        _, out, _ = self.mm("gate")
+        log = re.search(r"test: green .* · output: (\S+)", out).group(1)
+        record = log[:-len("log")] + "json"
+        good = json.loads(self.read(record))
+        for n, bad in enumerate(([good], {"cmd": good["cmd"], "at": good["at"]}, dict(good, seconds="3"),
+                                 dict(good, at=[1]), dict(good, at=10 ** 30), "{",
+                                 {k: v for k, v in good.items() if k != "disk"}, dict(good, disk="0" * 16)), 2):
+            self.write(record, bad if isinstance(bad, str) else json.dumps(bad))
+            code, out, err = self.mm("gate")
+            self.assertEqual((code, runs()), (0, n), err)
+        os.remove(os.path.join(self.dir, log))
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 10))
+        self.assertEqual((self.mm("gate")[0], runs()), (0, 10))
+
+    def disk_test(self, test):
+        """A project whose suite reads what a tracked file is on disk; -> its gate: (exit code, ran or read)."""
+        self.write("src/cart.py", "x = 1\n")
+        self.write("src/total.py", "y = 1\n")
+        self.write("CLAUDE.md", "## mismagent\n- test: %s\n- lint: true\n" % test)
+        self.commit("gate")
+
+        def gate():
+            code, out, _ = self.mm("gate")
+            self.assertEqual(self.git("status", "--porcelain"), "", "git sees nothing: the disk is mm's to look at")
+            return code, "read" if re.search(r"^test: .* not run again", out, re.M) else "ran"
+        return gate
+
+    def test_a_file_a_sparse_checkout_took_away_or_git_was_told_to_assume_is_looked_at(self):
+        gate = self.disk_test("test -f src/cart.py && grep -q 'y = 1' src/total.py")
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        self.git("sparse-checkout", "set", "--no-cone", "/*", "!/src/cart.py")  # gone from disk, and status is clean
+        self.assertEqual(gate(), (1, "ran"))
+        self.git("sparse-checkout", "disable")
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        self.git("update-index", "--assume-unchanged", "src/total.py")
+        self.assertEqual(gate(), (0, "read"))  # told to assume, and unchanged: the same files
+        self.write("src/total.py", "y = 2222\n")
+        self.assertEqual(gate(), (1, "ran"))
+
+    def test_a_mode_bit_git_ignores_is_looked_at(self):
+        gate = self.disk_test("test -x src/cart.py")  # 100644 in the commit
+        self.git("config", "core.filemode", "false")
+        os.chmod(os.path.join(self.dir, "src/cart.py"), 0o755)
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))  # green on this disk, as a run would be
+        os.chmod(os.path.join(self.dir, "src/cart.py"), 0o644)  # the commit's mode again: other files than the run read
+        self.assertEqual(gate(), (1, "ran"))
+        os.chmod(os.path.join(self.dir, "src/cart.py"), 0o755)
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.chmod(os.path.join(self.dir, "src/cart.py"), 0o654)  # the owner's bit alone gone
+        self.assertEqual(gate(), (1, "ran"))
+
+    def test_a_name_git_folds_is_looked_at_as_it_is_written(self):
+        for committed, on_disk, why in (("CART.py", "cart.py", "case"), ("caf\u00e9.py", "cafe\u0301.py", "composition")):
+            with self.subTest(why):
+                gate = self.disk_test("ls src | grep -qx '%s'" % on_disk)
+                self.write("src/" + committed, "x = 1\n")
+                self.commit(why)
+                here = lambda name: os.path.join(self.dir, "src", name)  # noqa: E731
+                if not os.path.exists(here(on_disk)):
+                    self.skipTest("this filesystem tells %r from %r: git sees the rename" % (committed, on_disk))
+                os.rename(here(committed), here(on_disk))
+                if on_disk not in os.listdir(os.path.join(self.dir, "src")) or self.git("status", "--porcelain"):
+                    self.skipTest("the rename by %s is not kept by this filesystem, or git sees it" % why)
+                self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))  # green on this disk
+                os.rename(here(on_disk), here(committed))  # the commit's spelling: not what the run read
+                self.assertEqual(gate(), (1, "ran"))
+
+    def test_a_directory_respelt_or_closed_to_writing_and_a_link_added_or_retargeted_are_looked_at(self):
+        gate = self.disk_test("true")
+        os.symlink("total.py", os.path.join(self.dir, "src/link"))
+        self.commit("a link")
+        self.git("update-index", "--assume-unchanged", "src/link", "src/cart.py")
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.remove(os.path.join(self.dir, "src/link"))
+        os.symlink("./total.py", os.path.join(self.dir, "src/link"))  # the same file by another link: lstat, not stat
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.chmod(os.path.join(self.dir, "src"), 0o555)  # a suite that writes beside its source now fails
+        try:
+            self.assertEqual(gate(), (0, "ran"))
+        finally:
+            os.chmod(os.path.join(self.dir, "src"), 0o755)
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.link(os.path.join(self.dir, "src/cart.py"), os.path.join(self.dir, ".mismagent/hard-link"))
+        self.assertEqual(self.mm("gate")[1].count("not run again"), 0)  # one more name for the file (status: the card's folder)
+        os.remove(os.path.join(self.dir, ".mismagent/hard-link"))
+        self.mm("gate")
+        at = os.stat(os.path.join(self.dir, "src/cart.py"))
+        self.write("src/cart.py", "x = 123456\n")  # another size, the time of its last write set back
+        os.utime(os.path.join(self.dir, "src/cart.py"), ns=(at.st_atime_ns, at.st_mtime_ns))
+        self.assertEqual(self.mm("gate")[1].count("not run again"), 0)
+        self.mm("gate")
+        at = os.stat(os.path.join(self.dir, "src/cart.py"))
+        os.utime(os.path.join(self.dir, "src/cart.py"), ns=(at.st_atime_ns, at.st_mtime_ns + 1000))  # a microsecond later
+        self.assertEqual(self.mm("gate")[1].count("not run again"), 0)
+        if os.path.exists(os.path.join(self.dir, "SRC")):  # a filesystem that folds case: git sees no rename
+            os.rename(os.path.join(self.dir, "src"), os.path.join(self.dir, "SRC"))
+            self.assertEqual(self.mm("gate")[1].count("not run again"), 0)
+
+    def test_a_change_that_is_no_write_and_a_flag_on_a_directory_are_looked_at(self):
+        gate = self.disk_test("true")
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        cart, src = os.path.join(self.dir, "src/cart.py"), os.path.join(self.dir, "src")
+        before = os.lstat(cart)
+        if hasattr(os, "chflags"):  # BSD, macOS: a flag — what an ACL or an extended attribute moves too: ctime alone
+            import stat
+            os.chflags(cart, stat.UF_NODUMP)
+        elif hasattr(os, "setxattr"):
+            try:
+                os.setxattr(cart, "user.mm", b"1")
+            except OSError:
+                self.skipTest("no extended attributes on this filesystem")
+        else:
+            self.skipTest("no way here to change a file without writing it")
+        after = os.lstat(cart)
+        self.assertEqual((before.st_mode, before.st_size, before.st_nlink, before.st_mtime_ns),
+                         (after.st_mode, after.st_size, after.st_nlink, after.st_mtime_ns))
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        if hasattr(os, "chflags"):
+            os.chflags(src, stat.UF_NODUMP)  # as an immutable folder would be flagged: its mode the same
+            self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+
+    def test_a_tracked_file_touched_or_rewritten_by_a_checkout_is_a_run(self):
+        gate = self.disk_test("true")
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.utime(os.path.join(self.dir, "src/cart.py"), (1, 1))  # the same bytes, written at another time
+        self.assertEqual((gate(), gate()), ((0, "ran"), (0, "read")))
+        os.remove(os.path.join(self.dir, "src/total.py"))
+        self.git("checkout", "--", "src/total.py")  # as a checkout writes it: a filter's bytes, a new file
+        self.assertEqual(gate(), (0, "ran"))
+        self.write("CLAUDE.md", "## mismagent\n- test: touch src/cart.py\n- lint: true\n")
+        self.commit("a suite that touches the code")
+        self.mm("gate")
+        code, out, _ = self.mm("gate")
+        self.assertIn("test: not on record (the command changed a tracked file on disk)", out)
+
+    def test_a_gate_does_not_wait_past_its_time_for_another(self):
+        import fcntl
+        self.assertEqual(self.mm("gate")[0], 0)  # the folder and the lock exist
+        fd = os.open(os.path.join(self.dir, ".git", "mismagent.gate.lock"), os.O_RDWR)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # a gate alive and stopped
+        try:
+            code, out, err = self.mm("gate", "--fresh", env=dict(os.environ, MM_GATE_WAIT="0.5"))
+        finally:
+            os.close(fd)
+        self.assertEqual(code, 1)
+        self.assertIn("another gate still runs in this checkout", err)
+        self.assertEqual(self.mm("gate")[0], 0)
+
+    def test_trees_wholly_red_leave_with_the_others(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: echo out; false\n- lint: false\n")
+        trees = []
+        for i in range(7):
+            self.write("src/cart.py", "x = %d\n" % i)
+            self.commit("code %d" % i)
+            code, out, _ = self.mm("gate")
+            self.assertEqual(code, 1)
+            trees.append(re.search(r"mismagent\.gate/(\w+)\.test\.log", out).group(1))
+            time.sleep(0.02)
+        kept = os.listdir(os.path.join(self.dir, ".git", "mismagent.gate"))
+        self.assertEqual(sorted(kept), sorted("%s.%s.log" % (t, k) for t in trees[-5:] for k in ("test", "lint")))
+
+    def test_red_and_dirty_runs_leave_no_more_output_than_the_trees_kept(self):
+        self.write("CLAUDE.md", "## mismagent\n- test: echo out; false\n- lint: true\n")
+        for i in range(7):
+            self.write("src/cart.py", "x = %d\n" % i)
+            self.mm("gate")  # dirty
+            self.commit("code %d" % i)
+            self.assertEqual(self.mm("gate")[0], 1)  # red test, green lint
+            time.sleep(0.02)
+        kept = os.listdir(os.path.join(self.dir, ".git", "mismagent.gate"))
+        self.assertEqual(len({n.split(".")[0] for n in kept} - {"uncommitted"}), 5)
+        self.assertEqual(sorted(n for n in kept if n.startswith("uncommitted.")), ["uncommitted.lint.log", "uncommitted.test.log"])
+        self.assertEqual(len(kept), 5 * 3 + 2, kept)  # a tree: the red test's output, lint's record and output
 
     def test_gate_red_test_or_lint(self):
         for key in ("test", "lint"):
@@ -2425,6 +2785,7 @@ class Spec(Repo):
         self.started()
         self.work()  # the gate commits once here too
         self.review("01-cart-1", "PASS")
+        self.forget_gate()  # no run on record for this code tree: land's gate runs the suite
         code, _, err = self.mm("land", "01-cart")
         self.assertEqual(code, 1)
         self.assertIn("no PASS review of 01-cart at HEAD", err)

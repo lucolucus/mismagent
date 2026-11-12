@@ -23,9 +23,12 @@ or an item its scope leaves out is not a finding.
 ## Slice review (dispatch: `MODE: slice`, the slice file)
 1. First note `git rev-parse HEAD`: the HEAD you review. `git diff <base>..HEAD`, `<base>` = the
    slice file's `Base:`. Run `MM gate --base <base>`: check (the human's files, the markers), then
-   the suite and lint.
+   the suite and lint. A command already green on this code tree (the builder's `mm built` ran it) is
+   not run again: its line names that run and the file with its whole output — your evidence that a
+   test ran is there. A suite you have a reason to doubt (a test that depends on what no commit
+   holds): `MM gate --base <base> --fresh`.
 2. **Examples:** each example of the slice has an acceptance test that proves *it* — the same given,
-   when and then, not a weaker one — and the gate **ran** it (its output names the test, or
+   when and then, not a weaker one — and the gate **ran** it (the output file the gate's `test:` line names shows the test, or
    `test:` reaches the file: compiled, discovered or run by hand is not run by the gate). The
    control or adapter the example names reaches the use case through the production wiring (the
    real button or binding, the init the app calls): a test on that path, or the smoke when it builds
@@ -69,7 +72,8 @@ or an item its scope leaves out is not a finding.
 
 ## Release review (dispatch: `MODE: release`, the release)
 You are a fresh pair of eyes on the release: do not read the slice reviews.
-1. Run `MM gate` and **the app itself** through its `smoke` command (`CLAUDE.md`, `## mismagent`);
+1. Run `MM gate --fresh` (the release's one real run of the suite, yours: it repeats what is on
+   record) and **the app itself** through its `smoke` command (`CLAUDE.md`, `## mismagent`);
    never start its interactive main loop. Say which use case the smoke exercised, what it showed,
    and the path from the app's entry to the use case it shares with the smoke (`file:line` of the
    function both call): a start-and-exit is no app run for a built product, and a smoke assembled
@@ -78,8 +82,8 @@ You are a fresh pair of eyes on the release: do not read the slice reviews.
    the release's slices.
 2. Check **the code the release's slices touched and the production paths it runs through**, by
    the skill's categories — one checklist line per topic:
-   - **tests** topics: the gate's output names each acceptance file of the release's examples (run,
-     not only compiled), each marker matches a live example, no test skipped or disabled;
+   - **tests** topics: the output file the gate's `test:` line names shows each acceptance file of the
+     release's examples (run, not only compiled), each marker matches a live example, no test skipped or disabled;
    - each **cross-cutting** topic: its *Must* and *Never* along **one** traced path — the smoke's,
      or a release example's use case where the topic applies. The line names the files you read
      (`file:line` of the boundary, the adapter, the root) and the findings, or nothing; `not

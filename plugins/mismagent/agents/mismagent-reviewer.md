@@ -54,7 +54,8 @@ or an item its scope leaves out is not a finding.
    is a block: `mm land` commits the file.
 5. **Verdict:**
    - `REWORK` if an example is unproven or failing, the gate is red, a new
-     suppression appeared, data can be lost, a refactoring slice changes behavior, a fix slice
+     suppression appeared, a gate setting of `CLAUDE.md` the diff loosened with no decision behind
+     it (the gate's warning names each changed key: a threshold raised, a command narrowed), data can be lost, a refactoring slice changes behavior, a fix slice
      whose `## Progress` shows no red run of its acceptance test before the fix (the bug never
      reproduced), a look
      difference (step 3), the map left false (step 4), a broken *Must* or *Never* of an approved topic that applies, a second

@@ -108,7 +108,10 @@ Read the requirements, `.mismagent/brief.md`, `releases/`, `examples/`, the todo
    app's entry calls, with its real configuration** — never a wiring of its own beside it; only what is external, the network or a device,
    replaced, and named in the command — exercises one use case, exits; never a blocking main loop;
    on an empty skeleton it just starts and exits), `- max_file_lines:`,
-   `- suppressions: 0`; `- shot:` when slices name artboards (`Design:`): renders, headless, each
+   `- suppressions: 0`, `- suppress:` (this stack's own suppression markers, comma-separated, as
+   written in the code — `swiftlint:disable, #[allow, @ts-ignore` — counted beside mm's built-in
+   ones; `none` when those cover the stack), `- tests:` (comma-separated folders, when tests live outside `tests/`:
+   the size sensor skips them); `- shot:` when slices name artboards (`Design:`): renders, headless, each
    screen named in `$MM_DESIGN` into `$MM_SHOTS/<name>.png`, driving the app **from outside its
    production views** — a scenarios target or wrapper beside the app, or the UI test driver; a
    production view holds no branch for a scenario, at most a neutral identifier or binding; `- acceptance:` (comma-separated folders) only when the build wants the
@@ -189,10 +192,14 @@ and the release file cite with those that amend or supersede them (they name it)
    the rule for the new stack, the citation dropped until the new file lands); the human decides it
    before the next slice starts, and the slice that lands the new file proposes the new citation.
 3. Before DONE every note you read is a slice you queued, a rule you proposed, a question in a
-   release file, or dropped (why, in the commit; git keeps it; a `RISK:` leaves only as a slice).
+   release file, or dropped (why, in the note below; git keeps it; a `RISK:` leaves only as a slice).
    `MM status` shows at most five notes, or your `NOTES:` line says why: a pass that leaves more
    stops the flow for the human, it is not run again.
-   Commit (`design pass`).
+   `MM designed "<release>: <what the pass did, what it dropped and why>" <each file you wrote or
+   deleted>` commits the pass: the notes and the proposals always, and of the map, the decisions,
+   the todo slices and the release files only those you name — files, never a folder (specify may
+   have its own beside yours; mm lists what it left). Never by hand: mm reads that commit to know a
+   pass ran, and writes it even when nothing changed.
 
 ## MODE: escalate — a slice stuck after two reworks
 Read the slice, its reviews and the diff. Decide by the standard, `ARCHITECTURE.md` and the skill,
